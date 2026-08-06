@@ -1,0 +1,57 @@
+import type { APIRoute } from 'astro';
+import { requireUser, hasRole } from '@lib/auth';
+import { adminCreateArticle } from '@lib/admin-store';
+import { sanitizeRichText, sanitizePlainText, sanitizeImageUrl } from '@lib/sanitize';
+
+export const prerender = false;
+
+function sanitizeInput(body: Record<string, unknown>) {
+  return {
+    headline: sanitizePlainText(String(body.headline ?? ''), 200),
+    kicker: sanitizePlainText(String(body.kicker ?? ''), 120),
+    trail: sanitizePlainText(String(body.trail ?? ''), 500),
+    body: sanitizeRichText(String(body.body ?? '')),
+    image: sanitizeImageUrl(String(body.image ?? '')) ?? undefined,
+    pillar: sanitizePlainText(String(body.pillar ?? 'news'), 40),
+    section: sanitizePlainText(String(body.section ?? ''), 60),
+    author: sanitizePlainText(String(body.author ?? ''), 120),
+    slug: sanitizePlainText(String(body.slug ?? ''), 160),
+    isLive: Boolean(body.isLive),
+    status: ['draft', 'published', 'scheduled'].includes(String(body.status))
+      ? String(body.status)
+      : 'draft',
+    publishAt: typeof body.publishAt === 'string' ? body.publishAt : undefined,
+    isSensitive: Boolean(body.isSensitive),
+    tags: Array.isArray(body.tags)
+      ? body.tags.map((t: unknown) => sanitizePlainText(String(t), 40)).filter(Boolean)
+      : [],
+    metaTitle: sanitizePlainText(String(body.metaTitle ?? ''), 200),
+    metaDescription: sanitizePlainText(String(body.metaDescription ?? ''), 300),
+  };
+}
+
+const json = (data: unknown, status = 200) =>
+  new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+export const POST: APIRoute = async ({ request }) => {
+  const auth = await requireUser(request);
+  if (!auth.ok) return json({ ok: false, message: 'Unauthorized' }, auth.status);
+  if (!hasRole(auth.user, 'author')) return json({ ok: false, message: 'Forbidden' }, 403);
+
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ ok: false, message: 'Bad JSON' }, 400);
+  }
+
+  const cleaned = sanitizeInput(body);
+  if (!cleaned.headline) return json({ ok: false, message: 'Missing headline' }, 422);
+
+  const id = await adminCreateArticle({ ...cleaned, created_by: auth.user.name });
+  if (!id) return json({ ok: false, message: 'Publish unavailable' }, 503);
+  return json({ ok: true, id }, 201);
+};
