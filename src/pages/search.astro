@@ -1,19 +1,12 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import NewsCard from '../components/NewsCard.astro';
-import { SEED_ARTICLES } from '../data/seed';
+import { loadSearchResults, toCards } from '../lib/content';
 
 export const prerender = false;
 
 const q = (Astro.url.searchParams.get('q') ?? '').trim().toLowerCase();
-const results = q
-  ? SEED_ARTICLES.filter((a) =>
-      [a.headline, a.kicker ?? '', a.trail ?? '', a.author ?? '', String(a.section ?? ''), String(a.pillar)]
-        .join(' ')
-        .toLowerCase()
-        .includes(q),
-    )
-  : [];
+const results = q ? await toCards(await loadSearchResults(q)) : [];
 ---
 
 <BaseLayout title={q ? `Nema: ${q} — Yanci` : 'Nema Labari — Yanci'} description="Nema labarai daga Yanci." path="/search/">

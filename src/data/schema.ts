@@ -47,6 +47,7 @@ export interface Article {
 
   $createdAt?: string;
   $updatedAt?: string;
+  views?: number;
 }
 
 export interface LiveUpdate {

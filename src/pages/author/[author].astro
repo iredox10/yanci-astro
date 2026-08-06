@@ -1,13 +1,13 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import NewsCard from '../../components/NewsCard.astro';
-import { SEED_ARTICLES } from '../../data/seed';
+import { loadAuthorFeed, toCards } from '../../lib/content';
 
 export const prerender = false;
 
 const { author } = Astro.params;
 const name = (author ?? '').replace(/-/g, ' ');
-const works = SEED_ARTICLES.filter((a) => (a.author ?? '').toLowerCase() === name.toLowerCase());
+const works = await toCards(await loadAuthorFeed(name.trim()));
 const displayedAuthor = works[0]?.author ?? name;
 ---
 

@@ -1,58 +1,57 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import NewsCard from '../../components/NewsCard.astro';
-import { SEED_ARTICLES } from '../../data/seed';
 import { pillarAccent } from '../../data/schema';
-import type { ArticleCard } from '../../data/schema';
+import type { Article } from '../../data/schema';
+import { loadArticles, loadArticle, toCards } from '../../lib/content';
 
-interface Props {
-  article: ArticleCard;
+export const prerender = false;
+
+const { id } = Astro.params;
+const article = await loadArticle(id!);
+if (!article) {
+  return Astro.redirect('/404');
 }
 
-export function getStaticPaths() {
-  return SEED_ARTICLES.map((a) => ({
-    params: { id: String(a.$id ?? a.id) },
-    props: { article: a },
-  }));
-}
-
-const { article } = Astro.props;
 const accent = pillarAccent(article.pillar);
-const id = String(article.$id ?? article.id);
-const body = (article as { body?: string }).body;
+const idStr = String(article.$id ?? article.id);
+const body = article.body;
 
 const words = (body ?? '').replace(/<[^>]*>/g, ' ').trim().split(/\s+/).filter(Boolean).length;
 const readTime = Math.max(1, Math.ceil(words / 200));
 
-const related = SEED_ARTICLES.filter((a) => String(a.$id ?? a.id) !== id).slice(0, 4);
+const related = await toCards(
+  (await loadArticles()).filter((a) => String(a.$id ?? a.id) !== idStr).slice(0, 4),
+);
 
 const formatDate = (iso?: string) =>
   iso ? new Date(iso).toLocaleDateString('ha-NG', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
 
-const currentUrl = `${Astro.site?.href ?? 'https://yanci.ng'}article/${id}`;
+const currentUrl = `${Astro.site?.href ?? 'https://yanci.ng'}article/${idStr}`;
 const enc = (s: string) => encodeURIComponent(s);
 const facebookShare = `https://www.facebook.com/sharer/sharer.php?u=${enc(currentUrl)}`;
 const twitterShare = `https://twitter.com/intent/tweet?url=${enc(currentUrl)}&text=${enc(article.headline)}`;
 const whatsappShare = `https://api.whatsapp.com/send?text=${enc(`${article.headline} - ${currentUrl}`)}`;
+const sectionLabel = String(article.section ?? article.pillar ?? 'Labarai');
 ---
 
 <BaseLayout
   title={article.headline}
   description={article.trail}
-  path={`/article/${id}`}
+  path={`/article/${idStr}`}
 >
   <!-- Reading progress -->
   <div class="fixed left-0 top-0 z-50 h-1.5 w-full bg-gray-100">
     <div id="reading-progress-bar" class="h-full transition-all duration-300 ease-out" style={`width:0%; background-color: ${accent}`} />
   </div>
 
-  <main id="main-content" class="overflow-hidden pb-32 pt-10 md:pt-16" role="main" aria-label="Babban ciki">
+  <main id="main-content" class="overflow-hidden pb-32 pt-10 md:pt-16" role="main" aria-label="Babban ciki" data-article-id={idStr} data-article-section={sectionLabel}>
     <article class="mx-auto w-full max-w-[780px] px-4 sm:px-5 md:px-0">
       <!-- Header -->
       <header class="mb-8 md:mb-10">
         <div class="mb-6 flex items-center gap-3">
-          <a href="/section/labarai" class="font-sans text-sm font-extrabold uppercase tracking-widest hover:underline" style={`color: ${accent}`}>
-            {article.section ?? 'Labarai'}
+          <a href={`/tag/${encodeURIComponent(sectionLabel)}`} class="font-sans text-sm font-extrabold uppercase tracking-widest hover:underline" style={`color: ${accent}`}>
+            {sectionLabel}
           </a>
           <span class="text-xs text-gray-300">/</span>
           <span class="flex items-center gap-1 font-sans text-xs font-bold uppercase tracking-widest text-gray-500">
@@ -127,7 +126,7 @@ const whatsappShare = `https://api.whatsapp.com/send?text=${enc(`${article.headl
       <div class="mt-16 border-t border-gray-200 pt-8 md:mt-20 md:pt-10">
         <h4 class="mb-4 font-sans text-xs font-bold uppercase tracking-widest text-gray-400 md:mb-6">Taken Labarai</h4>
         <div class="flex flex-wrap gap-2 md:gap-3">
-          {['Najeriya', 'Arewa', 'Labarai'].map((tag) => (
+          {(article.tags && article.tags.length > 0 ? article.tags : ['Najeriya', 'Arewa', 'Labarai']).map((tag) => (
             <a href={`/tag/${encodeURIComponent(tag)}`} class="rounded-full border border-gray-100 bg-gray-50 px-3 py-1.5 font-sans text-xs font-bold text-gray-700 shadow-sm transition-all duration-300 hover:border-[#121212] hover:bg-[#121212] hover:text-white md:px-4 md:py-2 md:text-sm">
               #{tag}
             </a>
@@ -168,4 +167,20 @@ const whatsappShare = `https://api.whatsapp.com/send?text=${enc(`${article.headl
   };
   window.addEventListener('scroll', onScroll, { passive: true });
   topBtn?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+  const mainEl = document.getElementById('main-content');
+  const articleId = mainEl?.getAttribute('data-article-id') ?? '';
+  const articleSection = mainEl?.getAttribute('data-article-section') ?? null;
+
+  fetch('/api/track-view', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      articleId,
+      section: articleSection,
+      referrer: document.referrer || null,
+      device: /Mobi|Android|iPhone/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
+    }),
+    keepalive: true,
+  }).catch(() => {});
 </script>

@@ -5,15 +5,15 @@ import OpinionCard from '../components/OpinionCard.astro';
 import HomeTabs from '../components/home/HomeTabs';
 import StatCounter from '../components/home/StatCounter';
 import {
-  SEED_ARTICLES,
   SEED_TICKER,
   SEED_HIGHLIGHTS,
   SEED_STATS,
   SEED_SPORTS,
   SEED_TRENDING,
 } from '../data/seed';
+import { loadArticles } from '../lib/content';
 
-const published = SEED_ARTICLES;
+const published = await loadArticles();
 const headlines = published.filter((a) => a.section === 'headlines');
 const opinion = published.filter((a) => a.section === 'opinion');
 const sport = published.filter((a) => a.section === 'sport');

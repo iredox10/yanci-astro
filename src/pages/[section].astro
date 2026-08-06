@@ -2,32 +2,23 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import SectionHeader from '../components/SectionHeader.astro';
 import NewsCard from '../components/NewsCard.astro';
-import { SECTIONS, sectionBySlug, sectionKeyForSlug, pillarForSlug } from '../data/sections';
-import { SEED_ARTICLES } from '../data/seed';
+import { sectionBySlug, sectionKeyForSlug } from '../data/sections';
+import { loadSectionFeed, toCards } from '../lib/content';
 import { pillarColors } from '../data/schema';
 
-interface Props {
-  section: string;
-}
+export const prerender = false;
 
-export function getStaticPaths() {
-  return SECTIONS.map((s) => ({
-    params: { section: s.slug },
-    props: { section: s.slug },
-  }));
+const { section } = Astro.params;
+const def = sectionBySlug(section!);
+if (!def) {
+  return Astro.redirect('/404');
 }
-
-const { section } = Astro.props;
-const def = sectionBySlug(section)!;
 const colors = pillarColors(def.pillar);
-const sectionKey = sectionKeyForSlug(section);
-const pillar = pillarForSlug(section);
+const sectionKey = sectionKeyForSlug(section!) ?? section!;
 
-const sectionArticles = SEED_ARTICLES.filter(
-  (a) => a.section === sectionKey || a.pillar === pillar,
-);
+const cards = await toCards(await loadSectionFeed(sectionKey));
 
-const [heroStory, ...rest] = sectionArticles;
+const [heroStory, ...rest] = cards;
 const subStories = rest.slice(0, 3);
 const feedStories = rest.slice(3);
 ---
@@ -40,7 +31,7 @@ const feedStories = rest.slice(3);
   <SectionHeader section={def} />
 
   <main class="mx-auto max-w-[1400px] px-4 py-12 md:px-6">
-    {sectionArticles.length === 0 ? (
+    {cards.length === 0 ? (
       <div class="py-32 text-center text-gray-400">
         <p class="mb-2 font-serif text-2xl">Babu labari a nan tukuna.</p>
         <p class="text-sm">Dawo nan gaba ko nema labari.</p>

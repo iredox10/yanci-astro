@@ -1,15 +1,19 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import NewsCard from '../../components/NewsCard.astro';
-import { SEED_ARTICLES } from '../../data/seed';
+import { loadArticles, toCards } from '../../lib/content';
 
 export const prerender = false;
 
 const { tag } = Astro.params;
-const matches = SEED_ARTICLES.filter((a) => {
-  const t = (a as { tags?: string }).tags ?? '';
-  return t.split(',').map((s) => s.trim().toLowerCase()).includes((tag ?? '').toLowerCase());
-});
+const needle = (tag ?? '').toLowerCase();
+const matches = await toCards(
+  (await loadArticles()).filter((a) =>
+    (Array.isArray(a.tags) ? a.tags : [String(a.section ?? ''), String(a.pillar ?? '')])
+      .map((t) => String(t).trim().toLowerCase())
+      .includes(needle),
+  ),
+);
 ---
 
 <BaseLayout title={`#${tag} — Yanci`} description={`Labarun da ke dauke da #${tag}.`} path={`/tag/${tag}/`}>
