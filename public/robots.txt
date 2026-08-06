@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# Disallow admin area
+Disallow: /admin/
+Disallow: /admin
+
+Sitemap: https://yanci.ng/sitemap.xml
+Sitemap: https://yanci.ng/sitemap-news.xml

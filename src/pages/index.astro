@@ -1,0 +1,459 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import NewsCard from '../components/NewsCard.astro';
+import OpinionCard from '../components/OpinionCard.astro';
+import HomeTabs from '../components/home/HomeTabs';
+import StatCounter from '../components/home/StatCounter';
+import {
+  SEED_ARTICLES,
+  SEED_TICKER,
+  SEED_HIGHLIGHTS,
+  SEED_STATS,
+  SEED_SPORTS,
+  SEED_TRENDING,
+} from '../data/seed';
+
+const published = SEED_ARTICLES;
+const headlines = published.filter((a) => a.section === 'headlines');
+const opinion = published.filter((a) => a.section === 'opinion');
+const sport = published.filter((a) => a.section === 'sport');
+const heroStory = headlines.find((h) => h.type === 'hero') ?? headlines[0];
+const popular = [...published].sort((a, b) => (b.views ?? 0) - (a.views ?? 0)).slice(0, 5);
+const latest = [...headlines, ...sport]
+  .sort((a, b) => new Date(b.$createdAt ?? 0).getTime() - new Date(a.$createdAt ?? 0).getTime())
+  .slice(0, 5);
+
+const liveMatch = SEED_SPORTS.liveMatches[0];
+const standings = SEED_SPORTS.standings;
+const fixtures = SEED_SPORTS.fixtures;
+
+const iconD: Record<string, string> = {
+  trend: '<path d="M64 32c17.7 0 32 14.3 32 32v288c0 17.7-14.3 32-32 32s-32-14.3-32-32V64c0-17.7 14.3-32 32-32zm0 416c-35.3 0-64 28.7-64 64s28.7 64 64 64 64-28.7 64-64-28.7-64-64-64zM384 128c0-8.8 7.2-16 16-16h96c8.8 0 16 7.2 16 16s-7.2 16-16 16h-80v48c0 17.7-14.3 32-32 32h-96c-17.7 0-32-14.3-32-32s14.3-32 32-32h64v-16c0-8.8-7.2-16-16-16h-80c-8.8 0-16-7.2-16-16V192c0-8.8 7.2-16 16-16zm64 160c-17.7 0-32 14.3-32 32s14.3 32 32 32 32-14.3 32-32-14.3-32-32-32z"/>',
+  radio: '<path d="M384 192h-88V78.6c0-3.2-1.3-6.2-3.7-8.3L192 80 128 104V192H128a64 64 0 0 0-64 64v128a64 64 0 0 0 64 64h320a64 64 0 0 0 64-64V256a64 64 0 0 0-64-64h-8zm0 64a32 32 0 1 1 0 0 0 32 32 32 32 0 0 0-32-32zm-256 0h256a32 32 0 0 1 32 32v96a32 32 0 0 1-32 32a32 32 0 0 1-32-32v-96h-64v96a32 32 0 0 1-32 32a32 32 0 1 1 0-64zm64-64v-74.3h80v74.3z"/>',
+  innovation:
+    '<path d="M256 16c141.4 0 256 114.6 256 256s-114.6 256-256 256S0 413.4 3.1 269.9h174.2l-8.5-37.3 45.2-14-7.2-32H262l21-20-15.1-34.6-20.9-14.2 28.4-21 3.6 8.4 45.2-14-7-37.8c14.4-7.2 30.1-12.3 46.8-15zM128 272a32 32 0 1 0 0-64 32 32 0 0 0 0 64z"/>',
+};
+
+function iconPathFor(name: string): string {
+  return iconD[name] ?? iconD.trend;
+}
+
+const gridSvg =
+  "data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E";
+const sportPattern =
+  "data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c59d5f' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E";
+---
+
+<BaseLayout
+  title="Yanci — Muryar Arewa"
+  description="Yanci: Jaridar Hausa mai zuwa. Labarai, siyasa, wasanni da al’adu a yaren Hausa, kai tsaye daga Najeriya."
+  path="/"
+>
+  <!-- Breaking News Ticker -->
+  <section class="sticky top-[48px] z-30 border-b border-gray-200/50 bg-white/80 shadow-sm backdrop-blur-md">
+    <div class="mx-auto max-w-[1400px] px-4 md:px-6">
+      <div class="flex items-center gap-4 py-2.5">
+        <div class="flex shrink-0 animate-pulse items-center gap-2 rounded-full bg-red-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white">
+          <svg class="h-3 w-3" viewBox="0 0 384 512" fill="currentColor" aria-hidden="true"><path d="M216 23.9c0-10.6-13.4-17.2-22.3-11.2L67.5 101.3C59.3 102 28 104 18 104c-9.9 0-18 8.1-18 18v60c0 9.9 8.1 18 18 18h41.2l-9.6 12.2c-3.7 4.7-2.9 11.4 1.8 15.1 4.6 3.6 11.2 4-1.8 12.2 1.1 14.9-1.8 29.7-30.6V12.4c10.3 8.6 17.5 19.4 22.8 31.7-36.5 35.9-38.9 91.2-3 129z"/></svg>
+          <span class="hidden sm:inline">Kai Tsaye</span>
+        </div>
+        <div class="relative flex-1 overflow-hidden">
+          <div class="animate-marquee flex gap-8 whitespace-nowrap">
+            {[...SEED_TICKER, ...SEED_TICKER, ...SEED_TICKER].map((item) => (
+              <span class="flex cursor-pointer items-center gap-3 text-sm font-medium text-gray-700 transition-colors hover:text-[#0f3036]">
+                <span class="h-1.5 w-1.5 rounded-full bg-[#c59d5f]" />
+                {item}
+              </span>
+            ))}
+          </div>
+        </div>
+        <span class="hidden shrink-0 text-xs font-bold text-[#0f3036] transition-colors hover:text-[#c59d5f] md:block">Duba duka</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Hero -->
+  <section class="relative overflow-hidden pb-16 pt-8">
+    <div class="pointer-events-none absolute inset-0">
+      <div class="absolute left-1/4 top-0 h-96 w-96 rounded-full bg-[#c59d5f]/5 blur-3xl" />
+      <div class="absolute bottom-0 right-1/4 h-96 w-96 rounded-full bg-[#0f3036]/5 blur-3xl" />
+    </div>
+    <div class="relative mx-auto max-w-[1400px] px-4 md:px-6">
+      <div class="grid gap-6 lg:grid-cols-12 lg:gap-8">
+        {heroStory && (
+          <div class="lg:col-span-8">
+            <NewsCard data={heroStory} variant="hero" />
+          </div>
+        )}
+        <div class="lg:col-span-4">
+          <HomeTabs client:load latest={latest} popular={popular} />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Highlights -->
+  <section class="py-16">
+    <div class="mx-auto max-w-[1400px] px-4 md:px-6">
+      <div class="grid gap-6 md:grid-cols-3">
+        {SEED_HIGHLIGHTS.map((panel, index) => (
+          <article class="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-8 shadow-sm transition-all duration-500 hover:-translate-y-1 hover:shadow-xl" style={`transition-delay:${index * 100}ms`}>
+            <div class={`absolute inset-0 bg-gradient-to-br ${panel.gradient} opacity-0 transition-opacity duration-500 group-hover:opacity-100`} />
+            <div class="absolute -right-8 -top-8 h-32 w-32 rounded-full opacity-10 transition-transform duration-700 group-hover:scale-150" style={`background-color:${panel.accent}`} />
+            <div class="relative z-10">
+              <div class="mb-6 flex items-center gap-3">
+                <div class="rounded-xl p-3 text-white shadow-lg" style={`background-color:${panel.accent}`}>
+                  <svg class="h-6 w-6" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true" set:html={iconPathFor(panel.icon)} />
+                </div>
+                <span class="text-xs font-bold uppercase tracking-widest" style={`color:${panel.accent}`}>{panel.tag}</span>
+              </div>
+              <h3 class="mb-3 font-serif text-xl font-bold leading-tight text-[#1c1917] transition-colors group-hover:text-[#0f3036]">{panel.title}</h3>
+              <p class="mb-6 text-sm leading-relaxed text-gray-600">{panel.copy}</p>
+              <span class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider transition-all group-hover:gap-3" style={`color:${panel.accent}`}>
+                Bincika
+                <svg class="h-3 w-3" viewBox="0 0 384 512" fill="currentColor" aria-hidden="true"><path d="M342.6 214.6 235.6 321.6c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L274.7 224H32c-17.7 0-32-14.3-32-32s14.3-32 32-32h242.7l-84.4-48.9c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l103.1 103.1c9.4 9.4 14.6 22.1 14.6 35.3s-5.2 25.9-14.6 35.3z"/></svg>
+              </span>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats -->
+  <section class="relative overflow-hidden bg-[#0f3036] py-16">
+    <div class="absolute inset-0 opacity-5" style={`background-image:url('${gridSvg}')`} />
+    <div class="relative mx-auto grid max-w-[1400px] gap-8 px-4 md:grid-cols-3 md:px-6">
+      {SEED_STATS.map((stat) => (
+        <div>
+          <StatCounter client:visible stat={stat} />
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <!-- Opinion -->
+  <section class="py-20">
+    <div class="mx-auto max-w-[1400px] px-4 md:px-6">
+      <div class="mb-12 flex items-end justify-between">
+        <div>
+          <span class="mb-2 block text-xs font-bold uppercase tracking-widest text-[#e05e00]">Ra'ayi & Sharhi</span>
+          <h2 class="font-serif text-4xl font-black text-[#1c1917]">Ra'ayoyin Masana</h2>
+        </div>
+        <a href="/raayi" class="group hidden items-center gap-2 text-sm font-bold text-[#0f3036] transition-colors hover:text-[#c59d5f] md:flex">
+          Duba duk ra'ayoyi
+          <svg class="h-4 w-4 transition-transform group-hover:translate-x-1" viewBox="0 0 320 512" fill="currentColor" aria-hidden="true"><path d="M96 480c-8.2 0-16.3-3.1-22.1-9.9-11.9-11.9-11.9-31.3 0-43.2l160-160c11.9-11.9 11.9-31.3 0-43.2L73.9 85.1c-11.9-11.9-11.9-31.3 0-43.2s31.3-11.9 43.2 0l160 160c12.5 12.5 19 28.1 19 43.2s-6.5 30.7-19 43.2l-160 160c-6.8 6.8-15.9 9.9-24 9.9z"/></svg>
+        </a>
+      </div>
+
+      <div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+        {opinion.map((item, index) => (
+          <div class={index === 0 ? 'md:col-span-2 lg:col-span-2 lg:row-span-2' : ''}>
+            <OpinionCard data={item} featured={index === 0} />
+          </div>
+        ))}
+
+        <!-- Editorial card -->
+        <div class="group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-br from-[#1c1917] to-[#2d2a26] p-8 text-white transition-all duration-500 hover:shadow-2xl">
+          <div class="absolute right-0 top-0 h-40 w-40 rounded-full bg-[#c59d5f]/10 blur-3xl transition-transform duration-700 group-hover:scale-150" />
+          <div class="relative z-10">
+            <span class="mb-4 inline-block rounded-full bg-[#c59d5f]/20 px-3 py-1 text-xs font-bold uppercase tracking-wider text-[#c59d5f]">Sharhin Edita</span>
+            <h3 class="mb-4 font-serif text-2xl font-bold leading-tight transition-colors group-hover:text-[#c59d5f]">Matakan tsaron bayanai su ci gaba da zama ginshikin cigaba.</h3>
+            <p class="line-clamp-3 text-sm leading-relaxed text-gray-400">A yayin da duniya ke kara dunkulewa, ya zama wajibi mu dage wajen kare bayani.</p>
+          </div>
+          <div class="relative z-10 mt-8 flex items-center gap-4">
+            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-[#c59d5f] to-[#d4a85f] font-serif text-xl font-bold text-[#0f3036] shadow-lg">Y</div>
+            <div>
+              <p class="text-sm font-bold">Yanci Edita</p>
+              <p class="text-xs uppercase tracking-wider text-gray-400">Muryar Gaskiya</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Newsletter mini card -->
+        <div class="group flex flex-col justify-between rounded-2xl border border-gray-100 bg-gradient-to-br from-[#f8f7f4] to-[#f0ede8] p-8 transition-all duration-300 hover:shadow-lg">
+          <div>
+            <div class="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[#0f3036] shadow-lg transition-transform group-hover:scale-110">
+              <svg class="h-6 w-6 text-[#c59d5f]" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M502 3 153 199a24 24 0 0 0-4 40l70 26 22 74a24 24 0 0 0 39 10L382 30c3-3 3-7 0-10 0 0-2-13-11-18 0 0 0 0-1 0A15 15 0 0 0 369 0zM232 406l-31-19 105-113-74-27 0 0 0 0a24 24 0 0 1-34-34l0 0 0 0 113-105-19-31a24 24 0 0 0-32-9l-195 119a24 24 0 0 0-2 42l53 26 25 90a24 24 0 0 0 41 9L282 382a24 24 0 0 0-50-76z"/></svg>
+            </div>
+            <h3 class="mb-2 font-serif text-xl font-bold text-[#1c1917]">Tafiyar da Wasiku</h3>
+            <p class="mb-4 text-sm text-gray-600">Samu labarai kai tsaye a cikin akwatin sako naka kowane safiya.</p>
+          </div>
+          <form action="/api/newsletter" method="post" class="space-y-3">
+            <input type="email" name="email" required placeholder="Adireshin imel..." class="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm transition-all focus:border-[#c59d5f] focus:outline-none focus:ring-2 focus:ring-[#c59d5f]/20" />
+            <button type="submit" class="w-full rounded-lg bg-[#0f3036] py-3 text-sm font-bold uppercase tracking-wider text-white shadow-lg shadow-[#0f3036]/20 transition-colors hover:bg-[#1a454c]">Yi Rajista</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sport -->
+  <section class="relative overflow-hidden bg-gradient-to-b from-[#0f3036] via-[#1a454c] to-[#0f3036] py-20">
+    <div class="absolute inset-0 opacity-5" style={`background-image:url('${sportPattern}')`} />
+    <div class="absolute left-10 top-20 h-32 w-32 animate-pulse rounded-full bg-[#2c7a7b]/20 blur-3xl" />
+    <div class="absolute bottom-20 right-10 h-48 w-48 animate-pulse rounded-full bg-[#cb95f]/10 blur-3xl" />
+
+    <div class="relative z-10 mx-auto max-w-[1400px] px-4 md:px-6">
+      <div class="mb-12 flex flex-col justify-between gap-6 md:flex-row md:items-center">
+        <div class="flex items-center gap-4">
+          <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#c59d5f] to-[#d4a85f] shadow-2xl shadow-[#c59d5f]/30">
+            <svg class="h-7 w-7 text-[#0f3036]" viewBox="0 0 640 512" fill="currentColor" aria-hidden="true"><path d="M192 416c0 17.7 14.3 32 32 32h128c17.7 0 32-14.3 32-32v-64H192v64zm416-144c0 4.4-.3 8.8-.8 13C234.7 278.6 153.6 144 162 96c4.9-2.6 8.6 0 13.3 0 141.6 0 213.8 78.4 242.7 96zm64 32c0 51.8-38.5 94.8-89 101.7-1.4 10.1-2.8 20.2-4.2 30.3H221.5l-4.2-30.4C165.9 283.7 128 240 128 192c0 141.6-53.3 256 224 256 39.3 0 74.7-14.9 100.4-39.2 17 3.4 33.5 13.6 43.4 26.3z"/></svg>
+          </div>
+          <div>
+            <span class="text-xs font-bold uppercase tracking-widest text-[#c59d5f]">Wasanni</span>
+            <h2 class="font-serif text-3xl font-black text-white md:text-4xl">Sakamako da Labarai</h2>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid gap-8 lg:grid-cols-12">
+        <!-- Live match + standings -->
+        <div class="space-y-6 lg:col-span-4">
+          {liveMatch && (
+            <div class="overflow-hidden rounded-2xl bg-white shadow-2xl">
+              <div class="flex items-center justify-between bg-gradient-to-r from-[#0f3036] to-[#1a454c] p-4">
+                <div class="flex items-center gap-2">
+                  <span class="relative flex h-3 w-3">
+                    <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
+                    <span class="relative inline-flex h-3 w-3 rounded-full bg-red-500"></span>
+                  </span>
+                  <span class="text-xs font-bold uppercase tracking-widest text-white">Kai Tsaye</span>
+                </div>
+                <span class="text-xs font-bold text-[#c59d5f]">{liveMatch.league}</span>
+              </div>
+              <div class="p-6">
+                <div class="mb-6 flex items-center justify-between">
+                  <div class="flex flex-col items-center gap-2">
+                    <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0f3036] to-[#1a454c] text-2xl font-black text-white shadow-lg">{liveMatch.homeTeam.split(' ').map(n => n[0]).join('').slice(0, 2)}</div>
+                    <span class="text-sm font-bold text-[#1c1917]">{liveMatch.homeTeam}</span>
+                  </div>
+                  <div class="text-center">
+                    <div class="flex items-center gap-3 text-3xl font-black">
+                      <span class="text-[#0f3036]">{liveMatch.homeScore}</span>
+                      <span class="text-gray-300">:</span>
+                      <span class="text-gray-400">{liveMatch.awayScore}</span>
+                    </div>
+                    <div class="mt-2 rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-600">{liveMatch.minute}</div>
+                  </div>
+                  <div class="flex flex-col items-center gap-2">
+                    <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-gray-400 to-gray-500 text-2xl font-black text-white shadow-lg">{liveMatch.awayLogo}</div>
+                    <span class="text-sm font-bold text-gray-500">{liveMatch.awayTeam}</span>
+                  </div>
+                </div>
+                <div class="space-y-3 border-t border-gray-100 pt-4">
+                  {(liveMatch.events ?? []).map((evt) => (
+                    <div class="flex items-center gap-3 text-xs">
+                      <span class="w-8 font-mono text-gray-400">{evt.minute}</span>
+                      <span class={`h-2 w-2 rounded-full ${evt.team === 'home' ? 'bg-[#c59d5f]' : 'bg-gray-400'}`}></span>
+                      <span class="flex-1 text-gray-600">{evt.player}</span>
+                      <span class="font-bold text-[#0f3036]">{evt.score}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {standings.length > 0 && (
+            <div class="overflow-hidden rounded-2xl bg-white/95 shadow-xl backdrop-blur">
+              <div class="flex items-center justify-between border-b border-gray-100 p-4">
+                <div class="flex items-center gap-2">
+                  <span class="flex h-5 w-5 items-center justify-center text-[#0f3036]"><svg class="h-5 w-5" viewBox="0 0 640 512" fill="currentColor" aria-hidden="true"><path d="M572 52c27 0 45-18 57-30l-27-36-57 20zM96 0C60.7 0 32 28.7 32 64v64H32c-17.7 0-32 14.3-32 32v128c0 17.7 14.3 32 32 32h16v208c0 17.7 14.3 32 32 32h64c17.7 0 32-14.3 32-32V224h32V512c0 17.7 14.3 32 32 32h64c17.7 0 32-14.3 32-32V158.6 128h64 42.9c19.1 0 36.3 9.1 48.9 18.4 4.5 3.3 9.1 6.7 13.4 9.4 5 3 10.7 4.4 16.7 2.9 1.1-3 2.1-6.1 3.2-9.2l8.6-23.4C598.4 110.4 632 48 632 64c0-8.5 0-7.8 0 0zM192 96V32h64v64h-64zm0 127.7V160h64c0 32.9-5.9 44.6-8 63.7H192zm96-14.7l5.3-16.7 10.7-10.7h80v64H288v-18.4z"/></svg></span>
+                  <span class="text-sm font-bold">Tsarin Gasar NPFL</span>
+                </div>
+                <span class="text-xs text-gray-400">2024/25</span>
+              </div>
+              <div class="p-2">
+                {standings.slice(0, 5).map((team) => (
+                  <div class={`flex items-center gap-3 rounded-lg p-2.5 text-sm ${team.pos === 1 ? 'border-l-4 border-[#c59d5f] bg-gradient-to-r from-[#c59d5f]/20 to-transparent' : 'hover:bg-gray-50'}`}>
+                    <span class={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${team.pos <= 3 ? 'bg-[#0f3036] text-white' : 'bg-gray-100 text-gray-600'}`}>{team.pos}</span>
+                    <span class="flex-1 font-bold text-[#1c1917]">{team.team}</span>
+                    <span class="w-8 text-center text-xs text-gray-400">{team.p}</span>
+                    <span class="w-10 text-center text-xs text-gray-400">{team.gd}</span>
+                    <span class="w-8 text-center font-bold text-[#0f3036]">{team.pts}</span>
+                  </div>
+                ))}
+              </div>
+              <a href="/wasanni" class="block w-full border-t border-gray-100 py-3 text-center text-xs font-bold uppercase tracking-wider text-[#0f3036] transition-colors hover:text-[#c59d5f]">Duba cikakken tebur</a>
+            </div>
+          )}
+        </div>
+
+        <!-- Fixtures -->
+        <div class="h-full rounded-2xl bg-white/95 p-6 shadow-xl backdrop-blur lg:col-span-4">
+          <div class="mb-6 flex items-center justify-between">
+            <span class="text-lg font-bold">Wasannin Wannan Mako</span>
+            <span class="rounded-full bg-[#0f3036]/10 px-3 py-1 text-xs font-bold text-[#0f3036]">{fixtures.length} Wasanni</span>
+          </div>
+          <div class="space-y-4">
+            {fixtures.slice(0, 5).map((match) => (
+              <div class="group cursor-pointer rounded-xl border border-gray-100 bg-white p-4 transition-all hover:border-[#2c7a7b]/30 hover:shadow-lg">
+                <div class="mb-3 flex items-center justify-between">
+                  <span class="rounded-full bg-[#2c7a7b]/10 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-[#2c7a7b]">{match.league}</span>
+                  <span class="text-xs text-gray-400">{match.date}, {match.time}</span>
+                </div>
+                <div class="mb-3 flex items-center justify-between">
+                  <div class="flex-1 text-center">
+                    <div class="mx-auto mb-1 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-[#0f3036] to-[#1a454c] font-bold text-white transition-transform group-hover:scale-110">{match.home.split(' ').map(n => n[0]).join('')}</div>
+                    <span class="text-xs font-bold text-[#1c1917]">{match.home}</span>
+                  </div>
+                  <div class="px-4"><span class="text-lg font-black text-gray-300">VS</span></div>
+                  <div class="flex-1 text-center">
+                    <div class="mx-auto mb-1 flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 font-bold text-gray-600 transition-transform group-hover:scale-110">{match.away.split(' ').map(n => n[0]).join('')}</div>
+                    <span class="text-xs font-bold text-gray-600">{match.away}</span>
+                  </div>
+                </div>
+                <div class="text-center text-[10px] text-gray-400">{match.stadium}</div>
+              </div>
+            ))}
+          </div>
+          <a href="/wasanni" class="mt-6 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#0f3036] py-3 text-sm font-bold uppercase tracking-wider text-[#0f3036] transition-all hover:bg-[#0f3036] hover:text-white">Duba Jadawalin Duka</a>
+        </div>
+
+        <!-- Sports news -->
+        <div class="space-y-6 lg:col-span-4">
+          <div>
+            <div class="mb-4 flex items-center justify-between">
+              <h3 class="text-lg font-bold text-white">Sabbin Labarai</h3>
+              <a href="/wasanni" class="text-xs text-[#c59d5f] hover:underline">Duba duka</a>
+            </div>
+            <div class="space-y-4">
+              {sport.slice(0, 3).map((article) => (
+                <a href={`/article/${article.$id ?? article.id}`} class="group flex cursor-pointer gap-4 rounded-xl bg-white/95 p-4 backdrop-blur transition-all hover:bg-white">
+                  {article.image && (
+                    <div class="h-24 w-24 shrink-0 overflow-hidden rounded-xl">
+                      <img src={article.image} alt={article.headline} loading="lazy" class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                    </div>
+                  )}
+                  <div class="min-w-0 flex-1">
+                    <span class="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[#2c7a7b]">{article.kicker}</span>
+                    <h4 class="line-clamp-2 font-serif text-sm font-bold leading-snug text-[#1c1917] transition-colors group-hover:text-[#0f3036]">{article.headline}</h4>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-white/10 bg-white/10 p-6 backdrop-blur">
+            <h4 class="mb-4 text-sm font-bold text-white">Saurin Labarai</h4>
+            <div class="grid grid-cols-2 gap-4">
+              <div class="rounded-xl bg-white/5 p-3 text-center">
+                <p class="text-2xl font-black text-[#c59d5f]">12</p>
+                <p class="text-[10px] uppercase tracking-wider text-white/60">Kwallaya a yau</p>
+              </div>
+              <div class="rounded-xl bg-white/5 p-3 text-center">
+                <p class="text-2xl font-black text-white">8</p>
+                <p class="text-[10px] uppercase tracking-wider text-white/60">Wasannin da suka gama</p>
+              </div>
+              <div class="rounded-xl bg-white/5 p-3 text-center">
+                <p class="text-2xl font-black text-white">{fixtures.length}</p>
+                <p class="text-[10px] uppercase tracking-wider text-white/60">Wasannin gobe</p>
+              </div>
+              <div class="rounded-xl bg-white/5 p-3 text-center">
+                <p class="text-2xl font-black text-[#c59d5f]">{liveMatch ? 1 : 0}</p>
+                <p class="text-[10px] uppercase tracking-wider text-white/60">Kai tsaye</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Lifestyle & Culture -->
+  <section class="py-20">
+    <div class="mx-auto grid max-w-[1400px] gap-12 px-4 md:px-6 lg:grid-cols-12">
+      <div class="lg:col-span-7">
+        <div class="mb-8 flex items-center gap-4">
+          <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-[#d69e2e] to-[#ecc94b]">
+            <span class="flex h-5 w-5 items-center justify-center text-white">☉</span>
+          </div>
+          <div>
+            <span class="text-xs font-bold uppercase tracking-widest text-[#d69e2e]">Rayuwa</span>
+            <h2 class="font-serif text-2xl font-black text-[#1c1917]">Rayuwar Yanci</h2>
+          </div>
+        </div>
+        <div class="space-y-6">
+          {published.slice(0, 2).map((item, idx) => (
+            <article class={`group overflow-hidden rounded-2xl border border-gray-100 bg-white transition-all duration-500 hover:shadow-xl ${idx === 0 ? 'flex flex-col md:flex-row' : 'flex gap-4 p-4'}`}>
+              {item.image && (
+                <div class={`overflow-hidden ${idx === 0 ? 'aspect-video md:w-1/2' : 'h-24 w-24 shrink-0 rounded-lg'}`}>
+                  <img src={item.image} alt={item.headline} loading="lazy" class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                </div>
+              )}
+              <div class={idx === 0 ? 'flex flex-col justify-center p-6 md:w-1/2' : 'min-w-0 flex-1'}>
+                <span class="mb-2 block text-[10px] font-bold uppercase tracking-widest text-[#d69e2e]">{item.kicker}</span>
+                <h3 class={`font-serif text-[#1c1917] leading-tight transition-colors group-hover:text-[#d69e2e] ${idx === 0 ? 'mb-3 text-2xl font-bold' : 'mb-2 text-lg font-bold'}`}>{item.headline}</h3>
+                {idx === 0 && item.trail && <p class="mb-4 line-clamp-3 text-sm leading-relaxed text-gray-600">{item.trail}</p>}
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+
+      <div class="lg:col-span-5">
+        <div class="mb-8 flex items-center gap-4">
+          <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-[#a1845c] to-[#c4a574]">
+            <span class="flex h-5 w-5 items-center justify-center text-white">✦</span>
+          </div>
+          <div>
+            <span class="text-xs font-bold uppercase tracking-widest text-[#a1845c]">Al'adu</span>
+            <h2 class="font-serif text-2xl font-black text-[#1c1917]">Al'adu & Fasaha</h2>
+          </div>
+        </div>
+
+        <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1c1917] to-[#2d2a26] p-6 text-white">
+          <div class="absolute inset-0 opacity-20">
+            <img src="https://images.unsplash.com/photo-1535905557558-afc4877a26fc?w=800&auto=format&fit=crop" alt="" loading="lazy" class="h-full w-full object-cover" />
+          </div>
+          <div class="relative z-10 space-y-6">
+            {sport.slice(0, 2).map((item) => (
+              <a href={`/article/${item.$id ?? item.id}`} class="group flex cursor-pointer gap-4 rounded-xl bg-white/5 p-4 backdrop-blur-sm transition-all duration-300 hover:bg-white/10">
+                {item.image && (
+                  <div class="h-20 w-20 shrink-0 overflow-hidden rounded-lg">
+                    <img src={item.image} alt={item.headline} loading="lazy" class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                  </div>
+                )}
+                <div class="min-w-0 flex-1">
+                  <span class="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[#c59d5f]">{item.kicker}</span>
+                  <h3 class="line-clamp-2 font-serif text-base font-bold leading-snug transition-colors group-hover:text-[#c59d5f]">{item.headline}</h3>
+                </div>
+              </a>
+            ))}
+          </div>
+          <a href="/aladu" class="relative z-10 mt-6 block w-full rounded-xl border border-white/20 py-4 text-center text-sm font-bold uppercase tracking-widest transition-all hover:bg-white hover:text-[#1c1917]">Dukan labaran al'adu</a>
+        </div>
+
+        <div class="mt-8">
+          <h4 class="mb-4 text-xs font-bold uppercase tracking-widest text-gray-400">Batutuwan da suka fi shahara</h4>
+          <div class="flex flex-wrap gap-2">
+            {SEED_TRENDING.map((tag) => (
+              <a href="/search" class="cursor-pointer rounded-full bg-gray-100 px-4 py-2 text-xs font-bold text-gray-600 transition-all hover:bg-[#0f3036] hover:text-white">{tag}</a>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Newsletter full width -->
+  <section class="relative overflow-hidden bg-[#0f3036] py-20">
+    <div class="absolute inset-0">
+      <div class="absolute -right-40 -top-40 h-96 w-96 rounded-full bg-[#c59d5f]/20 blur-3xl" />
+      <div class="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-[#2c7a7b]/20 blur-3xl" />
+    </div>
+    <div class="relative mx-auto max-w-2xl px-4 text-center md:px-6">
+      <div class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#c59d5f] shadow-2xl">
+        <svg class="h-8 w-8 text-[#0f3036]" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M502 3 153 199a24 24 0 0 0-4 40l70 26 22 74a24 24 0 0 0 39 10L382 30zM232 406l-31-19 105-113-74-27a24 24 0 0 1-34-34l113-105-19-31a24 24 0 0 0-32-9l-195 119a24 24 0 0 0-2 42l53 26 25 90a24 24 0 0 0 41 9L282 382a24 24 0 0 0-50-76z"/></svg>
+      </div>
+      <h2 class="mb-4 font-serif text-4xl font-black text-white md:text-5xl">Kasance tare da mu</h2>
+      <p class="mb-8 text-lg text-gray-300">Samu labarai masu inganci, ra'ayoyi masu zurfi, da rahotanni na musamman kai tsaye a cikin akwatin sako naka.</p>
+      <form action="/api/newsletter" method="post" class="mx-auto flex max-w-lg flex-col gap-4 sm:flex-row">
+        <input type="email" name="email" placeholder="Adireshin imel..." required class="flex-1 rounded-xl border border-white/20 bg-white/10 px-6 py-4 text-white transition-all placeholder:text-gray-400 focus:border-[#c59d5f] focus:outline-none focus:ring-2 focus:ring-[#c59d5f]/50" />
+        <button type="submit" class="rounded-xl bg-[#c59d5f] px-8 py-4 font-bold uppercase tracking-wider text-[#0f3036] shadow-lg transition-all hover:bg-white">Yi Rajista</button>
+      </form>
+      <p class="mt-4 text-xs text-gray-500">Masu karatu 50,000+ sun riga sun yi rajista. Kana iya soke rajista a kowane lokaci.</p>
+    </div>
+  </section>
+</BaseLayout>

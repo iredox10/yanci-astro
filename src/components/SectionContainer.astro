@@ -1,0 +1,22 @@
+---
+interface Props {
+  title: string;
+  accent?: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+}
+
+const { title, accent = '#0f3036', ctaLabel = 'Duba duka', ctaHref = '#' } = Astro.props;
+---
+
+<section class="mb-12">
+  <div class="mb-4 flex items-center justify-between border-b border-gray-200 pb-2">
+    <h2 class="text-xl font-bold" style={`color:${accent}`}>{title}</h2>
+    {ctaHref !== '#' && (
+      <a href={ctaHref} class="text-xs font-bold hover:underline" style={`color:${accent}`}>{ctaLabel}</a>
+    )}
+  </div>
+  <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <slot />
+  </div>
+</section>

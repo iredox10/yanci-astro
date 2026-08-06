@@ -1,0 +1,84 @@
+---
+import type { ArticleCard } from '../data/schema';
+import { pillarColors } from '../data/schema';
+
+interface Props {
+  data: ArticleCard;
+  variant?: 'standard' | 'compact' | 'featured' | 'hero';
+}
+
+const { data, variant = 'standard' } = Astro.props;
+const colors = pillarColors(data.pillar);
+const href = `/article/${data.$id ?? data.id}`;
+
+const formatTime = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('ha-NG') : '');
+---
+
+{data.type === 'hero' || variant === 'hero' ? (
+  <a href={href} class="group relative block h-full min-h-[500px] md:min-h-[600px] overflow-hidden rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-700">
+    <div class="absolute inset-0">
+      {data.image && <img src={data.image} alt={data.headline} width={1600} height={960} loading="eager" class="h-full w-full object-cover transition-transform duration-1000 group-hover:scale-105" />}
+      <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
+      <div class="absolute inset-0 bg-[#0f3036]/0 group-hover:bg-[#0f3036]/10 transition-colors duration-500" />
+    </div>
+    <div class="relative flex h-full flex-col justify-end p-6 md:p-10 text-white">
+      <div class="transform transition-all duration-500 group-hover:-translate-y-2">
+        <span class="inline-block px-4 py-1.5 mb-4 text-xs font-bold uppercase tracking-widest" style={`background-color:${colors.main}; color:#0f3036; border-radius:9999px; box-shadow:0 10px 15px -3px rgb(0 0 0 / 0.3)`}>
+          {data.kicker}
+        </span>
+        <h2 class="mb-4 font-serif text-3xl font-bold leading-tight md:text-5xl lg:text-6xl">{data.headline}</h2>
+        {data.trail && (
+          <p class="mb-6 hidden max-w-3xl border-l-4 pl-4 font-serif text-lg text-gray-200 leading-relaxed opacity-0 transition-all delay-100 duration-500 group-hover:opacity-100 md:block" style={`border-color:${colors.main}`}>
+            {data.trail}
+          </p>
+        )}
+      </div>
+    </div>
+  </a>
+) : data.type === 'compact' || variant === 'compact' ? (
+  <a href={href} class="group -mx-3 flex gap-4 rounded-xl px-3 py-4 border-b border-gray-100 transition-all last:border-0 hover:bg-gray-50/50">
+    <div class="min-w-0 flex-1">
+      <span class="mb-2 block text-[10px] font-bold uppercase tracking-widest" style={`color:${colors.main}`}>{data.kicker}</span>
+      <h3 class="line-clamp-2 font-serif text-lg font-bold leading-snug text-[#1c1917] transition-colors group-hover:text-[#0f3036]">{data.headline}</h3>
+    </div>
+    {data.image && <div class="h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg"><img src={data.image} alt={data.headline} loading="lazy" width={192} height={192} class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110" /></div>}
+  </a>
+) : variant === 'featured' ? (
+  <a href={href} class="group block h-full">
+    <div class="relative flex h-full flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-all duration-500 hover:shadow-xl">
+      {data.image && (
+        <div class="relative aspect-[16/9] overflow-hidden">
+          <img src={data.image} alt={data.headline} loading="lazy" class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+          <span class="absolute left-4 top-4 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white" style={`background-color:${colors.main}`}>{data.kicker}</span>
+        </div>
+      )}
+      <div class="flex flex-1 flex-col p-6">
+        <h3 class="mb-3 font-serif text-2xl font-bold leading-tight text-[#1c1917] transition-colors group-hover:text-[#0f3036]">{data.headline}</h3>
+        {data.trail && <p class="mb-4 line-clamp-2 text-sm leading-relaxed text-gray-600">{data.trail}</p>}
+        <div class="mt-auto flex items-center justify-between text-xs text-gray-400">
+          <span class="font-medium text-gray-600">{data.author ?? 'Yanci'}</span>
+          <span>{formatTime(data.$createdAt)}</span>
+        </div>
+      </div>
+    </div>
+  </a>
+) : (
+  <a href={href} class="group block h-full">
+    <div class="flex h-full flex-col overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm transition-all duration-300 hover:border-gray-200 hover:shadow-lg">
+      {data.image && (
+        <div class="relative aspect-[3/2] overflow-hidden">
+          <img src={data.image} alt={data.headline} loading="lazy" class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+          <div class="absolute inset-0 bg-black/0 transition-colors duration-300 group-hover:bg-black/10" />
+        </div>
+      )}
+      <div class="flex flex-1 flex-col p-5">
+        <span class="mb-3 text-[10px] font-bold uppercase tracking-widest" style={`color:${colors.main}`}>{data.kicker}</span>
+        <h3 class="mb-3 flex-1 font-serif text-lg font-bold leading-tight text-[#1c1917] transition-colors group-hover:text-[#0f3036]">{data.headline}</h3>
+        <div class="mt-auto flex items-center justify-between border-t border-gray-50 pt-4 text-xs text-gray-400">
+          <span class="font-medium">{data.author ?? 'Yanci'}</span>
+          <span>{formatTime(data.$createdAt)}</span>
+        </div>
+      </div>
+    </div>
+  </a>
+)}

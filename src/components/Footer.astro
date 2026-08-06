@@ -1,0 +1,109 @@
+---
+const year = new Date().getFullYear();
+const socials = [
+  { name: 'Twitter', href: 'https://twitter.com/yanci_ng' },
+  { name: 'Facebook', href: 'https://facebook.com/yanci.ng' },
+  { name: 'Instagram', href: 'https://instagram.com/yanci_ng' },
+  { name: 'LinkedIn', href: 'https://linkedin.com/company/yanci' },
+];
+---
+
+<footer class="relative mt-20 overflow-hidden border-t-8 border-[#c59d5f] bg-[#0f3036] pt-20 pb-10 text-white">
+  <div class="pointer-events-none absolute inset-0 opacity-5"></div>
+  <div class="relative z-10 mx-auto max-w-[1400px] px-6">
+    <div class="mb-16 grid grid-cols-1 gap-12 lg:grid-cols-12">
+      <div class="space-y-8 lg:col-span-4">
+        <h3 class="mb-4 font-serif text-4xl font-black tracking-tighter">Yanci<span class="text-yanci-accent">.</span></h3>
+        <p class="max-w-md text-sm leading-relaxed text-gray-300">
+          Jarida mai zaman kanta da ke ba da labarai a Hausa, bisa gudummawar masu karatu. Muna kare gaskiya da al'adunmu na Arewa.
+        </p>
+
+        <div class="rounded-sm border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
+          <h4 class="mb-2 text-sm font-bold uppercase tracking-widest text-yanci-accent">Kasance da mu</h4>
+          <p class="mb-4 text-xs text-gray-400">Samu labarun masu zafi kai tsaye a akwatin imel naka.</p>
+          <form id="newsletter-form" action="/api/newsletter" method="post" class="flex gap-2">
+            <input
+              type="email" name="email" placeholder="Adireshin imel" required
+              class="w-full rounded-sm border border-white/20 bg-white/10 px-4 py-2 text-sm text-white placeholder-gray-500 transition-colors focus:border-yanci-accent focus:outline-none"
+            />
+            <button type="submit" class="rounded-sm bg-yanci-accent px-4 py-2 transition-colors hover:bg-white" aria-label="Biyan rajista">
+              <svg class="h-5 w-5 text-[#0f3036]" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M502 3 153 199a24 24 0 0 0-4 40l70 26 22 74a24 24 0 0 0 39 10L382 30c3-3 3-7 0-10 0 0-2-13-11-18 0 0 0 0-1 0A15 15 0 0 0 369 0zM232 406l-31-19 105-113-74-27 0 0 0 0a24 24 0 0 1-34-34l0 0 0 0 113-105-19-31a24 24 0 0 0-32-9l-195 119a24 24 0 0 0-2 42l53 26 25 90a24 24 0 0 0 41 9L282 382a24 24 0 0 0-50-76z"/></svg>
+            </button>
+          </form>
+          <p id="newsletter-status" class="mt-2 hidden text-xs text-green-400 font-bold">An yi rajada!</p>
+        </div>
+
+        <div class="flex gap-4">
+          {socials.map((s) => (
+            <a href={s.href} target="_blank" rel="noopener noreferrer" class="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 transition-all hover:bg-yanci-accent hover:text-[#0f3036]" aria-label={s.name}>
+              {s.name[0]}
+            </a>
+          ))}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-8 md:grid-cols-4 lg:col-span-8">
+        <div>
+          <h4 class="mb-6 border-b border-white/10 pb-3 text-xs font-bold uppercase tracking-wider text-yanci-accent">Labarun</h4>
+          <ul class="space-y-4 text-sm text-gray-400">
+            {[['Najeriya', '/labarai'], ['Siyasa', '/siyasa'], ['Kasuwanci', '/kasuwanci'], ['Wasanni', '/wasanni'], ['Fasaha', '/fasaha'], ['Zabe', '/zabe']].map(([label, href]) => (
+              <li><a href={href} class="block transition-all hover:translate-x-1 hover:text-white">{label}</a></li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h4 class="mb-6 border-b border-white/10 pb-3 text-xs font-bold uppercase tracking-wider text-yanci-accent">Ra'ayi</h4>
+          <ul class="space-y-4 text-sm text-gray-400">
+            {[['Sharhin Edita', '/raayi'], ['Bincike', '/raayi'], ['Tattaunawa', '/raayi']].map(([label, href]) => (
+              <li><a href={href} class="block transition-all hover:translate-x-1 hover:text-white">{label}</a></li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h4 class="mb-6 border-b border-white/10 pb-3 text-xs font-bold uppercase tracking-wider text-yanci-accent">Al'adu</h4>
+          <ul class="space-y-4 text-sm text-gray-400">
+            {[['Kiɗa', '/aladu'], ['Fina-finai', '/bidiyo'], ['Abinci', '/aladu']].map(([label, href]) => (
+              <li><a href={href} class="block transition-all hover:translate-x-1 hover:text-white">{label}</a></li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h4 class="mb-6 border-b border-white/10 pb-3 text-xs font-bold uppercase tracking-wider text-yanci-accent">Kamfani</h4>
+          <ul class="space-y-4 text-sm text-gray-400">
+            <li><span class="cursor-not-allowed text-gray-600" title="Anima a nana">Game da Mu</span></li>
+            <li><a href="/#tawi" class="block transition-all hover:translate-x-1 hover:text-white">Tuntube Mu</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex flex-col items-center justify-between gap-6 border-t border-white/10 pt-8 text-xs font-medium tracking-wide text-gray-500 md:flex-row">
+      <p>© {year} Yanci Media Ltd. An kiyaye haƴɗin mallaka.</p>
+      <div class="flex gap-8">
+        <span class="cursor-not-allowed text-gray-600" title="Anima gina">Tsare Sirri</span>
+        <a href="/search" class="transition-colors hover:text-white">Taswirar Shafin</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  const form = document.getElementById('newsletter-form');
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = (form.querySelector('input[type="email"]') as HTMLInputElement | null)?.value;
+    if (!email) return;
+    try {
+      await fetch('/api/newsletter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      form.hidden = true;
+      const status = document.getElementById('newsletter-status');
+      if (status) { status.hidden = false; }
+    } catch {
+      /* keep native fallback by not hiding */
+    }
+  });
+</script>

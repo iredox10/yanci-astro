@@ -1,0 +1,139 @@
+---
+import { SECTION_ROUTES } from '../data/schema';
+
+const today = new Date().toLocaleDateString('ha-NG', {
+  weekday: 'long',
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+});
+---
+
+<header class="relative z-50 font-sans">
+  <div class="flex items-center justify-between bg-[#0a2125] px-4 py-2 text-xs text-gray-300 md:px-6">
+    <div class="flex items-center gap-4">
+      <span class="font-bold text-yanci-accent">{today}</span>
+      <span class="hidden text-gray-500 md:inline">|</span>
+      <span class="hidden items-center gap-1 hover:text-white md:flex">🌍 International</span>
+    </div>
+    <div class="flex items-center gap-4">
+      <span class="cursor-not-allowed text-gray-400" title="Coming soon">Ayyuka</span>
+      <a href="/#tuntube" class="hover:text-white transition-colors">Tuntube Mu</a>
+      <a href="/admin/login" class="flex items-center gap-1 font-bold text-white hover:text-yanci-accent transition-colors">
+        <svg class="h-3 w-3" viewBox="0 0 448 512" fill="currentColor" aria-hidden="true"><path d="M224 256a128 128 0 1 0-128-128 128 128 0 0 0 128 128zm96 64H128A128 128 0 0 0 0 448v32a32 32 0 0 0 32 32h384a32 32 0 0 0 32-32v-32a128 128 0 0 0-128-128z"/></svg>
+        Shiga
+      </a>
+    </div>
+  </div>
+
+  <div class="bg-[#0f3036] py-6 text-white transition-all md:py-8">
+    <div class="mx-auto flex max-w-[1400px] items-center justify-between px-4 md:px-6">
+      <a href="/" class="group flex items-center gap-3">
+        <img src="/icons/yc-mark.svg" alt="Yanci Logo" class="h-10 w-10 object-contain md:h-14 md:w-14" />
+        <span class="font-serif text-4xl font-black leading-none tracking-tighter md:text-6xl">Yanci<span class="text-yanci-accent">.</span></span>
+      </a>
+      <div class="flex items-center gap-4 md:gap-6">
+        <a href="#" class="hidden items-center gap-2 rounded-full bg-yanci-accent px-5 py-2 text-sm font-bold text-[#0f3036] shadow-lg transition-all hover:-translate-y-0.5 hover:bg-white hover:shadow-xl md:flex">
+          Tallafa mana ▾
+        </a>
+        <div class="flex items-center gap-2 border-l border-white/10 pl-6">
+          <button id="nav-search-btn" type="button" aria-label="Nema" class="rounded-full p-2 text-yanci-accent transition-colors hover:bg-white/10">
+            <svg class="h-6 w-6" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M505 442.7 405.3 343a48 48 0 0 0-17-11.4V280a192 192 0 1 0-128 166v48.6a48.6 48.6 0 0 0 8.4 26.4 24 24 0 0 0 0 0l2.8 4A207.3 207.3 0 0 0 502 394.7 24 24 0 0 0 505 374.6zM64 272a128 128 0 1 1 256 0 128 128 0 0 1-256 0z"/></svg>
+          </button>
+          <button id="nav-menu-btn" type="button" aria-label="Rukuni" class="flex items-center gap-2 rounded-full p-2 font-bold transition-colors hover:bg-white/10">
+            <span class="flex flex-col items-end gap-1.5">
+              <span class="h-0.5 w-6 bg-white"></span>
+              <span class="h-0.5 w-4 bg-white"></span>
+              <span class="h-0.5 w-6 bg-white"></span>
+            </span>
+            <span class="hidden text-sm uppercase tracking-wider md:inline">Rukuni</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="sticky top-0 z-40 border-y border-[#2a5d66] bg-[#1a454c] shadow-md">
+    <div class="mx-auto max-w-[1400px] px-4 md:px-6">
+      <div class="flex h-12 items-center justify-between overflow-x-auto no-scrollbar">
+        <ul class="flex items-center gap-1 whitespace-nowrap text-sm font-bold text-gray-200 md:gap-6">
+          {SECTION_ROUTES.map((item) => (
+            <li>
+              <a href={item.path} class="block border-b-2 border-transparent px-3 py-3 transition-colors hover:border-yanci-accent hover:bg-[#0f3036] hover:text-white">{item.label}</a>
+            </li>
+          ))}
+        </ul>
+        <a href="/zabe" class="hidden items-center gap-2 border-l border-[#2a5d66] pl-4 text-xs font-bold text-yanci-accent transition-colors hover:text-white lg:flex">
+          <span class="h-2 w-2 animate-pulse rounded-full bg-red-500"></span>
+          KAI TSAYE
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <div id="nav-menu" hidden class="fixed inset-0 z-[60] overflow-y-auto bg-[#0f3036]/98 px-6 py-8 backdrop-blur-xl">
+    <div class="mx-auto max-w-[1400px] h-full">
+      <div class="mb-12 flex items-center justify-between border-b border-white/10 pb-6">
+        <span class="font-serif text-3xl font-black text-white">Yanci<span class="text-yanci-accent">.</span></span>
+        <button id="nav-menu-close" type="button" aria-label="Rufe" class="group rounded-full p-2 text-white transition-colors hover:bg-white/10">
+          <svg class="h-8 w-8 transition-transform group-hover:rotate-90" viewBox="0 0 352 512" fill="currentColor" aria-hidden="true"><path d="M242.7 256l100-100a24 24 0 0 0-34-34l-100 100-100-100a24 24 0 0 0-34 34l100 100-100 100a24 24 0 0 0 34 34l100-100 100 100a24 24 0 0 0 34-34z"/></svg>
+        </button>
+      </div>
+      <div class="grid gap-12 text-white md:grid-cols-3">
+        {[{ title: 'Labarai', color: 'text-yanci-accent', links: [['Najeriya', '/labarai'], ['Afirka', '/labarai'], ['Duniya', '/labarai'], ['Siyasa', '/siyasa'], ['Tsaro', '/labarai']] },
+          { title: 'Wasanni', color: 'text-[#90cfff]', links: [['Kwallon Kafa', '/wasanni'], ['NPFL', '/wasanni'], ['Premier League', '/wasanni'], ['Champions League', '/wasanni']] },
+          { title: "Al'adu & Rayuwa", color: 'text-[#eacca0]', links: [['Fina-finai', '/aladu'], ['Waka', '/aladu'], ['Abinci', '/aladu'], ['Tarihi', '/aladu']] }].map((col) => (
+          <div class="space-y-8">
+            <h3 class={`text-sm font-bold uppercase tracking-widest ${col.color}`}>{col.title}</h3>
+            <ul class="space-y-4 font-serif text-xl font-bold">
+              {col.links.map(([label, path]) => (
+                <li><a href={path} class="block transition-all hover:translate-x-2 hover:text-white">{label}</a></li>
+              ))}
+            </ul>
+          </div>
+        ))}
+        <div class="rounded-lg border border-white/5 bg-[#0a2125] p-6">
+          <h3 class="mb-4 font-bold text-white">Biyan Kuɗi</h3>
+          <p class="mb-6 text-sm text-gray-400">Samun labarai masu inganci yana bukatar tallafi. Taimaka mana mu ci gaba da aiki.</p>
+          <a href="#" class="block w-full rounded bg-yanci-accent py-3 text-center font-bold text-[#0f3036] transition-colors hover:bg-white">Bada Tallafi</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="nav-search" hidden class="fixed inset-0 z-[70] flex items-start justify-center bg-black/60 px-4 pt-24 backdrop-blur-sm">
+    <div class="w-full max-w-2xl overflow-hidden rounded-xl bg-white shadow-2xl">
+      <form action="/search" method="get" class="flex items-center gap-3 px-5 py-4">
+        <svg class="h-5 w-5 flex-shrink-0 text-gray-400" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M505 3.7 416.3 69a48 48 0 0 0-9 11.4 192 192 0 1 0 38.1 176.7A192 192 0 0 0 344.7 141 48.6 48.6 0 0 0 331 131.6 48.7 48.7 0 0 0 320 128 48 48 0 0 0 296 214.9L280 128a192 192 0 1 0 0 384 192 192 0 0 0 0-384z"/></svg>
+        <input name="q" type="search" placeholder="Nemi labarai..." class="flex-1 text-lg text-gray-900 outline-none placeholder-gray-400" />
+        <button type="button" id="nav-search-close" class="p-1 text-gray-400 transition-colors hover:text-gray-700" aria-label="Rufe">
+          <svg class="h-5 w-5" viewBox="0 0 352 512" fill="currentColor"><path d="M0 74l39-39 175 175 176-176 39 39zM0 438l39 39 175-175 176 176 39-39z"/></svg>
+        </button>
+      </form>
+    </div>
+  </div>
+</header>
+
+<script>
+  const menu = document.getElementById('nav-menu');
+  const search = document.getElementById('nav-search');
+  const menuBtn = document.getElementById('nav-menu-btn');
+  const menuClose = document.getElementById('nav-menu-close');
+  const searchBtn = document.getElementById('nav-search-btn');
+  const searchClose = document.getElementById('nav-search-close');
+  const input = search?.querySelector('input') as HTMLInputElement | null;
+
+  const toggle = (el: HTMLElement | null, force?: boolean) => {
+    if (!el) return;
+    if (force === undefined) el.hidden = !el.hidden;
+    else el.hidden = !force;
+  };
+
+  menuBtn?.addEventListener('click', () => toggle(menu, true));
+  menuClose?.addEventListener('click', () => toggle(menu, false));
+  searchBtn?.addEventListener('click', () => { toggle(search, true); input?.focus(); });
+  searchClose?.addEventListener('click', () => toggle(search, false));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { toggle(menu, false); toggle(search, false); }
+  });
+</script>
