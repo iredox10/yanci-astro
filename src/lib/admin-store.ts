@@ -1,4 +1,4 @@
-import { Client, Databases, ID } from 'node-appwrite';
+import { Client, Databases, ID, Query } from 'node-appwrite';
 import {
   APPWRITE_API_KEY,
   APPWRITE_COLLECTION_REVISIONS,
@@ -44,6 +44,24 @@ function writable(): {
 }
 
 export const READ_ANY = 'read("any")';
+
+/** True when a document already carries this headline (dedupe). */
+export async function articleExistsByHeadline(headline: string): Promise<boolean> {
+  const env = writable();
+  if (!env) return false;
+  if (!headline) return false;
+  try {
+    const { total } = await new Databases(env.client).listDocuments({
+      databaseId: env.databaseId,
+      collectionId: env.collection,
+      queries: [Query.equal('headline', headline), Query.limit(1)],
+    });
+    return total > 0;
+  } catch (error) {
+    console.error('[admin-store] articleExistsByHeadline failed', error);
+    return true; // fail closed: don't create duplicates when unknown
+  }
+}
 
 export async function adminCreateArticle(data: Record<string, unknown>): Promise<string | null> {
   const env = writable();
