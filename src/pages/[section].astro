@@ -1,0 +1,105 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SectionHeader from '../components/SectionHeader.astro';
+import NewsCard from '../components/NewsCard.astro';
+import { SECTIONS, sectionBySlug, sectionKeyForSlug, pillarForSlug } from '../data/sections';
+import { SEED_ARTICLES } from '../data/seed';
+import { pillarColors } from '../data/schema';
+
+interface Props {
+  section: string;
+}
+
+export function getStaticPaths() {
+  return SECTIONS.map((s) => ({
+    params: { section: s.slug },
+    props: { section: s.slug },
+  }));
+}
+
+const { section } = Astro.props;
+const def = sectionBySlug(section)!;
+const colors = pillarColors(def.pillar);
+const sectionKey = sectionKeyForSlug(section);
+const pillar = pillarForSlug(section);
+
+const sectionArticles = SEED_ARTICLES.filter(
+  (a) => a.section === sectionKey || a.pillar === pillar,
+);
+
+const [heroStory, ...rest] = sectionArticles;
+const subStories = rest.slice(0, 3);
+const feedStories = rest.slice(3);
+---
+
+<BaseLayout
+  title={`${def.label} — Yanci`}
+  description={def.blurb}
+  path={`/${section}/`}
+>
+  <SectionHeader section={def} />
+
+  <main class="mx-auto max-w-[1400px] px-4 py-12 md:px-6">
+    {sectionArticles.length === 0 ? (
+      <div class="py-32 text-center text-gray-400">
+        <p class="mb-2 font-serif text-2xl">Babu labari a nan tukuna.</p>
+        <p class="text-sm">Dawo nan gaba ko nema labari.</p>
+        <a
+          href="/search"
+          class="mt-6 inline-block rounded-sm px-6 py-3 text-sm font-bold uppercase tracking-widest text-white transition-all duration-200"
+          style={`background-color: ${colors.main}`}
+        >
+          Nema Labari
+        </a>
+      </div>
+    ) : (
+      <>
+        <section class="mb-12">
+          <div class="grid gap-8 md:grid-cols-12">
+            {heroStory && (
+              <div class="md:col-span-8">
+                <NewsCard data={heroStory} variant="hero" />
+              </div>
+            )}
+            {subStories.length > 0 && (
+              <div class="border-t-4 bg-white p-6 md:col-span-4" style={`border-color: ${colors.main}`}>
+                <h3 class="mb-4 text-sm font-bold uppercase tracking-widest" style={`color: ${colors.main}`}>
+                  Mafi Daukar Hankali
+                </h3>
+                <ul class="divide-y divide-gray-100">
+                  {subStories.map((story) => (
+                    <li class="py-4 first:pt-0">
+                      <a href={`/article/${story.$id ?? story.id}`} class="group block">
+                        <span class="mb-1 block text-[10px] font-bold uppercase tracking-widest" style={`color: ${colors.main}`}>
+                          {story.kicker}
+                        </span>
+                        <h4 class="line-clamp-2 font-serif text-lg font-bold leading-tight text-[#1c1917] transition-colors group-hover:text-[#0f3036]">
+                          {story.headline}
+                        </h4>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {feedStories.length > 0 && (
+          <section class="mt-12">
+            <div class="mb-8 flex items-center gap-2 border-b pb-2" style={`border-color: ${colors.main}`}>
+              <span class="text-sm font-bold uppercase tracking-widest" style={`color: ${colors.main}`}>
+                {def.label} — Ƙarin Labari
+              </span>
+            </div>
+            <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+              {feedStories.map((story) => (
+                <NewsCard data={story} />
+              ))}
+            </div>
+          </section>
+        )}
+      </>
+    )}
+  </main>
+</BaseLayout>

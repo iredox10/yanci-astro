@@ -1,0 +1,36 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import NewsCard from '../../components/NewsCard.astro';
+import { SEED_ARTICLES } from '../../data/seed';
+
+export const prerender = false;
+
+const { author } = Astro.params;
+const name = (author ?? '').replace(/-/g, ' ');
+const works = SEED_ARTICLES.filter((a) => (a.author ?? '').toLowerCase() === name.toLowerCase());
+const displayedAuthor = works[0]?.author ?? name;
+---
+
+<BaseLayout title={`${displayedAuthor} — Yanci`} description={`Duk labaran ${displayedAuthor} a Yanci.`} path={`/author/${author}/`}>
+  <section class="mx-auto max-w-[1400px] px-4 py-12 md:px-6">
+    <div class="mb-10 flex items-center gap-4 border-b border-gray-200 pb-8">
+      <div class="flex h-16 w-16 items-center justify-center rounded-full bg-[#0f3036] font-serif text-2xl font-black text-white">
+        {displayedAuthor[0]}
+      </div>
+      <div>
+        <span class="mb-1 block text-xs font-bold uppercase tracking-widest text-[#e05e00]">Marubuci</span>
+        <h1 class="font-serif text-3xl font-black text-[#121212] md:text-4xl">{displayedAuthor}</h1>
+        <p class="mt-1 text-sm text-gray-500">{works.length} labarai</p>
+      </div>
+    </div>
+    {works.length === 0 ? (
+      <p class="py-16 text-center text-gray-400">Babu labarun wannan marubuci tukuna.</p>
+    ) : (
+      <div class="grid gap-8 sm:grid-cols-2">
+        {works.map((a) => (
+          <NewsCard data={a} />
+        ))}
+      </div>
+    )}
+  </section>
+</BaseLayout>

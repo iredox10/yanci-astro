@@ -82,6 +82,15 @@ export const PILLARS: Record<string, PillarColors> = {
 
 export const pillarColors = (pillar?: string): PillarColors => PILLARS[pillar ?? ''] ?? PILLARS.news;
 
+/** Article page accent per legacy Guardian reader (distinct from card colors). */
+export const pillarAccent = (pillar?: string): string => {
+  if (pillar === 'sport') return '#0084c6';
+  if (pillar === 'culture') return '#a1845c';
+  if (pillar === 'lifestyle') return '#bb3b80';
+  if (pillar === 'opinion') return '#e05e00';
+  return '#c70000';
+};
+
 export const SECTION_ROUTES = [
   { label: 'Labarai', path: '/labarai' },
   { label: 'Siyasa', path: '/siyasa' },

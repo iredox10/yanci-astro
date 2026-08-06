@@ -1,0 +1,31 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import NewsCard from '../../components/NewsCard.astro';
+import { SEED_ARTICLES } from '../../data/seed';
+
+export const prerender = false;
+
+const { tag } = Astro.params;
+const matches = SEED_ARTICLES.filter((a) => {
+  const t = (a as { tags?: string }).tags ?? '';
+  return t.split(',').map((s) => s.trim().toLowerCase()).includes((tag ?? '').toLowerCase());
+});
+---
+
+<BaseLayout title={`#${tag} — Yanci`} description={`Labarun da ke dauke da #${tag}.`} path={`/tag/${tag}/`}>
+  <section class="mx-auto max-w-[1400px] px-4 py-12 md:px-6">
+    <div class="mb-10 border-b border-gray-200 pb-6">
+      <span class="mb-2 block text-xs font-bold uppercase tracking-widest text-[#e05e00]">Tag</span>
+      <h1 class="font-serif text-4xl font-black tracking-tighter text-[#121212] md:text-5xl">#{tag}</h1>
+    </div>
+    {matches.length === 0 ? (
+      <p class="py-16 text-center text-gray-400">Babu labari da tag "{tag}" tukuna.</p>
+    ) : (
+      <div class="grid gap-8 sm:grid-cols-2">
+        {matches.map((a) => (
+          <NewsCard data={a} />
+        ))}
+      </div>
+    )}
+  </section>
+</BaseLayout>

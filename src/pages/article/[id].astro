@@ -1,0 +1,171 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import NewsCard from '../../components/NewsCard.astro';
+import { SEED_ARTICLES } from '../../data/seed';
+import { pillarAccent } from '../../data/schema';
+import type { ArticleCard } from '../../data/schema';
+
+interface Props {
+  article: ArticleCard;
+}
+
+export function getStaticPaths() {
+  return SEED_ARTICLES.map((a) => ({
+    params: { id: String(a.$id ?? a.id) },
+    props: { article: a },
+  }));
+}
+
+const { article } = Astro.props;
+const accent = pillarAccent(article.pillar);
+const id = String(article.$id ?? article.id);
+const body = (article as { body?: string }).body;
+
+const words = (body ?? '').replace(/<[^>]*>/g, ' ').trim().split(/\s+/).filter(Boolean).length;
+const readTime = Math.max(1, Math.ceil(words / 200));
+
+const related = SEED_ARTICLES.filter((a) => String(a.$id ?? a.id) !== id).slice(0, 4);
+
+const formatDate = (iso?: string) =>
+  iso ? new Date(iso).toLocaleDateString('ha-NG', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+
+const currentUrl = `${Astro.site?.href ?? 'https://yanci.ng'}article/${id}`;
+const enc = (s: string) => encodeURIComponent(s);
+const facebookShare = `https://www.facebook.com/sharer/sharer.php?u=${enc(currentUrl)}`;
+const twitterShare = `https://twitter.com/intent/tweet?url=${enc(currentUrl)}&text=${enc(article.headline)}`;
+const whatsappShare = `https://api.whatsapp.com/send?text=${enc(`${article.headline} - ${currentUrl}`)}`;
+---
+
+<BaseLayout
+  title={article.headline}
+  description={article.trail}
+  path={`/article/${id}`}
+>
+  <!-- Reading progress -->
+  <div class="fixed left-0 top-0 z-50 h-1.5 w-full bg-gray-100">
+    <div id="reading-progress-bar" class="h-full transition-all duration-300 ease-out" style={`width:0%; background-color: ${accent}`} />
+  </div>
+
+  <main id="main-content" class="overflow-hidden pb-32 pt-10 md:pt-16" role="main" aria-label="Babban ciki">
+    <article class="mx-auto w-full max-w-[780px] px-4 sm:px-5 md:px-0">
+      <!-- Header -->
+      <header class="mb-8 md:mb-10">
+        <div class="mb-6 flex items-center gap-3">
+          <a href="/section/labarai" class="font-sans text-sm font-extrabold uppercase tracking-widest hover:underline" style={`color: ${accent}`}>
+            {article.section ?? 'Labarai'}
+          </a>
+          <span class="text-xs text-gray-300">/</span>
+          <span class="flex items-center gap-1 font-sans text-xs font-bold uppercase tracking-widest text-gray-500">
+            <svg class="h-3 w-3 text-gray-400" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M256 0C114.6 0 0 114.6 0 256s114.6 256 256 256 256-114.6 256-256S397.4 0 256 0zm112 288c0 8.8-7.2 16-16 16h-96c-8.8 0-16-7.2-16-16V128c0-8.8 7.2-16 16-16s16 7.2 16 16v128h80c8.8 0 16 7.2 16 16z"/></svg>
+            {readTime} Min Read
+          </span>
+        </div>
+
+        <h1 class="mb-6 break-words font-serif text-3xl font-bold leading-[1.1] tracking-tight text-[#121212] sm:text-4xl md:mb-8 md:text-5xl lg:text-[3.5rem]">
+          {article.headline}
+        </h1>
+
+        {article.trail && (
+          <div class="mb-8 break-words border-l-4 border-gray-200 py-1 pl-4 font-serif text-lg leading-[1.5] text-gray-600 sm:text-xl md:mb-10 md:pl-6 md:text-2xl">
+            {article.trail}
+          </div>
+        )}
+
+        {/* Meta */}
+        <div class="mb-8 flex flex-col justify-between gap-4 py-4 sm:flex-row sm:items-center sm:gap-6 sm:py-6 md:mb-10 border-y border-gray-100">
+          <div class="flex items-center gap-3 sm:gap-4">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg font-bold text-[#121212] sm:h-12 sm:w-12 sm:text-xl">
+              {(article.author ?? 'Y')[0]}
+            </div>
+            <div class="flex min-w-0 flex-col">
+              <span class="mb-0.5 text-[10px] font-sans font-bold uppercase tracking-widest text-gray-400">Written by</span>
+              <a href={`/author/${encodeURIComponent(article.author ?? 'Yanci Staff')}`} class="truncate font-sans text-sm font-bold transition-colors hover:underline sm:text-base" style={`color: ${accent}`}>
+                {article.author ?? 'Yanci Staff'}
+              </a>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 text-xs text-gray-400">
+            <svg class="h-3 w-3 shrink-0" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M464 256H48c-26.5 0-48-21.5-48-48V80c0-26.5 21.5-48 48-48h416c26.5 0 48 21.5 48 48v128c0 26.5-21.5 48-48 48zM64 207.8V320c0 26.5 21.5 48 48 48h288c26.5 0 48-21.5 48-48V207.8l-54.6 27.6c-25.5 12.9-56.7 10.2-81.2-9.2l-9.3 9.3c-33.1 33.1-86.8 33.1-119.9 0l-9.3-9.3c-24.5 19.4-55.7 22.1-81.2 6.9 0 0 0-1.1 0-1.1zm0 61.9 2.7-2.7 42.7-21.6-2.7 2.7-7.5 7.5c-12.5 12.5-32.8 12.5-45.3 0L64 269.1z"/></svg>
+            <span>{formatDate(article.$createdAt)}</span>
+          </div>
+
+          <div class="flex shrink-0 items-center gap-2 sm:gap-3">
+            <span class="mr-1 hidden font-sans text-[10px] font-bold uppercase tracking-widest text-gray-400 sm:block">Share</span>
+            <a href={facebookShare} target="_blank" rel="noopener noreferrer" class="flex h-9 w-9 items-center justify-center rounded-full border border-gray-100 text-gray-400 transition-all duration-300 hover:border-[#1877F2] hover:bg-[#1877F2] hover:text-white sm:h-10 sm:w-10" title="Facebook" aria-label="Share on Facebook">
+              <svg class="h-[14px] w-[14px]" viewBox="0 0 320 512" fill="currentColor" aria-hidden="true"><path d="M279.14 288l14.22-92.66h-88.9v-60.13c0-25.35 12.42-50.06 52.24-50.06h40.42V6.26S260.43 0 225.36 0c-73.22 0-121.08 44.38-121.08 124.72v70.62H22.89V288h81.39v224h100.17V288z"/></svg>
+            </a>
+            <a href={twitterShare} target="_blank" rel="noopener noreferrer" class="flex h-9 w-9 items-center justify-center rounded-full border border-gray-100 text-gray-400 transition-all duration-300 hover:border-[#1DA1F2] hover:bg-[#1DA1F2] hover:text-white sm:h-10 sm:w-10" title="Twitter" aria-label="Share on Twitter">
+              <svg class="h-[14px] w-[14px]" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M459.6 151.8c.3 4.6.3 9.3.3 14.1 0 144.6-110.1 311.4-311.4 311.4-61.8 0-119.3-18.1-167.7-49.2 8.6 1 17.2 1.5 26.2 1.5 53.4 0 102.5-18.2 141.5-48.9-49.9-1-92-26-106.5-81.6 13.4 2.6 27.2 2.6 41.3-1.6C120.3 277 80 228.7 80 169.4v-2.1c13 7.4 27.4 11.9 42.3 12.3-27.7-19.7-42.3-61.4-42.3-83.5 0-14.7 3.9-29 12.2-41.8 55.2 71.9 126.9 108.5 219.8 116.9a133.1 133.1 0 0 1 3.1-29.2C327.3 86.2 368 56 413.6 56c19.4 0 37.3 8.1 47.1 21-13.4 2.8-40 7.1-64.5 19.2 26.6-6.9 61.8-8.8 78.4-3.3z" transform="translate(9 0)"/></svg>
+            </a>
+            <a href={whatsappShare} target="_blank" rel="noopener noreferrer" class="flex h-9 w-9 items-center justify-center rounded-full border border-gray-100 text-gray-400 transition-all duration-300 hover:border-[#25D366] hover:bg-[#25D366] hover:text-white sm:h-10 sm:w-10" title="Whatsapp" aria-label="Share on WhatsApp">
+              <svg class="h-[14px] w-[14px]" viewBox="0 0 448 512" fill="currentColor" aria-hidden="true"><path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.2 0-65.7-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-32.6-16.3-54-29.1-75.5-66-5.7-9.8 5.7-9.1 16.3-30.3 1.8-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 35.2 15.2 49 16.5 66.6 13.9 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"/></svg>
+            </a>
+          </div>
+        </div>
+      </header>
+
+      <!-- Main image -->
+      {article.image && (
+        <figure class="mb-8 w-full md:mb-12">
+          <div class="relative overflow-hidden rounded-sm bg-gray-100 shadow-sm">
+            <img src={article.image} alt={article.headline} loading="eager" decoding="async" class="block h-auto w-full object-cover" />
+          </div>
+        </figure>
+      )}
+
+      <!-- Body -->
+      <div>
+        {body ? (
+          <Fragment set:html={body} />
+        ) : (
+          <p class="py-12 text-center font-serif italic text-gray-400">Ana loda labarin...</p>
+        )}
+      </div>
+
+      <!-- Tags -->
+      <div class="mt-16 border-t border-gray-200 pt-8 md:mt-20 md:pt-10">
+        <h4 class="mb-4 font-sans text-xs font-bold uppercase tracking-widest text-gray-400 md:mb-6">Taken Labarai</h4>
+        <div class="flex flex-wrap gap-2 md:gap-3">
+          {['Najeriya', 'Arewa', 'Labarai'].map((tag) => (
+            <a href={`/tag/${encodeURIComponent(tag)}`} class="rounded-full border border-gray-100 bg-gray-50 px-3 py-1.5 font-sans text-xs font-bold text-gray-700 shadow-sm transition-all duration-300 hover:border-[#121212] hover:bg-[#121212] hover:text-white md:px-4 md:py-2 md:text-sm">
+              #{tag}
+            </a>
+          ))}
+        </div>
+      </div>
+    </article>
+
+    <!-- Related -->
+    <section class="mt-12 border-t border-gray-200 bg-gray-50 py-12 md:mt-24 md:py-20">
+      <div class="mx-auto max-w-[1400px] px-4 sm:px-5 md:px-6">
+        <div class="mb-8">
+          <span class="mb-2 block text-xs font-bold uppercase tracking-widest" style={`color: ${accent}`}>Ku karanta ƙari</span>
+          <h2 class="font-serif text-3xl font-black text-[#121212]">Labaran da ke da alaƙa</h2>
+        </div>
+        <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+          {related.map((a) => (
+            <NewsCard data={a} />
+          ))}
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <button id="back-to-top" type="button" class="fixed bottom-6 right-4 z-50 hidden h-12 w-12 items-center justify-center rounded-full bg-[#121212] text-white shadow-2xl transition-all duration-300 hover:bg-[#c70000] sm:bottom-10 sm:right-10 sm:h-14 sm:w-14" aria-label="Back to top">
+    <svg class="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 384 512" fill="currentColor" aria-hidden="true"><path d="M63.5 405.4 167.6 268.6l-32.2 0c-40.3 0-73-32.6-73-72.9v-2.6c0-9.4 14.3-17.9 15.3-28.2 3.7-8.9 12.7-37.7 17.8-44 6.4-8 16.9-13 27.6-13 10.6 0 17.3 6.4 27.4 11.1 0 0-1.8-15.9-1.8-26.8 0-6.8-3.3-13.4-8.7-17.4l-19.8-11.2c-8.7-12.4-18.3-24.3-18.3-36.2 0-14 14.9-21.2 27.3-21.2 9.2 0 16.9 6.2 26.3 10.6 0 0 0-8.1 0-14.8 0-8-7-14.8-15.4-14.8h-3.9C122.4 1.9 104.4 18.2 104.4 40 103.2 51 199.2 512 231.3 512c14.4 0 31.9-13.3 47.9-27.9 4.2 4.3 7.9 11.9 13.1 16.9 30.5 29.6 63.6 14.9 63.6 14.9v0c-9.7-30.1-15.2-35.1 22.1-15.3v0c4.3-8.2 13.8-14.7 20.6-21.7-7.3-3.6-8.8-9.3-12.4-16.2l-28.9-67.4C263.9 141.4 42.4 116.4 42.4 319.7z"/></svg>
+  </button>
+</BaseLayout>
+
+<script>
+  const bar = document.getElementById('reading-progress-bar');
+  const topBtn = document.getElementById('back-to-top');
+  const onScroll = () => {
+    const total = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+    const p = total > 0 ? (window.scrollY / total) * 100 : 0;
+    if (bar) bar.style.width = `${Math.min(p, 100)}%`;
+    if (topBtn) topBtn.classList.toggle('hidden', window.scrollY <= 500);
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  topBtn?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+</script>

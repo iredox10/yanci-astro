@@ -1,0 +1,21 @@
+---
+import { pillarColors } from '../data/schema';
+import type { SectionDef } from '../data/sections';
+
+interface Props {
+  section: SectionDef;
+}
+
+const { section } = Astro.props;
+const colors = pillarColors(section.pillar);
+---
+
+<div class="border-b py-10 text-white" style={`background-color:${colors.main}; border-color:${colors.dark}`}>
+  <div class="mx-auto max-w-[1400px] px-4 md:px-6">
+    <div class="mb-2 text-xs font-bold uppercase tracking-widest opacity-60">Yanci</div>
+    <h1 class="mb-4 font-serif text-5xl font-black tracking-tighter md:text-7xl">
+      {section.label}<span style={`color: ${colors.pastel}`}>.</span>
+    </h1>
+    <p class="max-w-lg text-sm opacity-70">{section.blurb}</p>
+  </div>
+</div>
