@@ -1,0 +1,109 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import StatCard from '../../components/admin/StatCard.astro';
+import StatusBadge from '../../components/admin/StatusBadge.astro';
+import { getArticles, getMostRead } from '@lib/appwrite-server';
+import { pillarColors } from '../../data/schema';
+
+export const prerender = false;
+
+const articles = await getArticles(200);
+const mostRead = await getMostRead(10);
+
+const published = articles.filter((a) => a.status === 'published' || a.isLive);
+const drafts = articles.filter((a) => a.status === 'draft' || (!a.isLive && a.status !== 'scheduled'));
+const scheduled = articles.filter((a) => a.status === 'scheduled');
+
+const byPillar = new Map<string, number>();
+for (const a of articles) {
+  const p = String(a.pillar ?? 'news');
+  byPillar.set(p, (byPillar.get(p) ?? 0) + 1);
+}
+
+const recent = [...articles]
+  .sort((a, b) => String(b.$createdAt ?? '').localeCompare(String(a.$createdAt ?? '')))
+  .slice(0, 8);
+
+const readById = new Map(mostRead.map((m) => [m.articleId, m.views]));
+const fmt = new Intl.NumberFormat('en-GB');
+const day = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+const titleFor = (a: { headline?: string; ogTitle?: string }) => String(a.headline ?? a.ogTitle ?? 'Untitled');
+---
+
+<AdminLayout title="Dashboard" active="dashboard">
+  <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+    <StatCard label="Total" value={fmt.format(articles.length)} />
+    <StatCard label="Published" value={fmt.format(published.length)} />
+    <StatCard label="Drafts" value={fmt.format(drafts.length)} />
+    <StatCard label="Scheduled" value={fmt.format(scheduled.length)} />
+  </div>
+
+  <section class="mt-8 grid gap-8 lg:grid-cols-2">
+    <div>
+      <h2 class="border-b border-yanci-primary/20 pb-2 font-serif text-lg font-bold text-yanci-primary">
+        By pillar
+      </h2>
+      <ul class="mt-3 space-y-2">
+        {[...byPillar.entries()].sort((x, y) => y[1] - x[1]).map(([pillar, count]) => (
+          <li class="flex items-center justify-between text-sm">
+            <span class="flex items-center gap-2">
+              <span style={{ backgroundColor: pillarColors(pillar).main }} class="inline-block size-2.5 rounded-full" />
+              <span class="capitalize text-yanci-dark/80">{pillar}</span>
+            </span>
+            <span class="font-semibold text-yanci-primary">{count}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+    <div>
+      <h2 class="border-b border-yanci-primary/20 pb-2 font-serif text-lg font-bold text-yanci-primary">
+        Most read
+      </h2>
+      <ul class="mt-3 space-y-2">
+        {mostRead.length === 0 && (
+          <li class="text-sm text-yanci-primary/50">No view data yet.</li>
+        )}
+        {mostRead.map((m, i) => {
+          const article = articles.find((x) => x.$id === m.articleId);
+          return (
+            <li class="flex items-center gap-3 text-sm">
+              <span class="w-5 font-serif font-bold text-yanci-accent">{i + 1}</span>
+              <a
+                href={article ? `/admin/articles/${article.$id}` : '#'}
+                class="flex-1 truncate text-yanci-dark/80 hover:text-yanci-primary"
+              >
+                {article ? titleFor(article) : 'Deleted article'}
+              </a>
+              <span class="text-xs text-yanci-primary/50">{fmt.format(m.views)} views</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  </section>
+
+  <section class="mt-8">
+    <h2 class="border-b border-yanci-primary/20 pb-2 font-serif text-lg font-bold text-yanci-primary">
+      Recent articles
+    </h2>
+    <ul class="mt-3 divide-y divide-yanci-primary/10">
+      {recent.map((a) => (
+        <li class="flex items-center gap-4 py-2.5 text-sm">
+          <a
+            href={`/admin/articles/${a.$id}`}
+            class="flex-1 truncate font-medium text-yanci-dark/85 hover:text-yanci-primary"
+          >
+            {titleFor(a)}
+          </a>
+          <StatusBadge status={String(a.status ?? (a.isLive ? 'published' : 'draft'))} />
+          <span class="w-16 text-right text-xs text-yanci-primary/50">
+            {a.$id && readById.get(a.$id) ? fmt.format(readById.get(a.$id)!) : '—'}
+          </span>
+          <span class="w-28 text-right text-xs text-yanci-primary/50">
+            {day.format(new Date(String(a.$createdAt ?? '')))}
+          </span>
+        </li>
+      ))}
+    </ul>
+  </section>
+</AdminLayout>

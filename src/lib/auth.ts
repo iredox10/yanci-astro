@@ -59,6 +59,11 @@ export async function sessionTokenFrom(request: Request): Promise<string | null>
   }
 
   const cookies = parseCookies(request);
+
+  // Admin console cookie (HttpOnly, set by POST /api/auth/login).
+  const admin = cookies.get(ADMIN_COOKIE);
+  if (admin && admin.split('.').length === 3) return admin;
+
   const project = PUBLIC_APPWRITE_PROJECT_ID;
   if (!project) return null;
   for (const key of [`a_session_${project}`, `a_session_${project}_legacy`]) {
@@ -76,6 +81,46 @@ export async function sessionTokenFrom(request: Request): Promise<string | null>
     }
   }
   return null;
+}
+
+export const ADMIN_COOKIE = 'yc_session';
+
+export function adminCookieHeader(token: string, maxAgeSeconds: number, reset = false): string {
+  const secure = import.meta.env?.PROD ? '; Secure' : '';
+  return [
+    `${ADMIN_COOKIE}=${reset ? '' : encodeURIComponent(token)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    secure,
+    reset ? 'Max-Age=0' : `Max-Age=${maxAgeSeconds}`,
+  ]
+    .filter(Boolean)
+    .join('; ');
+}
+
+/** Create an Appwrite email/password session server-side and return its JWT. */
+export async function createAdminSession(
+  email: string,
+  password: string,
+): Promise<{ token: string; user: SessionUser } | { ok: false; status: number }> {
+  if (!PUBLIC_APPWRITE_ENDPOINT || !PUBLIC_APPWRITE_PROJECT_ID) {
+    return { ok: false, status: 503 };
+  }
+  try {
+    const client = new Client()
+      .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
+      .setProject(PUBLIC_APPWRITE_PROJECT_ID);
+    const session = await new Account(client).createEmailPasswordSession(email.trim(), password);
+    const token = session.secret;
+    const verified = await verifySession(token);
+    if (!verified) return { ok: false, status: 403 };
+    const role = await roleForUser(verified.id) ?? (await roleFromLabels(getLabels(verified)));
+    if (!role || ROLE_PRIORITY[role] === undefined) return { ok: false, status: 403 };
+    return { token, user: { ...verified, role } };
+  } catch {
+    return { ok: false, status: 401 };
+  }
 }
 
 export async function verifySession(

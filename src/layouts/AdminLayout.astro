@@ -1,0 +1,78 @@
+---
+import '../styles/global.css';
+import { requireUser, roleName } from '@lib/auth';
+
+interface Props {
+  title?: string;
+  active?: string;
+}
+
+const { title = 'Admin', active } = Astro.props;
+const auth = await requireUser(Astro.request);
+
+const links = [
+  { href: '/admin/dashboard', label: 'Dashboard', id: 'dashboard' },
+  { href: '/admin/articles', label: 'Articles', id: 'articles' },
+  { href: '/admin/articles/new', label: 'New article', id: 'new' },
+];
+const current = active ?? links[0].id;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title} — Yanci Admin</title>
+  </head>
+  <body class="bg-yanci-paper text-yanci-dark">
+    <div class="mx-auto flex min-h-screen max-w-6xl flex-col px-4 sm:px-6">
+      <header class="flex items-center justify-between border-b border-yanci-primary/15 py-4">
+        <a href="/admin/dashboard" class="flex items-center gap-2">
+          <span class="font-serif text-2xl font-bold text-yanci-primary">Yanci</span>
+          <span class="rounded-sm bg-yanci-accent px-2 py-0.5 text-xs font-bold uppercase tracking-widest text-yanci-primary">
+            Admin
+          </span>
+        </a>
+        <div class="flex items-center gap-4">
+          {auth.ok && (
+            <div class="text-right text-xs leading-tight">
+              <p class="font-bold text-yanci-primary">{auth.user.name}</p>
+              <p class="text-yanci-primary/60">{roleName(auth.user.role)}</p>
+            </div>
+          )}
+          <form method="post" action="/api/auth/logout">
+            <button class="border border-yanci-primary/30 px-3 py-1.5 text-sm font-medium text-yanci-primary transition-colors hover:bg-yanci-primary hover:text-yanci-paper">
+              Sign out
+            </button>
+          </form>
+        </div>
+      </header>
+      <nav class="flex gap-1 py-3">
+        {links.map((link) => (
+          <a
+            href={link.href}
+            class:list={[
+              'px-3 py-1.5 text-sm font-medium transition-colors',
+              current === link.id
+                ? 'bg-yanci-primary text-yanci-paper'
+                : 'text-yanci-primary/70 hover:bg-yanci-primary/10',
+            ]}
+          >
+            {link.label}
+          </a>
+        ))}
+        <a
+          href="/"
+          target="_blank"
+          class="ml-auto px-3 py-1.5 text-sm font-medium text-yanci-primary/70 hover:bg-yanci-primary/10"
+        >
+          View site ↗
+        </a>
+      </nav>
+      <main class="flex-1 pb-16">
+        <slot />
+      </main>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,29 @@
+import type { APIRoute } from 'astro';
+import { Client, Account } from 'node-appwrite';
+import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
+import { sessionTokenFrom, adminCookieHeader } from '@lib/auth';
+
+export const prerender = false;
+
+export const POST: APIRoute = async ({ request }) => {
+  const token = await sessionTokenFrom(request);
+  if (token && PUBLIC_APPWRITE_ENDPOINT && PUBLIC_APPWRITE_PROJECT_ID) {
+    try {
+      const client = new Client()
+        .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
+        .setProject(PUBLIC_APPWRITE_PROJECT_ID)
+        .setSession(token);
+      await new Account(client).deleteSession({ sessionId: 'current' });
+    } catch {
+      /* session already gone */
+    }
+  }
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+      'Set-Cookie': adminCookieHeader('', 0, true),
+    },
+  });
+};

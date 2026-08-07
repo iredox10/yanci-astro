@@ -1,0 +1,17 @@
+---
+interface Props {
+  status: string;
+}
+
+const { status } = Astro.props;
+
+const styles: Record<string, string> = {
+  published: 'bg-yanci-teal/15 text-yanci-teal',
+  draft: 'bg-yanci-primary/10 text-yanci-primary/70',
+  scheduled: 'bg-yanci-accent/20 text-yanci-primary',
+};
+---
+
+<span class:list={['rounded-sm px-2 py-0.5 text-xs font-semibold capitalize', styles[status] ?? styles.draft]}>
+  {status}
+</span>

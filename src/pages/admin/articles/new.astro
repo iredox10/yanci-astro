@@ -1,0 +1,11 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import AdminArticleEditor from '../../../components/admin/AdminArticleEditor';
+
+export const prerender = false;
+---
+
+<AdminLayout title="New article" active="new">
+  <h1 class="font-serif text-2xl font-bold text-yanci-primary">New article</h1>
+  <AdminArticleEditor client:load />
+</AdminLayout>

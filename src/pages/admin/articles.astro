@@ -1,0 +1,135 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import StatusBadge from '../../components/admin/StatusBadge.astro';
+import { getArticles } from '@lib/appwrite-server';
+import AdminDeleteButton from '../../components/admin/AdminDeleteButton';
+import { pillarColors } from '../../data/schema';
+
+export const prerender = false;
+
+const articles = await getArticles(500);
+const day = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+const url = new URL(Astro.request.url);
+const query = url.searchParams.get('q')?.trim().toLowerCase() ?? '';
+const filter = url.searchParams.get('filter') ?? 'all';
+
+const statusOf = (a: { status?: string; isLive?: boolean }) =>
+  String(a.status ?? (a.isLive ? 'published' : 'draft'));
+
+const filtered = articles
+  .filter((a) => {
+    const status = statusOf(a);
+    if (filter !== 'all' && status !== filter) return false;
+    if (!query) return true;
+    const haystack = [a.headline, a.kicker, a.author, a.pillar, a.section, a.slug].join(' ').toLowerCase();
+    return haystack.includes(query);
+  })
+  .sort((a, b) => String(b.$createdAt ?? '').localeCompare(String(a.$createdAt ?? '')));
+
+const countBy = (pred: (a: (typeof articles)[number]) => boolean) => articles.filter(pred).length;
+
+const statuses = [
+  { id: 'all', label: `All (${articles.length})` },
+  { id: 'published', label: `Published (${countBy((a) => statusOf(a) === 'published')})` },
+  { id: 'draft', label: `Drafts (${countBy((a) => statusOf(a) === 'draft')})` },
+  { id: 'scheduled', label: `Scheduled (${countBy((a) => statusOf(a) === 'scheduled')})` },
+];
+
+const titleFor = (a: { headline?: string; ogTitle?: string }) => String(a.headline ?? a.ogTitle ?? 'Untitled');
+---
+
+<AdminLayout title="Articles" active="articles">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <h1 class="font-serif text-2xl font-bold text-yanci-primary">Articles</h1>
+    <a
+      href="/admin/articles/new"
+      class="bg-yanci-primary px-4 py-2 text-sm font-bold uppercase tracking-wide text-yanci-paper hover:bg-yanci-primary/90"
+    >
+      + New article
+    </a>
+  </div>
+
+  <form class="mt-4 flex flex-wrap items-center gap-3" method="get">
+    <input
+      type="search"
+      name="q"
+      value={query}
+      placeholder="Search headline, author, section…"
+      class="w-72 border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40"
+    />
+    <button class="border border-yanci-primary/30 px-4 py-2 text-sm font-medium text-yanci-primary hover:bg-yanci-primary/10">
+      Search
+    </button>
+  </form>
+
+  <div class="mt-4 flex flex-wrap gap-1">
+    {statuses.map((s) => (
+      <a
+        href={`?filter=${s.id}`}
+        class:list={[
+          'px-3 py-1.5 text-sm font-medium',
+          (filter === s.id || (s.id === 'all' && filter === 'all')) && 'bg-yanci-primary text-yanci-paper',
+        ]}
+      >
+        {s.label}
+      </a>
+    ))}
+  </div>
+
+  <div class="mt-5 overflow-hidden border border-yanci-primary/15 bg-white/60">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-yanci-primary/5 text-xs uppercase tracking-wide text-yanci-primary/60">
+        <tr>
+          <th class="px-4 py-2.5 font-semibold">Headline</th>
+          <th class="hidden px-4 py-2.5 font-semibold md:table-cell">Pillar</th>
+          <th class="hidden px-4 py-2.5 font-semibold lg:table-cell">Author</th>
+          <th class="px-4 py-2.5 font-semibold">Status</th>
+          <th class="hidden px-4 py-2.5 font-semibold sm:table-cell">Updated</th>
+          <th class="px-4 py-2.5 text-right font-semibold">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-yanci-primary/10">
+        {filtered.length === 0 && (
+          <tr>
+            <td colspan={6} class="px-4 py-10 text-center text-yanci-primary/50">
+              No articles{query ? ` matching “${query}”` : ' in this view'}.
+            </td>
+          </tr>
+        )}
+        {filtered.map((a) => (
+          <tr class="hover:bg-white/60">
+            <td class="max-w-md px-4 py-3">
+              <a href={`/admin/articles/${a.$id}`} class="font-medium leading-snug text-yanci-dark hover:text-yanci-primary">
+                {titleFor(a)}
+              </a>
+              {a.slug && <p class="mt-0.5 truncate text-xs text-yanci-primary/40">{a.slug}</p>}
+            </td>
+            <td class="hidden px-4 py-3 md:table-cell">
+              <span class="flex items-center gap-1.5">
+                <span style={{ backgroundColor: pillarColors(String(a.pillar ?? 'news')).main }} class="inline-block size-2 rounded-full" />
+                <span class="capitalize text-yanci-dark/70">{String(a.pillar ?? 'news')}</span>
+              </span>
+            </td>
+            <td class="hidden px-4 py-3 text-yanci-dark/70 lg:table-cell">{String(a.author ?? '—')}</td>
+            <td class="px-4 py-3">
+              <StatusBadge status={statusOf(a)} />
+            </td>
+            <td class="hidden px-4 py-3 text-yanci-dark/50 sm:table-cell">
+              {day.format(new Date(String(a.$updatedAt ?? '')))}
+            </td>
+            <td class="whitespace-nowrap px-4 py-3 text-right">
+              <a href={`/admin/articles/${a.$id}`} class="mr-3 font-medium text-yanci-teal hover:text-yanci-teal/70">
+                Edit
+              </a>
+              <AdminDeleteButton client:load articleId={String(a.$id)} />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+  <p class="mt-2 text-xs text-yanci-primary/50">
+    Showing {filtered.length} of {articles.length} articles.
+  </p>
+</AdminLayout>

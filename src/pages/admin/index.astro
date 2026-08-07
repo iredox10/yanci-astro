@@ -1,0 +1,11 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+
+return Astro.redirect('/admin/dashboard');
+---
+
+<AdminLayout title="Redirect">
+  <p class="text-yanci-primary/60">Redirecting to the dashboard…</p>
+</AdminLayout>

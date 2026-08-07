@@ -1,0 +1,43 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import AdminArticleEditor, { type ArticleDraft } from '../../../components/admin/AdminArticleEditor';
+import { getArticleById } from '@lib/appwrite-server';
+
+export const prerender = false;
+
+const id = Astro.params.id;
+if (!id) return Astro.redirect('/admin/articles');
+
+const article = id ? await getArticleById(id) : null;
+if (!article) return Astro.redirect('/admin/articles');
+
+const initial: ArticleDraft = {
+  $id: article.$id,
+  headline: String(article.headline ?? article.ogTitle ?? ''),
+  kicker: String(article.kicker ?? ''),
+  trail: String(article.trail ?? ''),
+  body: String(article.body ?? ''),
+  image: String(article.image ?? ''),
+  pillar: String(article.pillar ?? 'news'),
+  section: String(article.section ?? ''),
+  author: String(article.author ?? ''),
+  slug: String(article.slug ?? ''),
+  isLive: Boolean(article.isLive),
+  status: String(article.status ?? (article.isLive ? 'published' : 'draft')),
+  publishAt: article.publishAt ? String(article.publishAt) : undefined,
+  isSensitive: Boolean(article.isSensitive),
+  tags: Array.isArray(article.tags) ? article.tags.map(String) : [],
+  metaTitle: article.metaTitle ? String(article.metaTitle) : undefined,
+  metaDescription: article.metaDescription ? String(article.metaDescription) : undefined,
+};
+---
+
+<AdminLayout title="Edit article" active="articles">
+  <div class="flex items-center justify-between">
+    <h1 class="font-serif text-2xl font-bold text-yanci-primary">Edit article</h1>
+    <a href="/admin/articles" class="text-sm font-medium text-yanci-primary/70 hover:text-yanci-primary">
+      ← Back to list
+    </a>
+  </div>
+  <AdminArticleEditor client:load initial={initial} />
+</AdminLayout>
