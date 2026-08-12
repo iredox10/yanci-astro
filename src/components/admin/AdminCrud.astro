@@ -1,0 +1,277 @@
+---
+/**
+ * Reusable server-rendered CRUD admin panel for simple content collections.
+ * Renders a table of existing documents plus a create/edit form. Submissions
+ * go through fetch() to `/api/admin/<collection>/[id]` (POST/PUT) and DELETE.
+ *
+ * Usage:
+ *   <AdminCrud
+ *     collection="highlights"
+ *     title="Homepage highlights"
+ *     fields={[{ key: 'tag', label: 'Tag' }, { key: 'order', label: 'Order', type: 'number' }]}
+ *     docs={docs}
+ *   />
+ */
+
+interface FieldConfig {
+  key: string;
+  label: string;
+  type?: 'text' | 'number' | 'checkbox' | 'textarea' | 'select' | 'json';
+  options?: string[];
+  placeholder?: string;
+  help?: string;
+}
+
+interface Props {
+  collection: string;
+  title: string;
+  description?: string;
+  fields: FieldConfig[];
+  docs: Record<string, unknown>[];
+}
+
+const { collection, title, description, fields, docs } = Astro.props;
+
+const shown = fields.filter((f) => f.key !== 'order');
+const sorted = [...docs].sort(
+  (a, b) => Number(a.order ?? 0) - Number(b.order ?? 0) || String(a.$createdAt ?? '').localeCompare(String(b.$createdAt ?? '')),
+);
+---
+
+<section>
+  <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h1 class="font-serif text-2xl font-bold text-yanci-primary">{title}</h1>
+      {description && <p class="mt-1 max-w-xl text-sm text-yanci-primary/60">{description}</p>}
+    </div>
+  </div>
+
+  <div class="grid gap-8 lg:grid-cols-5">
+    <div class="overflow-hidden border border-yanci-primary/15 bg-white/60 lg:col-span-3">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-yanci-primary/5 text-xs uppercase tracking-wide text-yanci-primary/60">
+          <tr>
+            {shown.slice(0, 4).map((f) => <th class="px-4 py-2.5 font-semibold">{f.label}</th>)}
+            <th class="px-4 py-2.5 text-right font-semibold">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-yanci-primary/10">
+          {sorted.length === 0 && (
+            <tr><td colspan={shown.slice(0, 4).length + 1} class="px-4 py-10 text-center text-yanci-primary/50">Nothing here yet — add the first one.</td></tr>
+          )}
+          {sorted.map((doc) => (
+            <tr class="align-top hover:bg-white/60">
+              {shown.slice(0, 4).map((f) => (
+                <td class="max-w-xs px-4 py-3">
+                  {f.type === 'checkbox'
+                    ? (Boolean(doc[f.key]) ? '✓' : '—')
+                    : f.key === 'order'
+                      ? String(doc[f.key] ?? '')
+                      : <span class="line-clamp-3 break-words">{String(doc[f.key] ?? '—')}</span>}
+                </td>
+              ))}
+              <td class="whitespace-nowrap px-4 py-3 text-right">
+                <button
+                  class="mr-3 font-medium text-yanci-teal hover:text-yanci-teal/70"
+                  data-edit={doc.$id}
+                  type="button"
+                >
+                  Edit
+                </button>
+                <button
+                  class="text-xs font-medium text-yanci-red transition-colors hover:text-yanci-red/70"
+                  data-delete={doc.$id}
+                  type="button"
+                >
+                  Delete
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="lg:col-span-2">
+      <form id="crud-form" class="border border-yanci-primary/15 bg-white/60 p-5">
+        <input type="hidden" name="id" />
+        <h2 class="mb-4 font-serif text-lg font-bold text-yanci-primary" id="crud-form-title">Add new</h2>
+        <div class="space-y-4">
+          {fields.map((f) => (
+            <label class="block">
+              <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">{f.label}</span>
+              {f.type === 'textarea' && (
+                <textarea
+                  name={f.key}
+                  rows={f.key === 'body' || f.key === 'analysis' || f.key === 'platform' ? 5 : 3}
+                  placeholder={f.placeholder}
+                  class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40"
+                ></textarea>
+              )}
+              {f.type === 'select' && (
+                <select
+                  name={f.key}
+                  class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40"
+                >
+                  {(f.options ?? []).map((opt) => <option value={opt}>{opt}</option>)}
+                </select>
+              )}
+              {f.type === 'checkbox' && (
+                <input
+                  type="checkbox"
+                  name={f.key}
+                  class="size-4 accent-yanci-accent"
+                />
+              )}
+              {f.type === 'number' && (
+                <input
+                  type="number"
+                  name={f.key}
+                  placeholder={f.placeholder}
+                  class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40"
+                />
+              )}
+              {(!f.type || f.type === 'text') && (
+                <input
+                  type="text"
+                  name={f.key}
+                  placeholder={f.placeholder}
+                  class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40"
+                />
+              )}
+              {f.type === 'json' && (
+                <textarea
+                  name={f.key}
+                  rows={4}
+                  data-json="true"
+                  placeholder={f.placeholder ?? 'JSON, e.g. {"c1": 12345}'}
+                  class="w-full font-mono text-xs border border-yanci-primary/25 bg-white px-3 py-2 focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40"
+                ></textarea>
+              )}
+              {f.help && <span class="mt-0.5 block text-xs text-yanci-primary/40">{f.help}</span>}
+            </label>
+          ))}
+        </div>
+        <div class="mt-5 flex items-center gap-3">
+          <button
+            type="submit"
+            class="bg-yanci-primary px-5 py-2 text-sm font-bold uppercase tracking-wide text-yanci-paper hover:bg-yanci-primary/90"
+          >
+            Save
+          </button>
+          <button type="button" id="crud-reset" class="border border-yanci-primary/30 px-4 py-2 text-sm font-medium text-yanci-primary/70 hover:bg-yanci-primary/10">
+            Reset
+          </button>
+          <span id="crud-msg" class="text-xs text-yanci-red"></span>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<script define:vars={{ collection, docs }}>
+  const docsById = new Map(
+    docs.map((d) => [d.$id, d]),
+  );
+
+  const form = document.getElementById('crud-form');
+  const formTitle = document.getElementById('crud-form-title');
+  const msg = document.getElementById('crud-msg');
+  const reset = document.getElementById('crud-reset');
+
+  const EMPTY = new FormData(form);
+
+  function setMessage(text) {
+    if (msg) msg.textContent = text;
+  }
+
+  function fillForm(doc) {
+    for (const field of form.elements) {
+      const el = field;
+      if (!el.name || el.type === 'checkbox') continue;
+      const raw = doc[el.name];
+      el.value = raw === undefined || raw === null ? '' : String(raw);
+    }
+    for (const el of form.elements) {
+      if (el.type === 'checkbox') el.checked = Boolean(doc[el.name]);
+    }
+    form.elements.namedItem('id').value = String(doc.$id ?? '');
+    if (formTitle) formTitle.textContent = 'Edit';
+    setMessage('');
+  }
+
+  function resetForm() {
+    form.reset();
+    for (const [name, value] of EMPTY.entries()) {
+      const el = form.elements.namedItem(name);
+      if (el && !(el instanceof HTMLSelectElement)) el.value = String(value);
+    }
+    for (const el of form.elements) {
+      if (el.type === 'checkbox') el.checked = false;
+    }
+    form.elements.namedItem('id').value = '';
+    if (formTitle) formTitle.textContent = 'Add new';
+    setMessage('');
+  }
+
+  function readForm() {
+    const data = {};
+    for (const el of form.elements) {
+      const node = el;
+      if (!node.name || node.type === 'submit' || node.type === 'button' || node.type === 'hidden') continue;
+      if (node instanceof HTMLInputElement && node.type === 'checkbox') {
+        data[node.name] = node.checked;
+      } else if (node instanceof HTMLSelectElement) {
+        data[node.name] = node.value;
+      } else if (node instanceof HTMLTextAreaElement && node.dataset.json === 'true') {
+        try { data[node.name] = JSON.parse(node.value || 'null'); } catch { throw new Error(node.name + ' is not valid JSON'); }
+      } else if (node instanceof HTMLInputElement && node.type === 'number') {
+        data[node.name] = node.value === '' ? null : Number(node.value);
+      } else {
+        data[node.name] = node.value;
+      }
+    }
+    return data;
+  }
+
+  document.querySelectorAll('[data-edit]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const doc = docsById.get(btn.dataset.edit);
+      if (doc) fillForm(doc);
+      form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
+
+  document.querySelectorAll('[data-delete]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.delete;
+      if (!window.confirm('Delete this item permanently? This cannot be undone.')) return;
+      const res = await fetch(`/api/admin/${collection}/${id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return setMessage(data.message ?? 'Delete failed');
+      window.location.reload();
+    });
+  });
+
+  reset?.addEventListener('click', resetForm);
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const id = form.elements.namedItem('id').value;
+    let data;
+    try {
+      data = readForm();
+    } catch (err) {
+      return setMessage(err instanceof Error ? err.message : 'Invalid form data');
+    }
+    setMessage('');
+    const res = await fetch(`/api/admin/${collection}/${id || 'new'}`, {
+      method: id ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return setMessage(json.message ?? 'Save failed');
+    window.location.reload();
+  });
+</script>

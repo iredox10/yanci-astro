@@ -1,0 +1,229 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { sectionBySlug } from '../data/sections';
+import { getElections, getCandidates, getResults, getFactChecks } from '@lib/appwrite-server';
+
+export const prerender = false;
+
+const def = sectionBySlug('zabe')!;
+const elections = await getElections();
+const active = elections.find((e) => e.status === 'active' && e.published !== false) ?? elections[0];
+
+const [candidates, results, factChecks] = await Promise.all([
+  active ? getCandidates(active.$id) : Promise.resolve([]),
+  active ? getResults(active.$id) : Promise.resolve([]),
+  active ? getFactChecks(active.$id) : Promise.resolve([]),
+]);
+
+const partyNames: Record<string, string> = {
+  apc: 'APC',
+  pdp: 'PDP',
+  nnpp: 'NNPP',
+  lpp: 'LPP',
+  apga: 'APGA',
+  independent: 'Independent',
+};
+const partyColors: Record<string, string> = {
+  apc: '#2f6db3',
+  pdp: '#3a9e5f',
+  nnpp: '#b33a2f',
+  lpp: '#7a4fb3',
+  apga: '#b38a2f',
+  independent: '#6b7280',
+};
+const verdictStyles: Record<string, string> = {
+  true: 'bg-emerald-100 text-emerald-700',
+  mostly_true: 'bg-teal-100 text-teal-700',
+  misleading: 'bg-amber-100 text-amber-700',
+  false: 'bg-red-100 text-red-700',
+  unverified: 'bg-gray-200 text-gray-600',
+};
+const verdictLabels: Record<string, string> = {
+  true: 'Gaskiya',
+  mostly_true: 'Gaskiya da yawa',
+  misleading: 'Yaudara',
+  false: 'Karya',
+  unverified: 'Ba a tantance ba',
+};
+
+const presidents = candidates.filter((c) => c.position === 'president');
+const others = candidates.filter((c) => c.position !== 'president');
+
+const fmt = new Intl.NumberFormat('en-GB');
+const votesTotals = new Map<string, number>();
+for (const r of results) {
+  for (const [id, n] of Object.entries(r.candidateVotes ?? {})) {
+    votesTotals.set(id, (votesTotals.get(id) ?? 0) + n);
+  }
+}
+const totalVotes = [...votesTotals.values()].reduce((a, b) => a + b, 0);
+
+const candidateById = new Map(candidates.map((c) => [c.$id, c]));
+const ranked = [...votesTotals.entries()].sort((a, b) => b[1] - a[1]);
+const leader = ranked[0];
+---
+
+<BaseLayout
+  title="Zabe — Yanci"
+  description="Bayanin zabe, 'yan takara da sakamako."
+  path="/zabe/"
+>
+  <section class="border-b border-yanci-primary/15 bg-yanci-primary/5">
+    <div class="mx-auto max-w-[1400px] px-4 py-10 md:px-6">
+      <span class="text-xs font-bold uppercase tracking-widest text-yanci-accent">Zabe / Elections</span>
+      <h1 class="mt-2 font-serif text-3xl font-black text-yanci-primary">{active?.name ?? def.label}</h1>
+      {active && (
+        <p class="mt-2 max-w-2xl text-sm text-yanci-primary/60">
+          {active.fullName} · {active.electoralBody} · {new Date(active.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+          {active.description && <> · {active.description}</>}
+        </p>
+      )}
+    </div>
+  </section>
+
+  <main class="mx-auto max-w-[1400px] px-4 py-12 md:px-6">
+    {!active && (
+      <div class="py-32 text-center text-gray-400">
+        <p class="mb-2 font-serif text-2xl">Babu zabe a nan tukuna.</p>
+      </div>
+    )}
+
+    {active && (
+      <>
+        {presidents.length > 0 && (
+          <section class="mb-16">
+            <h2 class="mb-6 border-b-2 border-yanci-accent pb-2 font-serif text-xl font-bold text-yanci-primary">
+              'Yan takarar shugaban kasa
+            </h2>
+            <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+              {presidents.map((c) => {
+                const color = partyColors[c.party] ?? '#6b7280';
+                return (
+                  <article class="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-all hover:-translate-y-1 hover:shadow-xl">
+                    {c.image ? (
+                      <div class="aspect-[4/3] overflow-hidden">
+                        <img src={c.image} alt={c.name} loading="lazy" class="h-full w-full object-cover" />
+                      </div>
+                    ) : (
+                      <div class="flex aspect-[4/3] items-center justify-center bg-yanci-primary/5">
+                        <span class="font-serif text-5xl font-black text-yanci-primary/30">{c.name.slice(0, 1)}</span>
+                      </div>
+                    )}
+                    <div class="p-5">
+                      <span class="mb-2 inline-block rounded-full px-2.5 py-0.5 text-xs font-bold text-white" style={`background-color:${color}`}>
+                        {partyNames[c.party] ?? c.party}
+                      </span>
+                      <h3 class="font-serif text-lg font-bold leading-tight text-yanci-dark">{c.name}</h3>
+                      {c.runningMate && <p class="mt-1 text-xs text-yanci-primary/50">Running mate: {c.runningMate}</p>}
+                      {c.platform && <p class="mt-3 whitespace-pre-line text-xs leading-relaxed text-yanci-primary/60">{c.platform}</p>}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {results.length > 0 && (
+          <section class="mb-16">
+            <h2 class="mb-6 border-b-2 border-yanci-accent pb-2 font-serif text-xl font-bold text-yanci-primary">
+              Sakamako {totalVotes > 0 && <span class="text-sm font-normal text-yanci-primary/50">— {fmt.format(totalVotes)} kuri'u da aka kirga</span>}
+            </h2>
+            <div class="overflow-hidden border border-yanci-primary/15 bg-white/60">
+              <table class="w-full text-left text-sm">
+                <thead class="bg-yanci-primary/5 text-xs uppercase tracking-wide text-yanci-primary/60">
+                  <tr>
+                    <th class="px-4 py-2.5 font-semibold">State</th>
+                    {ranked.map(([id]) => {
+                      const c = candidateById.get(id);
+                      return c ? (
+                        <th class="px-4 py-2.5 text-right font-semibold">
+                          <span style={`color:${partyColors[c.party] ?? '#6b7280'}`}>{c.name.split(' ')[0]}</span>
+                        </th>
+                      ) : null;
+                    })}
+                    <th class="px-4 py-2.5 text-right font-semibold">Winner</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-yanci-primary/10">
+                  {results.slice(0, 40).map((r) => (
+                    <tr class="hover:bg-white/60">
+                      <td class="px-4 py-2.5 font-medium text-yanci-dark">{r.state}</td>
+                      {ranked.map(([id]) => {
+                        const n = r.candidateVotes?.[id];
+                        return (
+                          <td class="px-4 py-2.5 text-right tabular-nums text-yanci-dark/70">
+                            {n !== undefined ? fmt.format(n) : '—'}
+                          </td>
+                        );
+                      })}
+                      <td class="px-4 py-2.5 text-right">
+                        {r.winner && candidateById.get(r.winner) ? (
+                          <span class="font-semibold" style={`color:${partyColors[candidateById.get(r.winner)!.party] ?? '#6b7280'}`}>
+                            {candidateById.get(r.winner)!.name.split(' ')[0]}
+                          </span>
+                        ) : r.governor ? (
+                          <span class="font-semibold uppercase text-yanci-primary/60">{r.governor}</span>
+                        ) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {results.length > 40 && <p class="mt-2 text-xs text-yanci-primary/50">Showing 40 of {results.length} states.</p>}
+          </section>
+        )}
+
+        {factChecks.length > 0 && (
+          <section class="mb-16">
+            <h2 class="mb-6 border-b-2 border-yanci-accent pb-2 font-serif text-xl font-bold text-yanci-primary">
+              Tantance maganganu / Fact checks
+            </h2>
+            <div class="space-y-4">
+              {factChecks.map((fc) => (
+                <article class="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                  <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="max-w-2xl">
+                      <p class="font-serif text-lg font-bold leading-snug text-yanci-dark">“{fc.claim}”</p>
+                      <p class="mt-1 text-xs text-yanci-primary/50">
+                        {fc.claimant} {fc.claimantParty ? `· ${partyNames[fc.claimantParty] ?? fc.claimantParty}` : ''}
+                        {fc.date && <> · {new Date(fc.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</>}
+                      </p>
+                    </div>
+                    <span class={`rounded-full px-3 py-1 text-xs font-bold uppercase ${verdictStyles[fc.verdict] ?? verdictStyles.unverified}`}>
+                      {verdictLabels[fc.verdict] ?? fc.verdict}
+                    </span>
+                  </div>
+                  {fc.analysis && <p class="mt-3 text-sm leading-relaxed text-gray-600">{fc.analysis}</p>}
+                  {fc.source && <p class="mt-2 text-xs font-medium text-yanci-primary/50">Source: {fc.source}</p>}
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {others.length > 0 && (
+          <section>
+            <h2 class="mb-6 border-b-2 border-yanci-accent pb-2 font-serif text-xl font-bold text-yanci-primary">
+              Sauran 'yan takara
+            </h2>
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {others.slice(0, 12).map((c) => (
+                <article class="flex items-center gap-4 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                  <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full font-serif font-black text-white" style={`background-color:${partyColors[c.party] ?? '#6b7280'}`}>
+                    {c.name.slice(0, 1)}
+                  </div>
+                  <div class="min-w-0">
+                    <h3 class="truncate font-serif text-sm font-bold text-yanci-dark">{c.name}</h3>
+                    <p class="text-xs capitalize text-yanci-primary/50">{c.position} · {c.state} · {partyNames[c.party] ?? c.party}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+      </>
+    )}
+  </main>
+</BaseLayout>

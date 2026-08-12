@@ -1,0 +1,26 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import AdminCrud from '../../components/admin/AdminCrud.astro';
+import { adminListCollection } from '@lib/admin-collections';
+
+export const prerender = false;
+
+const docs = await adminListCollection('stats');
+---
+
+<AdminLayout title="Homepage stats" active="homepage-stats">
+  <AdminCrud
+    collection="homepage-stats"
+    title="Homepage stats"
+    description="Big numbers shown in the dark stats band on the homepage (e.g. 12,500+ labarai)."
+    docs={docs}
+    fields={[
+      { key: 'label', label: 'Label', placeholder: 'Labarai' },
+      { key: 'value', label: 'Value', type: 'number', placeholder: '12500' },
+      { key: 'suffix', label: 'Suffix', placeholder: '+' },
+      { key: 'icon', label: 'Icon', options: ['article', 'reader', 'staff', 'chart'], type: 'select' },
+      { key: 'order', label: 'Order', type: 'number' },
+      { key: 'active', label: 'Active', type: 'checkbox' },
+    ]}
+  />
+</AdminLayout>

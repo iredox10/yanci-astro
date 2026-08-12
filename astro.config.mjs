@@ -1,9 +1,22 @@
 // @ts-check
+import dns from 'node:dns';
+import { setGlobalDispatcher, Agent } from 'undici';
 import { defineConfig, envField } from 'astro/config';
 import react from '@astrojs/react';
 import node from '@astrojs/node';
 import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
+
+// Appwrite (Fastly) publishes both A and AAAA records; Node's default
+// "verbatim" DNS order may try IPv6 first and fail intermittently from some
+// networks, making server-side fetch() calls to Appwrite flaky. Force IPv4
+// first and disable Happy Eyeballs so one address is tried at a time.
+dns.setDefaultResultOrder('ipv4first');
+setGlobalDispatcher(
+  new Agent({ connect: { autoSelectFamily: false, lookup: (hostname, options, callback) => {
+    dns.lookup(hostname, { ...options, family: 4 }, callback);
+  } } }),
+);
 
 // https://astro.build/config
 export default defineConfig({
@@ -42,6 +55,7 @@ export default defineConfig({
       PUBLIC_APPWRITE_COLLECTION_SETTINGS: envField.string({ context: 'client', access: 'public', optional: true }),
       PUBLIC_APPWRITE_COLLECTION_COMMENTS: envField.string({ context: 'client', access: 'public', optional: true }),
       PUBLIC_APPWRITE_COLLECTION_VIEWS: envField.string({ context: 'client', access: 'public', optional: true }),
+      PUBLIC_APPWRITE_COLLECTION_STAFF: envField.string({ context: 'client', access: 'public', optional: true }),
       PUBLIC_VAPID_PUBLIC_KEY: envField.string({ context: 'client', access: 'public', optional: true }),
 
       // ── Server-only secrets (never bundled to the browser) ────────────────

@@ -1,0 +1,39 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+export const prerender = false;
+---
+
+<BaseLayout
+  title="Tsare Sirri — Yanci"
+  description="Manufar sirrinmu a Yanci."
+  path="/privacy/"
+>
+  <main class="mx-auto max-w-[900px] px-4 py-16 md:px-6">
+    <span class="text-xs font-bold uppercase tracking-widest text-yanci-accent">Doka</span>
+    <h1 class="mt-2 font-serif text-4xl font-black text-yanci-primary">Tsare Sirri</h1>
+    <div class="mt-8 space-y-6 text-gray-600">
+      <p>
+        Yanci Media Ltd tana kare sirrin masu karatun ta. Wannan manufa tana bayyana irin bayanan da muke tattarawa
+        da yadda muke amfani da su.
+      </p>
+      <h2 class="font-serif text-xl font-bold text-yanci-dark">Bayanan da muke tattarawa</h2>
+      <p>
+        Muna tattara adireshin imel a lokacin rajistar da aka yi wa labaran mu (newsletter). Muna kuma riƙe bayanan
+        kallon shafuka (misali: wane labari aka kalla) don fahimtar abin da masu karatu ke so, ba tare da suna ko
+        adireshin IP ba.
+      </p>
+      <h2 class="font-serif text-xl font-bold text-yanci-dark">Yadda muke amfani da bayanan</h2>
+      <p>Muna amfani da imel ɗin ku kawai don aiko muku da labaranmu. Ba mu sayar da bayananku ga wani.</p>
+      <h2 class="font-serif text-xl font-bold text-yanci-dark">Kware (Cookies)</h2>
+      <p>
+        Muna amfani da kware don ajiye shawarwarinku (kamar yare) da kuma fahimtar yadda shafinmu yake aiki. Kuna
+        iya kashe kware a cikin burauzar ku a kowane lokaci.
+      </p>
+      <h2 class="font-serif text-xl font-bold text-yanci-dark">Tuntuɓar mu</h2>
+      <p>
+        Domin tambayoyi game da sirri, tuntuɓi mu a <a href="/contact" class="font-medium text-yanci-teal hover:underline">shafin tuntuɓar mu</a>.
+      </p>
+    </div>
+  </main>
+</BaseLayout>

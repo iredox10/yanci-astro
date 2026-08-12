@@ -1,13 +1,15 @@
 import type { APIRoute } from 'astro';
-import { subscribeNewsletter } from '../../lib/appwrite-server';
+import { subscribeNewsletter, unsubscribeNewsletter } from '../../lib/appwrite-server';
 
 export const prerender = false;
 
 export const POST: APIRoute = async ({ request }) => {
   let email = '';
+  let action = 'subscribe';
   try {
     const json = await request.json();
     email = String(json?.email ?? '').trim();
+    action = String(json?.action ?? 'subscribe');
   } catch {
     return new Response(JSON.stringify({ ok: false, message: 'Bad JSON' }), { status: 400 });
   }
@@ -17,11 +19,15 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   try {
-    const ok = await subscribeNewsletter(email);
+    const ok = action === 'unsubscribe' ? await unsubscribeNewsletter(email) : await subscribeNewsletter(email);
     if (!ok) {
-      return new Response(JSON.stringify({ ok: false, message: 'Subscription unavailable' }), {
-        status: 503,
-      });
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          message: action === 'unsubscribe' ? 'Not subscribed' : 'Subscription unavailable',
+        }),
+        { status: action === 'unsubscribe' ? 404 : 503 },
+      );
     }
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
   } catch (error) {

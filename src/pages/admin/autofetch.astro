@@ -1,0 +1,204 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { listAutofetchSources } from '@lib/autofetch-store';
+
+export const prerender = false;
+
+const sources = await listAutofetchSources(false);
+const day = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+---
+
+<AdminLayout title="Autofetch" active="autofetch">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h1 class="font-serif text-2xl font-bold text-yanci-primary">Autofetch sources</h1>
+      <p class="mt-1 max-w-xl text-sm text-yanci-primary/60">
+        RSS or article URLs synced into drafts. Run sync to pull the active sources now — nothing is published
+        automatically; everything lands in Drafts for editorial review.
+      </p>
+    </div>
+    <button id="run-sync" class="bg-yanci-primary px-5 py-2 text-sm font-bold uppercase tracking-wide text-yanci-paper hover:bg-yanci-primary/90">
+      Run sync
+    </button>
+  </div>
+
+  <div id="sync-result" class="mt-3 hidden text-sm"></div>
+
+  <div class="mt-5 overflow-hidden border border-yanci-primary/15 bg-white/60">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-yanci-primary/5 text-xs uppercase tracking-wide text-yanci-primary/60">
+        <tr>
+          <th class="px-4 py-2.5 font-semibold">Name</th>
+          <th class="hidden px-4 py-2.5 font-semibold md:table-cell">URL</th>
+          <th class="hidden px-4 py-2.5 font-semibold sm:table-cell">Type</th>
+          <th class="px-4 py-2.5 font-semibold">Active</th>
+          <th class="hidden px-4 py-2.5 font-semibold lg:table-cell">Last run</th>
+          <th class="px-4 py-2.5 text-right font-semibold">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-yanci-primary/10">
+        {sources.length === 0 && (
+          <tr>
+            <td colspan={6} class="px-4 py-10 text-center text-yanci-primary/50">
+              No sources configured. Add the first one below.
+            </td>
+          </tr>
+        )}
+        {sources.map((s) => (
+          <tr class="hover:bg-white/60">
+            <td class="px-4 py-3 font-medium text-yanci-dark">{String(s.name)}</td>
+            <td class="hidden max-w-sm truncate px-4 py-3 text-yanci-primary/50 md:table-cell">{String(s.url)}</td>
+            <td class="hidden px-4 py-3 capitalize text-yanci-dark/70 sm:table-cell">{String(s.type ?? 'article')}</td>
+            <td class="px-4 py-3">
+              <span class="rounded-full px-2 py-0.5 text-xs font-bold uppercase {s.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'}">
+                {s.isActive ? 'On' : 'Off'}
+              </span>
+            </td>
+            <td class="hidden px-4 py-3 text-yanci-dark/50 lg:table-cell">
+              {s.lastRun ? day.format(new Date(String(s.lastRun))) : 'Never'}
+            </td>
+            <td class="whitespace-nowrap px-4 py-3 text-right">
+              <button data-toggle={s.$id} class="mr-3 font-medium text-yanci-teal hover:text-yanci-teal/70">
+                {s.isActive ? 'Disable' : 'Enable'}
+              </button>
+              <button data-edit={s.$id} class="mr-3 font-medium text-yanci-teal hover:text-yanci-teal/70">Edit</button>
+              <button data-del={s.$id} class="text-xs font-medium text-yanci-red hover:text-yanci-red/70">Delete</button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  <form id="source-form" class="mt-8 border border-yanci-primary/15 bg-white/60 p-5 lg:max-w-2xl">
+    <input type="hidden" name="id" />
+    <h2 class="mb-4 font-serif text-lg font-bold text-yanci-primary" id="form-title">Add source</h2>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <label class="block">
+        <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">Name</span>
+        <input name="name" type="text" required placeholder="BBC Africa"
+          class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40" />
+      </label>
+      <label class="block">
+        <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">Type</span>
+        <select name="type"
+          class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40">
+          <option value="rss">RSS feed</option>
+          <option value="article">Article page</option>
+          <option value="homepage">Homepage</option>
+        </select>
+      </label>
+      <label class="block sm:col-span-2">
+        <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">URL</span>
+        <input name="url" type="url" required placeholder="https://feeds.bbci.co.uk/news/world/africa/rss.xml"
+          class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40" />
+      </label>
+      <label class="flex items-center gap-2 sm:col-span-2">
+        <input name="isActive" type="checkbox" class="size-4 accent-yanci-accent" />
+        <span class="text-sm text-yanci-primary/70">Active (included in sync)</span>
+      </label>
+    </div>
+    <div class="mt-4 flex items-center gap-3">
+      <button type="submit" class="bg-yanci-primary px-5 py-2 text-sm font-bold uppercase tracking-wide text-yanci-paper hover:bg-yanci-primary/90">Save</button>
+      <button type="button" id="form-reset" class="border border-yanci-primary/30 px-4 py-2 text-sm font-medium text-yanci-primary/70 hover:bg-yanci-primary/10">Reset</button>
+      <span id="form-msg" class="text-xs text-yanci-red"></span>
+    </div>
+  </form>
+</AdminLayout>
+
+<script define:vars={{ sources }}>
+  const sourcesById = new Map(
+    sources.map((s) => [s.$id, s]),
+  );
+  const form = document.getElementById('source-form');
+  const formTitle = document.getElementById('form-title');
+  const msg = document.getElementById('form-msg');
+  const syncBtn = document.getElementById('run-sync');
+  const syncResult = document.getElementById('sync-result');
+
+  function setMsg(text) { if (msg) msg.textContent = text; }
+
+  function fill(doc) {
+    form.elements.namedItem('id').value = String(doc.$id ?? '');
+    form.elements.namedItem('name').value = String(doc.name ?? '');
+    form.elements.namedItem('url').value = String(doc.url ?? '');
+    form.elements.namedItem('type').value = String(doc.type ?? 'rss');
+    form.elements.namedItem('isActive').checked = Boolean(doc.isActive);
+    if (formTitle) formTitle.textContent = 'Edit source';
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function resetForm() {
+    form.reset();
+    form.elements.namedItem('id').value = '';
+    if (formTitle) formTitle.textContent = 'Add source';
+    setMsg('');
+  }
+
+  document.querySelectorAll('[data-edit]').forEach((btn) =>
+    btn.addEventListener('click', () => fill(sourcesById.get(btn.dataset.edit) ?? {})));
+
+  document.querySelectorAll('[data-del]').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.del;
+      if (!window.confirm('Delete this source?')) return;
+      const res = await fetch(`/api/admin/autofetch-sources/${id}`, { method: 'DELETE' });
+      if (res.ok) window.location.reload();
+      else { const d = await res.json().catch(() => ({})); setMsg(d.message ?? 'Delete failed'); }
+    }));
+
+  document.querySelectorAll('[data-toggle]').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      const s = sourcesById.get(btn.dataset.toggle);
+      if (!s) return;
+      const res = await fetch(`/api/admin/autofetch-sources/${s.$id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...s, isActive: !s.isActive, labels: s.labels ?? [] }),
+      });
+      if (res.ok) window.location.reload();
+    }));
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const id = form.elements.namedItem('id').value;
+    const fd = new FormData(form);
+    const data = {
+      name: String(fd.get('name') ?? ''),
+      url: String(fd.get('url') ?? ''),
+      type: String(fd.get('type') ?? 'rss'),
+      isActive: fd.get('isActive') === 'on',
+      labels: [],
+    };
+    const res = await fetch(`/api/admin/autofetch-sources/${id || 'new'}`, {
+      method: id ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return setMsg(json.message ?? 'Save failed');
+    window.location.reload();
+  });
+
+  document.getElementById('form-reset')?.addEventListener('click', resetForm);
+
+  syncBtn?.addEventListener('click', async () => {
+    syncBtn.textContent = 'Syncing…';
+    syncBtn.setAttribute('disabled', 'true');
+    try {
+      const res = await fetch('/api/autofetch/run', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      syncResult?.classList.remove('hidden');
+      if (res.ok) {
+        syncResult.className = 'mt-3 rounded-sm bg-emerald-50 p-4 text-sm text-emerald-700';
+        syncResult.textContent = `Sync complete: ${data.created ?? 0} new drafts from ${(data.sources ?? []).length} sources.`;
+      } else {
+        syncResult.className = 'mt-3 rounded-sm bg-red-50 p-4 text-sm text-red-700';
+        syncResult.textContent = data.message ?? 'Sync failed';
+      }
+    } finally {
+      syncBtn.textContent = 'Run sync';
+      syncBtn.removeAttribute('disabled');
+    }
+  });
+</script>

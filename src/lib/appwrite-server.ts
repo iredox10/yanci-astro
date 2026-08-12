@@ -9,6 +9,16 @@ import {
   PUBLIC_APPWRITE_DATABASE_ID,
   PUBLIC_APPWRITE_COLLECTION_ARTICLES,
   PUBLIC_APPWRITE_COLLECTION_VIEWS,
+  PUBLIC_APPWRITE_COLLECTION_HIGHLIGHTS,
+  PUBLIC_APPWRITE_COLLECTION_HOMEPAGE_STATS,
+  PUBLIC_APPWRITE_COLLECTION_SPORTS,
+  PUBLIC_APPWRITE_COLLECTION_HOMEPAGE_LAYOUT,
+  PUBLIC_APPWRITE_COLLECTION_SETTINGS,
+  PUBLIC_APPWRITE_COLLECTION_ELECTIONS,
+  PUBLIC_APPWRITE_COLLECTION_CANDIDATES,
+  PUBLIC_APPWRITE_COLLECTION_RESULTS,
+  PUBLIC_APPWRITE_COLLECTION_FACTCHECKS,
+  PUBLIC_APPWRITE_COLLECTION_STAFF,
 } from 'astro:env/client';
 import type { Article, LiveUpdate } from '../data/schema';
 
@@ -185,10 +195,403 @@ export async function subscribeNewsletter(email: string): Promise<boolean> {
     await databases().createDocument(c.databaseId, c.newsletter, ID.unique(), {
       email: normalized,
       subscribed_at: new Date().toISOString(),
+      status: 'subscribed',
     });
     return true;
   } catch (error) {
     console.error('[appwrite] subscribeNewsletter failed', error);
     return false;
+  }
+}
+
+export async function unsubscribeNewsletter(email: string): Promise<boolean> {
+  const c = collections();
+  if (!c || !c.newsletter) return false;
+  const normalized = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) return false;
+  try {
+    const found = await databases().listDocuments(c.databaseId, c.newsletter, [
+      Query.equal('email', normalized),
+      Query.limit(1),
+    ]);
+    if (found.documents.length === 0) return false;
+    await databases().updateDocument(
+      c.databaseId,
+      c.newsletter,
+      found.documents[0].$id,
+      { status: 'unsubscribed' },
+    );
+    return true;
+  } catch (error) {
+    console.error('[appwrite] unsubscribeNewsletter failed', error);
+    return false;
+  }
+}
+
+// ─── Homepage content collections ────────────────────────────────────────────
+
+function docCollection(collectionId: string | null | undefined): string | null {
+  return collectionId || null;
+}
+
+function databaseId(): string | null {
+  return PUBLIC_APPWRITE_DATABASE_ID || null;
+}
+
+export interface HomepageHighlight {
+  $id?: string;
+  tag: string;
+  title: string;
+  copy: string;
+  icon: string;
+  accent: string;
+  gradient: string;
+  link?: string;
+  order?: number;
+  active?: boolean;
+}
+
+export async function getHighlights(limit = 20): Promise<HomepageHighlight[]> {
+  const id = docCollection(PUBLIC_APPWRITE_COLLECTION_HIGHLIGHTS);
+  const dbId = databaseId();
+  if (!dbId || !id) return [];
+  try {
+    const { documents } = await databases().listDocuments(dbId, id, [
+      Query.limit(limit),
+    ]);
+    return (documents ?? [])
+      .filter((d) => d.active !== false)
+      .sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0))
+      .map((d) => ({
+        $id: d.$id,
+        tag: String(d.tag ?? ''),
+        title: String(d.title ?? ''),
+        copy: String(d.copy ?? ''),
+        icon: String(d.icon ?? 'trend'),
+        accent: String(d.accent ?? '#10b981'),
+        gradient: String(d.gradient ?? ''),
+        link: d.link ? String(d.link) : undefined,
+        order: Number(d.order ?? 0),
+        active: d.active !== false,
+      }));
+  } catch (error) {
+    console.error('[appwrite] getHighlights failed', error);
+    return [];
+  }
+}
+
+export interface HomepageStat {
+  $id?: string;
+  label: string;
+  value: number;
+  suffix: string;
+  icon: string;
+  order?: number;
+  active?: boolean;
+}
+
+export async function getHomepageStats(limit = 20): Promise<HomepageStat[]> {
+  const id = docCollection(PUBLIC_APPWRITE_COLLECTION_HOMEPAGE_STATS);
+  const dbId = databaseId();
+  if (!dbId || !id) return [];
+  try {
+    const { documents } = await databases().listDocuments(dbId, id, [
+      Query.limit(limit),
+    ]);
+    return (documents ?? [])
+      .filter((d) => d.active !== false)
+      .sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0))
+      .map((d) => ({
+        $id: d.$id,
+        label: String(d.label ?? ''),
+        value: Number(d.value ?? 0),
+        suffix: String(d.suffix ?? ''),
+        icon: String(d.icon ?? 'article'),
+        order: Number(d.order ?? 0),
+        active: d.active !== false,
+      }));
+  } catch (error) {
+    console.error('[appwrite] getHomepageStats failed', error);
+    return [];
+  }
+}
+
+function parseJsonArray(raw: unknown): unknown[] | null {
+  if (Array.isArray(raw)) return raw as unknown[];
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as unknown[]) : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+export interface SportsData {
+  $id?: string;
+  liveMatches: unknown[];
+  standings: unknown[];
+  fixtures: unknown[];
+}
+
+export async function getSportsData(): Promise<SportsData | null> {
+  const id = docCollection(PUBLIC_APPWRITE_COLLECTION_SPORTS);
+  const dbId = databaseId();
+  if (!dbId || !id) return null;
+  try {
+    const { documents } = await databases().listDocuments(dbId, id, [
+      Query.limit(1),
+    ]);
+    const doc = documents?.[0];
+    if (!doc) return null;
+    return {
+      $id: doc.$id,
+      liveMatches: parseJsonArray(doc.liveMatches) ?? [],
+      standings: parseJsonArray(doc.standings) ?? [],
+      fixtures: parseJsonArray(doc.fixtures) ?? [],
+    };
+  } catch (error) {
+    console.error('[appwrite] getSportsData failed', error);
+    return null;
+  }
+}
+
+export async function getSettings(limit = 100): Promise<Record<string, string>> {
+  const id = docCollection(PUBLIC_APPWRITE_COLLECTION_SETTINGS);
+  const dbId = databaseId();
+  if (!dbId || !id) return {};
+  try {
+    const { documents } = await databases().listDocuments(dbId, id, [
+      Query.limit(limit),
+    ]);
+    const out: Record<string, string> = {};
+    for (const doc of documents ?? []) {
+      const key = String(doc.key ?? '');
+      if (key) out[key] = String(doc.value ?? '');
+    }
+    return out;
+  } catch (error) {
+    console.error('[appwrite] getSettings failed', error);
+    return {};
+  }
+}
+
+export interface ElectionDoc {
+  $id?: string;
+  name: string;
+  fullName: string;
+  date: string;
+  type: string;
+  status: string;
+  electoralBody: string;
+  description: string;
+  image: string;
+  published?: boolean;
+}
+
+export async function getElections(limit = 20): Promise<ElectionDoc[]> {
+  const id = docCollection(PUBLIC_APPWRITE_COLLECTION_ELECTIONS);
+  const dbId = databaseId();
+  if (!dbId || !id) return [];
+  try {
+    const { documents } = await databases().listDocuments(dbId, id, [
+      Query.limit(limit),
+    ]);
+    return (documents ?? []).map((d) => ({
+      $id: d.$id,
+      name: String(d.name ?? ''),
+      fullName: String(d.fullName ?? ''),
+      date: String(d.date ?? ''),
+      type: String(d.type ?? ''),
+      status: String(d.status ?? ''),
+      electoralBody: String(d.electoralBody ?? ''),
+      description: String(d.description ?? ''),
+      image: String(d.image ?? ''),
+      published: d.published !== false,
+    }));
+  } catch (error) {
+    console.error('[appwrite] getElections failed', error);
+    return [];
+  }
+}
+
+export interface CandidateDoc {
+  $id?: string;
+  electionId: string;
+  name: string;
+  party: string;
+  position: string;
+  state: string;
+  education: string;
+  platform: string;
+  runningMate: string;
+  previousOffice: string;
+  image: string;
+  order?: number;
+}
+
+export async function getCandidates(electionId?: string, limit = 100): Promise<CandidateDoc[]> {
+  const id = docCollection(PUBLIC_APPWRITE_COLLECTION_CANDIDATES);
+  const dbId = databaseId();
+  if (!dbId || !id) return [];
+  try {
+    const queries = electionId
+      ? [Query.equal('electionId', electionId), Query.limit(limit)]
+      : [Query.limit(limit)];
+    const { documents } = await databases().listDocuments(dbId, id, queries);
+    return (documents ?? []).map((d) => ({
+      $id: d.$id,
+      electionId: String(d.electionId ?? ''),
+      name: String(d.name ?? ''),
+      party: String(d.party ?? ''),
+      position: String(d.position ?? ''),
+      state: String(d.state ?? ''),
+      education: String(d.education ?? ''),
+      platform: String(d.platform ?? ''),
+      runningMate: String(d.runningMate ?? ''),
+      previousOffice: String(d.previousOffice ?? ''),
+      image: String(d.image ?? ''),
+      order: Number(d.order ?? 0),
+    }));
+  } catch (error) {
+    console.error('[appwrite] getCandidates failed', error);
+    return [];
+  }
+}
+
+export interface ResultDoc {
+  $id?: string;
+  electionId: string;
+  state: string;
+  region: string;
+  candidateVotes: Record<string, number>;
+  met25Threshold: string[];
+  winner: string;
+  governor: string;
+  senate: Record<string, number>;
+  registeredVoters: number;
+  accreditedVoters: number;
+  validVotes: number;
+  rejectedVotes: number;
+}
+
+export async function getResults(electionId?: string, limit = 200): Promise<ResultDoc[]> {
+  const id = docCollection(PUBLIC_APPWRITE_COLLECTION_RESULTS);
+  const dbId = databaseId();
+  if (!dbId || !id) return [];
+  try {
+    const queries = electionId
+      ? [Query.equal('electionId', electionId), Query.limit(limit)]
+      : [Query.limit(limit)];
+    const { documents } = await databases().listDocuments(dbId, id, queries);
+    const parseObj = (raw: unknown): Record<string, number> => {
+      if (raw && typeof raw === 'object') return raw as Record<string, number>;
+      if (typeof raw === 'string') {
+        try {
+          const parsed = JSON.parse(raw);
+          return parsed && typeof parsed === 'object' ? (parsed as Record<string, number>) : {};
+        } catch {
+          return {};
+        }
+      }
+      return {};
+    };
+    return (documents ?? []).map((d) => ({
+      $id: d.$id,
+      electionId: String(d.electionId ?? ''),
+      state: String(d.state ?? ''),
+      region: String(d.region ?? ''),
+      candidateVotes: parseObj(d.candidateVotes),
+      met25Threshold: (parseJsonArray(d.met25Threshold) ?? []).map(String),
+      winner: String(d.winner ?? ''),
+      governor: String(d.governor ?? ''),
+      senate: parseObj(d.senate),
+      registeredVoters: Number(d.registeredVoters ?? 0),
+      accreditedVoters: Number(d.accreditedVoters ?? 0),
+      validVotes: Number(d.validVotes ?? 0),
+      rejectedVotes: Number(d.rejectedVotes ?? 0),
+    }));
+  } catch (error) {
+    console.error('[appwrite] getResults failed', error);
+    return [];
+  }
+}
+
+export interface FactCheckDoc {
+  $id?: string;
+  electionId: string;
+  claim: string;
+  claimant: string;
+  claimantParty: string;
+  verdict: string;
+  analysis: string;
+  source: string;
+  date: string;
+  relatedArticleId?: string;
+}
+
+export async function getFactChecks(electionId?: string, limit = 100): Promise<FactCheckDoc[]> {
+  const id = docCollection(PUBLIC_APPWRITE_COLLECTION_FACTCHECKS);
+  const dbId = databaseId();
+  if (!dbId || !id) return [];
+  try {
+    const queries = electionId
+      ? [Query.equal('electionId', electionId), Query.limit(limit)]
+      : [Query.limit(limit)];
+    const { documents } = await databases().listDocuments(dbId, id, queries);
+    return (documents ?? []).map((d) => ({
+      $id: d.$id,
+      electionId: String(d.electionId ?? ''),
+      claim: String(d.claim ?? ''),
+      claimant: String(d.claimant ?? ''),
+      claimantParty: String(d.claimantParty ?? ''),
+      verdict: String(d.verdict ?? 'unverified'),
+      analysis: String(d.analysis ?? ''),
+      source: String(d.source ?? ''),
+      date: String(d.date ?? ''),
+      relatedArticleId: d.relatedArticleId ? String(d.relatedArticleId) : undefined,
+    }));
+  } catch (error) {
+    console.error('[appwrite] getFactChecks failed', error);
+    return [];
+  }
+}
+
+export interface StaffDoc {
+  $id?: string;
+  name: string;
+  email: string;
+  role: string;
+  category: string;
+  status: string;
+  bio: string;
+  image: string;
+  order?: number;
+}
+
+export async function getStaff(limit = 100): Promise<StaffDoc[]> {
+  const id = docCollection(PUBLIC_APPWRITE_COLLECTION_STAFF);
+  const dbId = databaseId();
+  if (!dbId || !id) return [];
+  try {
+    const { documents } = await databases().listDocuments(dbId, id, [
+      Query.limit(limit),
+    ]);
+    return (documents ?? []).map((d) => ({
+      $id: d.$id,
+      name: String(d.name ?? ''),
+      email: String(d.email ?? ''),
+      role: String(d.role ?? ''),
+      category: String(d.category ?? ''),
+      status: String(d.status ?? ''),
+      bio: String(d.bio ?? ''),
+      image: String(d.image ?? ''),
+      order: Number(d.order ?? 0),
+    }));
+  } catch (error) {
+    console.error('[appwrite] getStaff failed', error);
+    return [];
   }
 }

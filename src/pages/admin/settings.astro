@@ -1,0 +1,24 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import AdminCrud from '../../components/admin/AdminCrud.astro';
+import { adminListCollection } from '@lib/admin-collections';
+
+export const prerender = false;
+
+const docs = await adminListCollection('settings');
+---
+
+<AdminLayout title="Settings" active="settings">
+  <AdminCrud
+    collection="settings"
+    title="Site settings"
+    description="Key/value settings consumed by the site. Add keys such as site_name, tagline, contact_email, advertising_email, social_twitter, …"
+    docs={docs}
+    fields={[
+      { key: 'key', label: 'Key', placeholder: 'site_name' },
+      { key: 'value', label: 'Value', type: 'textarea', placeholder: 'Value' },
+      { key: 'description', label: 'Description', placeholder: 'What is this used for?' },
+      { key: 'category', label: 'Category', options: ['general', 'contact', 'social', 'advertising', 'newsletter'], type: 'select' },
+    ]}
+  />
+</AdminLayout>

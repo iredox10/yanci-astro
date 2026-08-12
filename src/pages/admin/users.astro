@@ -1,0 +1,135 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import AdminCrud from '../../components/admin/AdminCrud.astro';
+import InviteForm from '../../components/admin/InviteForm';
+import { adminListCollection } from '@lib/admin-collections';
+
+export const prerender = false;
+
+const [staff, roles, invitations] = await Promise.all([
+  adminListCollection('staff'),
+  adminListCollection('roles'),
+  adminListCollection('invitations'),
+]);
+
+const day = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+---
+
+<AdminLayout title="Users & roles" active="users">
+  <div class="mb-6">
+    <h1 class="font-serif text-2xl font-bold text-yanci-primary">Users & roles</h1>
+    <p class="mt-1 max-w-2xl text-sm text-yanci-primary/60">
+      Team members, role definitions and pending invitations. Invitations link to the public
+      <code class="rounded bg-yanci-primary/10 px-1 font-mono text-xs">/invite/&lt;token&gt;</code> page where the invitee picks a password.
+    </p>
+  </div>
+
+  <div class="mb-6 flex flex-wrap gap-1">
+    <button data-tab="tab-staff" class="tab-btn bg-yanci-primary px-4 py-2 text-sm font-bold text-yanci-paper">Staff ({staff.length})</button>
+    <button data-tab="tab-roles" class="tab-btn px-4 py-2 text-sm font-medium text-yanci-primary/70 hover:bg-yanci-primary/10">Roles ({roles.length})</button>
+    <button data-tab="tab-invites" class="tab-btn px-4 py-2 text-sm font-medium text-yanci-primary/70 hover:bg-yanci-primary/10">Invitations ({invitations.length})</button>
+  </div>
+
+  <div id="tab-staff" class="tab-panel">
+    <AdminCrud
+      collection="staff"
+      title="Team members"
+      description="The byline directory shown on the site. The role here is a label — access is controlled by the Appwrite user's role."
+      docs={staff}
+      fields={[
+        { key: 'name', label: 'Name', placeholder: 'Usman Ali' },
+        { key: 'email', label: 'Email', placeholder: 'usman@yanci.ng' },
+        { key: 'role', label: 'Role', options: ['contributor', 'author', 'editor', 'managing_editor', 'super_admin'], type: 'select' },
+        { key: 'category', label: 'Category', options: ['news', 'siyasa', 'kasuwanci', 'sport', 'fasaha', 'opinion', 'culture'], type: 'select' },
+        { key: 'status', label: 'Status', options: ['Active', 'Inactive'], type: 'select' },
+        { key: 'bio', label: 'Bio', type: 'textarea' },
+        { key: 'image', label: 'Image URL', placeholder: 'https://…' },
+        { key: 'order', label: 'Order', type: 'number' },
+      ]}
+    />
+  </div>
+
+  <div id="tab-roles" class="tab-panel hidden">
+    <AdminCrud
+      collection="roles"
+      title="Role definitions"
+      description="Named roles with permission sets. These are the roles assignable via invitations."
+      docs={roles}
+      fields={[
+        { key: 'name', label: 'Name', placeholder: 'Contributor' },
+        { key: 'slug', label: 'Slug', placeholder: 'contributor' },
+        { key: 'description', label: 'Description', type: 'textarea' },
+        { key: 'permissions', label: 'Permissions (JSON)', type: 'json', placeholder: '{"publish_articles": false}' },
+        { key: 'priority', label: 'Priority', type: 'number', help: 'Higher = more access' },
+        { key: 'is_system', label: 'System role', type: 'checkbox' },
+      ]}
+    />
+  </div>
+
+  <div id="tab-invites" class="tab-panel hidden">
+    <div class="grid gap-8 lg:grid-cols-5">
+      <div class="overflow-hidden border border-yanci-primary/15 bg-white/60 lg:col-span-3">
+        <h2 class="border-b border-yanci-primary/10 bg-yanci-primary/5 px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-yanci-primary/60">
+          Pending invitations ({invitations.length})
+        </h2>
+        <table class="w-full text-left text-sm">
+          <thead class="bg-yanci-primary/5 text-xs uppercase tracking-wide text-yanci-primary/60">
+            <tr>
+              <th class="px-4 py-2.5 font-semibold">Name</th>
+              <th class="px-4 py-2.5 font-semibold">Email</th>
+              <th class="px-4 py-2.5 font-semibold">Role</th>
+              <th class="px-4 py-2.5 font-semibold">Status</th>
+              <th class="px-4 py-2.5 font-semibold">Expires</th>
+              <th class="px-4 py-2.5 text-right font-semibold">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-yanci-primary/10">
+            {invitations.length === 0 && (
+              <tr><td colspan={6} class="px-4 py-10 text-center text-yanci-primary/50">No invitations yet.</td></tr>
+            )}
+            {invitations.map((inv) => (
+              <tr class="hover:bg-white/60">
+                <td class="px-4 py-3 font-medium">{String(inv.name ?? '—')}</td>
+                <td class="px-4 py-3 text-yanci-dark/70">{String(inv.email ?? '—')}</td>
+                <td class="px-4 py-3 capitalize text-yanci-dark/70">{String(inv.role ?? inv.labels ?? '—')}</td>
+                <td class="px-4 py-3"><span class="rounded-full px-2 py-0.5 text-xs font-bold uppercase {String(inv.status) === 'accepted' ? 'bg-emerald-100 text-emerald-700' : String(inv.status) === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}">{String(inv.status ?? 'pending')}</span></td>
+                <td class="px-4 py-3 text-yanci-dark/50">{inv.expires_at ? day.format(new Date(String(inv.expires_at))) : '—'}</td>
+                <td class="whitespace-nowrap px-4 py-3 text-right">
+                  {String(inv.status) === 'pending' && inv.token && (
+                    <a href={`/invite/${String(inv.token)}`} target="_blank" class="mr-3 text-xs font-medium text-yanci-teal hover:text-yanci-teal/70">Open link</a>
+                  )}
+                  <button data-del-invite={inv.$id} class="text-xs font-medium text-yanci-red hover:text-yanci-red/70">Delete</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div class="lg:col-span-2">
+        <InviteForm client:load />
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach((b) => {
+        b.className = 'tab-btn px-4 py-2 text-sm font-medium text-yanci-primary/70 hover:bg-yanci-primary/10';
+      });
+      document.querySelectorAll('.tab-panel').forEach((p) => p.classList.add('hidden'));
+      btn.className = 'tab-btn bg-yanci-primary px-4 py-2 text-sm font-bold text-yanci-paper';
+      document.getElementById(btn.dataset.tab!)?.classList.remove('hidden');
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-del-invite]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.delInvite!;
+      if (!window.confirm('Delete this invitation? The invite link stops working.')) return;
+      const res = await fetch(`/api/admin/invitations/${id}`, { method: 'DELETE' });
+      if (res.ok) window.location.reload();
+    });
+  });
+</script>

@@ -1,0 +1,23 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import AdminCrud from '../../components/admin/AdminCrud.astro';
+import { adminListCollection } from '@lib/admin-collections';
+
+export const prerender = false;
+
+const docs = await adminListCollection('sports');
+---
+
+<AdminLayout title="Sports" active="sports">
+  <AdminCrud
+    collection="sports"
+    title="Sports dashboard data"
+    description="JSON blobs that feed the live match, standings and fixtures widgets. One document keeps all three."
+    docs={docs}
+    fields={[
+      { key: 'liveMatches', label: 'Live matches', type: 'json', placeholder: '[{ "id": 1, "league": "NPFL", "homeTeam": "...", "awayTeam": "...", "homeScore": 3, "awayScore": 2, "minute": "90+2\'", "isLive": true, "events": [], "streamUrl": "" }]' },
+      { key: 'standings', label: 'Standings', type: 'json', placeholder: '[{ "pos": 1, "team": "...", "p": 24, "w": 18, "d": 4, "l": 2, "gf": 52, "ga": 21, "pts": 58 }]' },
+      { key: 'fixtures', label: 'Fixtures', type: 'json', placeholder: '[{ "id": 1, "league": "NPFL", "homeTeam": "...", "awayTeam": "...", "date": "2026-08-12", "time": "17:00" }]' },
+    ]}
+  />
+</AdminLayout>

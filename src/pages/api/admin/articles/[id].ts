@@ -14,6 +14,9 @@ function sanitizeInput(body: Record<string, unknown>) {
     image: sanitizeImageUrl(String(body.image ?? '')) ?? undefined,
     pillar: sanitizePlainText(String(body.pillar ?? 'news'), 40),
     section: sanitizePlainText(String(body.section ?? ''), 60),
+    type: ['hero', 'standard', 'compact'].includes(String(body.type))
+      ? String(body.type)
+      : 'standard',
     author: sanitizePlainText(String(body.author ?? ''), 120),
     slug: sanitizePlainText(String(body.slug ?? ''), 160),
     isLive: Boolean(body.isLive),
@@ -22,9 +25,6 @@ function sanitizeInput(body: Record<string, unknown>) {
       : 'draft',
     publishAt: typeof body.publishAt === 'string' ? body.publishAt : undefined,
     isSensitive: Boolean(body.isSensitive),
-    tags: Array.isArray(body.tags)
-      ? body.tags.map((t: unknown) => sanitizePlainText(String(t), 40)).filter(Boolean)
-      : [],
     metaTitle: sanitizePlainText(String(body.metaTitle ?? ''), 200),
     metaDescription: sanitizePlainText(String(body.metaDescription ?? ''), 300),
   };

@@ -1,0 +1,98 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SectionHeader from '../components/SectionHeader.astro';
+import NewsCard from '../components/NewsCard.astro';
+import { sectionBySlug } from '../data/sections';
+import { loadSectionFeed } from '../lib/content';
+import type { Article } from '../data/schema';
+
+export const prerender = false;
+
+const def = sectionBySlug('bidiyo')!;
+const all = await loadSectionFeed('bidiyo');
+
+const videos: Article[] = all.filter((a) => a.videoUrl || (a.body ?? '').includes('iframe'));
+const cards = videos.length > 0 ? videos : all;
+
+const featured = cards[0];
+const rest = cards.slice(1, 7);
+---
+
+<BaseLayout
+  title="Bidiyo — Yanci"
+  description="Labarun bidiyo da kai tsaye daga Yanci."
+  path="/bidiyo/"
+>
+  <SectionHeader section={def} />
+
+  <main class="mx-auto max-w-[1400px] px-4 py-12 md:px-6">
+    <section class="grid gap-8 lg:grid-cols-2">
+      {featured && (
+        <article class="group overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+          {featured.videoUrl ? (
+            <div class="aspect-video w-full">
+              <iframe src={featured.videoUrl} title={featured.headline} class="h-full w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
+            </div>
+          ) : (
+            featured.image && (
+              <a href={`/article/${featured.$id ?? featured.id}`} class="block aspect-video overflow-hidden">
+                <img src={featured.image} alt={featured.headline} class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+              </a>
+            )
+          )}
+          <div class="p-6">
+            {featured.kicker && <span class="mb-2 block text-xs font-bold uppercase tracking-widest text-yanci-teal">{featured.kicker}</span>}
+            <h3 class="font-serif text-2xl font-bold leading-tight text-[#1c1917]">
+              <a href={`/article/${featured.$id ?? featured.id}`} class="transition-colors group-hover:text-yanci-primary">{featured.headline}</a>
+            </h3>
+            {featured.trail && <p class="mt-3 line-clamp-2 text-sm leading-relaxed text-gray-600">{featured.trail}</p>}
+          </div>
+        </article>
+      )}
+
+      <div class="grid gap-6 sm:grid-cols-2">
+        {rest.map((video) => (
+          <article class="group overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+            {video.videoUrl ? (
+              <div class="aspect-video w-full">
+                <iframe src={video.videoUrl} title={video.headline} class="h-full w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
+              </div>
+            ) : (
+              video.image && (
+                <a href={`/article/${video.$id ?? video.id}`} class="block aspect-video overflow-hidden">
+                  <img src={video.image} alt={video.headline} loading="lazy" class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                </a>
+              )
+            )}
+            <div class="p-5">
+              {video.kicker && <span class="mb-1 block text-[10px] font-bold uppercase tracking-widest text-yanci-teal">{video.kicker}</span>}
+              <h4 class="line-clamp-2 font-serif text-base font-bold leading-snug text-[#1c1917] transition-colors group-hover:text-yanci-primary">
+                <a href={`/article/${video.$id ?? video.id}`}>{video.headline}</a>
+              </h4>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    {cards.length === 0 && (
+      <div class="py-32 text-center text-gray-400">
+        <p class="mb-2 font-serif text-2xl">Babu bidiyo a nan tukuna.</p>
+        <p class="text-sm">Dawo nan gaba ko nema labari.</p>
+      </div>
+    )}
+
+    {cards.length > 6 && (
+      <section class="mt-16">
+        <div class="mb-6 border-b border-yanci-primary/20 pb-2">
+          <span class="text-sm font-bold uppercase tracking-widest text-yanci-teal">Ƙarin Bidiyo</span>
+        </div>
+        <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+          {cards.slice(7).map((story) => (
+            <NewsCard data={{ ...story, $id: story.$id ?? String(story.id) }} />
+          ))}
+        </div>
+      </section>
+    )}
+  </main>
+</BaseLayout>

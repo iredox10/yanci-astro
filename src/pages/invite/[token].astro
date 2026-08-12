@@ -1,0 +1,134 @@
+---
+import { Client, Databases, Query } from 'node-appwrite';
+import { APPWRITE_API_KEY, APPWRITE_COLLECTION_INVITATIONS } from 'astro:env/server';
+import {
+  PUBLIC_APPWRITE_ENDPOINT,
+  PUBLIC_APPWRITE_PROJECT_ID,
+  PUBLIC_APPWRITE_DATABASE_ID,
+} from 'astro:env/client';
+import { roleName } from '@lib/auth';
+import '../../styles/global.css';
+
+export const prerender = false;
+
+const { token } = Astro.params;
+
+let invite: Record<string, unknown> | null = null;
+let error: string | null = null;
+
+if (token && APPWRITE_API_KEY && PUBLIC_APPWRITE_ENDPOINT && PUBLIC_APPWRITE_PROJECT_ID && PUBLIC_APPWRITE_DATABASE_ID && APPWRITE_COLLECTION_INVITATIONS) {
+  try {
+    const client = new Client()
+      .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
+      .setProject(PUBLIC_APPWRITE_PROJECT_ID)
+      .setKey(APPWRITE_API_KEY);
+    const found = await new Databases(client).listDocuments({
+      databaseId: PUBLIC_APPWRITE_DATABASE_ID,
+      collectionId: APPWRITE_COLLECTION_INVITATIONS,
+      queries: [Query.equal('token', token), Query.limit(1)],
+    });
+    invite = found?.documents?.[0] ?? null;
+    if (invite) {
+      if (String(invite.status ?? 'pending') !== 'pending') error = 'This invitation has already been used.';
+      else if (invite.expires_at && new Date(String(invite.expires_at)).getTime() < Date.now())
+        error = 'This invitation has expired. Ask an admin for a new one.';
+    } else {
+      error = 'Invitation not found. Check the link and try again.';
+    }
+  } catch {
+    error = 'Could not load this invitation.';
+  }
+} else {
+  error = 'Invitation flow is not configured.';
+}
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Join Yanci — Invitation</title>
+  </head>
+  <body class="bg-yanci-paper text-yanci-dark">
+    <div class="flex min-h-screen items-center justify-center px-4 py-12">
+      <div class="w-full max-w-md">
+        <div class="mb-8 text-center">
+          <a href="/" class="font-serif text-4xl font-black text-yanci-primary">
+            Yanci<span class="text-yanci-accent">.</span>
+          </a>
+          <p class="mt-2 text-sm text-yanci-primary/60">Ka shiga tawagar editanmu.</p>
+        </div>
+
+        {error && (
+          <div class="border border-yanci-red/30 bg-red-50 p-6 text-center">
+            <p class="font-serif text-lg font-bold text-red-700">Babu damar shiga</p>
+            <p class="mt-2 text-sm text-red-700/80">{error}</p>
+            <a href="/" class="mt-4 inline-block text-sm font-medium text-yanci-teal hover:text-yanci-teal/70">Return home</a>
+          </div>
+        )}
+
+        {!error && invite && (
+          <form id="accept-form" class="border border-yanci-primary/15 bg-white p-6">
+            <div class="mb-6 text-center">
+              <p class="text-xs font-bold uppercase tracking-widest text-yanci-accent">Kuna gayyato zuwa</p>
+              <h1 class="mt-1 font-serif text-xl font-bold text-yanci-primary">{String(invite.name ?? 'The Yanci team')}</h1>
+              <p class="mt-1 text-sm text-yanci-primary/60">
+                Role: <span class="font-semibold capitalize">{roleName(String(invite.role ?? 'contributor'))}</span> · {String(invite.email ?? '')}
+              </p>
+            </div>
+            <div class="space-y-4">
+              <label class="block">
+                <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">Sunanka (wajibi)</span>
+                <input name="name" type="text" required placeholder="Sulaiman Bello"
+                  class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40" />
+              </label>
+              <label class="block">
+                <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">Kalmar sirri</span>
+                <input name="password" type="password" required minlength={8} placeholder="Aƙalla haruffa 8"
+                  class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40" />
+              </label>
+            </div>
+            <button type="submit"
+              class="mt-5 w-full bg-yanci-primary px-5 py-2.5 text-sm font-bold uppercase tracking-wide text-yanci-paper hover:bg-yanci-primary/90">
+              Ƙirƙiri asusun
+            </button>
+            <p id="msg" class="mt-3 text-center text-xs text-yanci-red"></p>
+            <p class="mt-4 text-center text-xs text-yanci-primary/50">
+              Ta hanyar ci gaba, kun yarda da ka'idojin editan Yanci.
+            </p>
+          </form>
+        )}
+      </div>
+    </div>
+
+    {!error && invite && (
+      <script>
+        const form = document.getElementById('accept-form') as HTMLFormElement;
+        const msg = document.getElementById('msg');
+        const token = "{token}";
+
+        form.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          const fd = new FormData(form);
+          msg!.textContent = '';
+          const res = await fetch('/api/invite/accept', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, password: fd.get('password'), name: fd.get('name') }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok) {
+            form.innerHTML = `<div class="py-10 text-center">
+              <p class="font-serif text-xl font-bold text-emerald-700">Nasara! An ƙirƙiri asusunku.</p>
+              <p class="mt-2 text-sm text-emerald-700/80">Kun iya shiga yanzu.</p>
+              <a href="/admin/login" class="mt-5 inline-block bg-yanci-primary px-6 py-2.5 text-sm font-bold uppercase tracking-wide text-yanci-paper">Shiga</a>
+            </div>`;
+          } else {
+            msg!.textContent = data.message ?? 'An samu matsala. Sake gwadawa.';
+          }
+        });
+      </script>
+    )}
+  </body>
+</html>

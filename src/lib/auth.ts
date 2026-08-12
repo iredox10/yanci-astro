@@ -18,6 +18,7 @@ export interface SessionUser {
   name: string;
   email: string;
   role: string;
+  labels?: string[];
 }
 
 /** `super_admin` has the most access; unknown roles are denied, never "editor". */
@@ -49,20 +50,35 @@ function parseCookies(request: Request): Map<string, string> {
   return map;
 }
 
-/** Pull a session JWT out of the request: Authorization header or Appwrite cookie. */
+/**
+ * Validate a session credential: either a 3-part JWT or Appwrite's base64
+ * JSON session envelope `{"id":...,"secret":...}` (the legacy session token).
+ */
+export function isSessionToken(value: string): boolean {
+  if (value.split('.').length === 3) return true;
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return false;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, 'base64').toString('utf8'));
+    return typeof parsed?.id === 'string' && typeof parsed?.secret === 'string';
+  } catch {
+    return false;
+  }
+}
+
+/** Pull a session token out of the request: Authorization header or cookie. */
 export async function sessionTokenFrom(request: Request): Promise<string | null> {
   const auth = request.headers.get('authorization') ?? '';
   const [scheme, ...rest] = auth.split(' ');
   if (scheme?.toLowerCase() === 'bearer' && rest.length) {
     const token = rest.join(' ').trim();
-    if (token.split('.').length === 3) return token;
+    if (isSessionToken(token)) return token;
   }
 
   const cookies = parseCookies(request);
 
   // Admin console cookie (HttpOnly, set by POST /api/auth/login).
   const admin = cookies.get(ADMIN_COOKIE);
-  if (admin && admin.split('.').length === 3) return admin;
+  if (admin && isSessionToken(admin)) return admin;
 
   const project = PUBLIC_APPWRITE_PROJECT_ID;
   if (!project) return null;
@@ -70,12 +86,12 @@ export async function sessionTokenFrom(request: Request): Promise<string | null>
     const value = cookies.get(key);
     if (!value) continue;
     const token = value.startsWith('{') ? null : value;
-    if (token && token.split('.').length === 3) return token;
-    // JSON cookie format: attempt to recover the `jwt` field.
+    if (token && isSessionToken(token)) return token;
+    // JSON cookie format: attempt to recover a session token field.
     try {
       const parsed = JSON.parse(value);
-      const jwt = parsed?.jwt ?? parsed?.token ?? null;
-      if (jwt && jwt.split('.').length === 3) return String(jwt);
+      const token = parsed?.jwt ?? parsed?.token ?? null;
+      if (token && isSessionToken(String(token))) return String(token);
     } catch {
       /* not JSON */
     }
@@ -99,7 +115,13 @@ export function adminCookieHeader(token: string, maxAgeSeconds: number, reset = 
     .join('; ');
 }
 
-/** Create an Appwrite email/password session server-side and return its JWT. */
+/**
+ * Create an Appwrite email/password session server-side and return its
+ * session token. Appwrite 1.9 returns the token only inside the session
+ * cookie (`a_session_<project>`), not in the SDK response's `secret` field,
+ * so we capture the Set-Cookie header. The token is a base64 JSON envelope
+ * that Appwrite accepts via `X-Appwrite-Session` (what `setSession` sends).
+ */
 export async function createAdminSession(
   email: string,
   password: string,
@@ -108,19 +130,38 @@ export async function createAdminSession(
     return { ok: false, status: 503 };
   }
   try {
-    const client = new Client()
-      .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-      .setProject(PUBLIC_APPWRITE_PROJECT_ID);
-    const session = await new Account(client).createEmailPasswordSession(email.trim(), password);
-    const token = session.secret;
+    const base = PUBLIC_APPWRITE_ENDPOINT.replace(/\/$/, '');
+    const headers = { 'X-Appwrite-Project': PUBLIC_APPWRITE_PROJECT_ID, 'Content-Type': 'application/json' };
+
+    const create = await fetch(`${base}/account/sessions/email`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ email: email.trim(), password }),
+    });
+    if (!create.ok) return { ok: false, status: 401 };
+
+    const token = parseSetCookie(create.headers, `a_session_${PUBLIC_APPWRITE_PROJECT_ID}`);
+    if (!token) return { ok: false, status: 403 };
+
     const verified = await verifySession(token);
     if (!verified) return { ok: false, status: 403 };
-    const role = await roleForUser(verified.id) ?? (await roleFromLabels(getLabels(verified)));
+    const role = (await roleForUser(verified.id)) ?? (await roleFromLabels(verified.labels));
     if (!role || ROLE_PRIORITY[role] === undefined) return { ok: false, status: 403 };
     return { token, user: { ...verified, role } };
   } catch {
     return { ok: false, status: 401 };
   }
+}
+
+function parseSetCookie(headers: Headers, name: string): string | null {
+  for (const cookie of headers.getSetCookie?.() ?? []) {
+    const first = cookie.split(';')[0] ?? '';
+    const eq = first.indexOf('=');
+    if (eq === -1) continue;
+    const key = first.slice(0, eq).trim();
+    if (key === name) return first.slice(eq + 1).trim();
+  }
+  return null;
 }
 
 export async function verifySession(
@@ -137,6 +178,7 @@ export async function verifySession(
       id: session.$id,
       name: session.name,
       email: session.email,
+      labels: (session as unknown as { labels?: string[] }).labels ?? [],
     };
   } catch {
     return null;
@@ -165,10 +207,6 @@ export async function roleForUser(userId: string): Promise<string | null> {
   }
 }
 
-function getLabels(session: { id: string; name: string; email: string }): string[] {
-  return (session as unknown as { labels?: string[] }).labels ?? [];
-}
-
 export async function roleFromLabels(labels: string[] | undefined): Promise<string | null> {
   if (!labels) return null;
   const set = new Set(labels.map((l) => l.trim().toLowerCase()));
@@ -188,7 +226,7 @@ export async function requireUser(request: Request): Promise<{ ok: true; user: S
   // Roles come from either the `roles` collection assignment (if it exists for
   // the user) or, as in the legacy app, from server-side user labels.
   const custom = await roleForUser(session.id);
-  const role = custom ?? (await roleFromLabels(getLabels(session)));
+  const role = custom ?? (await roleFromLabels(session.labels));
   if (!role || ROLE_PRIORITY[role] === undefined) return { ok: false, status: 403 };
 
   return { ok: true, user: { ...session, role } };

@@ -1,0 +1,29 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import AdminCrud from '../../components/admin/AdminCrud.astro';
+import { adminListCollection } from '@lib/admin-collections';
+
+export const prerender = false;
+
+const docs = await adminListCollection('factchecks');
+---
+
+<AdminLayout title="Fact checks" active="fact-checks">
+  <AdminCrud
+    collection="fact-checks"
+    title="Fact checks"
+    description="Claim-by-claim verdicts shown on the elections hub and fact-check pages."
+    docs={docs}
+    fields={[
+      { key: 'electionId', label: 'Election ID', placeholder: 'election-2027' },
+      { key: 'claim', label: 'Claim', type: 'textarea', placeholder: 'The claim being checked…' },
+      { key: 'claimant', label: 'Claimant', placeholder: 'Ahmadu Bello Musa' },
+      { key: 'claimantParty', label: 'Claimant party', options: ['apc', 'pdp', 'nnpp', 'lpp', 'apga', 'independent'], type: 'select' },
+      { key: 'verdict', label: 'Verdict', options: ['true', 'mostly_true', 'misleading', 'false', 'unverified'], type: 'select' },
+      { key: 'analysis', label: 'Analysis', type: 'textarea', placeholder: 'Why the claim is right or wrong…' },
+      { key: 'source', label: 'Source', placeholder: 'NBS Q4 2026 Report' },
+      { key: 'date', label: 'Date', placeholder: '2027-01-15' },
+      { key: 'relatedArticleId', label: 'Related article ID (optional)', placeholder: '69e…' },
+    ]}
+  />
+</AdminLayout>
