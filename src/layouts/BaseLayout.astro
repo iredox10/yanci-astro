@@ -3,6 +3,7 @@ import '../styles/global.css';
 import Nav from '../components/Nav.astro';
 import Footer from '../components/Footer.astro';
 import { getSettings } from '@lib/appwrite-server';
+import { SECTIONS } from '@/data/sections';
 
 interface Props {
   title?: string;
@@ -26,6 +27,8 @@ const {
 } = Astro.props;
 
 const canonical = new URL(path, Astro.site ?? settings.site_url ?? 'https://yanci.ng').href;
+
+const feedSection = SECTIONS.find((s) => path === `/${s.slug}/` || path === `/${s.slug}`);
 ---
 
 <!doctype html>
@@ -42,6 +45,15 @@ const canonical = new URL(path, Astro.site ?? settings.site_url ?? 'https://yanc
       rel="stylesheet"
     />
     <meta name="description" content={description} />
+    <link rel="alternate" type="application/rss+xml" title={`${siteName} RSS`} href="/rss.xml" />
+    {feedSection && (
+      <link
+        rel="alternate"
+        type="application/rss+xml"
+        title={`${siteName} — ${feedSection.label} RSS`}
+        href={`/rss/${feedSection.slug}.xml`}
+      />
+    )}
     <link rel="canonical" href={canonical} />
     <meta property="og:site_name" content={siteName} />
     <meta property="og:title" content={title} />
