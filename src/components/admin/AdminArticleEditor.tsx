@@ -136,8 +136,28 @@ export default function AdminArticleEditor({ initial }: { initial?: Partial<Arti
         </label>
 
         <label className="block sm:col-span-4">
-          <span className={labelClass}>Image URL</span>
-          <input value={form.image} onChange={(e) => set('image', e.target.value)} placeholder="https://…" className={inputClass} />
+          <span className={labelClass}>Image</span>
+          <div className="flex gap-2">
+            <input value={form.image} onChange={(e) => set('image', e.target.value)} placeholder="https://…" className={inputClass} />
+            <label className="shrink-0 cursor-pointer border border-yanci-primary/30 px-4 py-2 text-xs font-bold uppercase tracking-wide text-yanci-primary/70 transition-colors hover:bg-yanci-primary/10">
+              Loda
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const fd = new FormData();
+                  fd.append('file', file);
+                  const res = await fetch('/api/admin/media', { method: 'POST', body: fd });
+                  const data = await res.json().catch(() => ({}));
+                  if (res.ok && data.url) set('image', data.url);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+          </div>
         </label>
 
         <label className="block sm:col-span-4">

@@ -24,6 +24,8 @@ export interface SessionUser {
 /** `super_admin` has the most access; unknown roles are denied, never "editor". */
 const ROLE_PRIORITY: Record<string, number> = {
   super_admin: 4,
+  // Legacy handlers request `admin` as the minimum role; treat it as super_admin.
+  admin: 4,
   managing_editor: 3,
   editor: 2,
   author: 1,
@@ -159,7 +161,7 @@ function parseSetCookie(headers: Headers, name: string): string | null {
     const eq = first.indexOf('=');
     if (eq === -1) continue;
     const key = first.slice(0, eq).trim();
-    if (key === name) return first.slice(eq + 1).trim();
+    if (key === name) return decodeURIComponent(first.slice(eq + 1).trim());
   }
   return null;
 }
@@ -210,7 +212,10 @@ export async function roleForUser(userId: string): Promise<string | null> {
 export async function roleFromLabels(labels: string[] | undefined): Promise<string | null> {
   if (!labels) return null;
   const set = new Set(labels.map((l) => l.trim().toLowerCase()));
-  if (set.has('super_admin')) return 'super_admin';
+  // Legacy app stored "superadmin" (Appwrite labels forbid underscores);
+  // accept that spelling alongside the underscore form.
+  if (set.has('super_admin') || set.has('superadmin')) return 'super_admin';
+  if (set.has('managing_editor') || set.has('managingeditor')) return 'managing_editor';
   for (const candidate of PREFERRED_ROLES) {
     if (set.has(candidate)) return candidate;
   }

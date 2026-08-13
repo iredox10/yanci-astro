@@ -40,7 +40,7 @@ const [elections, candidates, results] = await Promise.all([
         { key: 'status', label: 'Status', options: ['upcoming', 'active', 'completed'], type: 'select' },
         { key: 'electoralBody', label: 'Electoral body', placeholder: 'INEC' },
         { key: 'description', label: 'Description', type: 'textarea' },
-        { key: 'image', label: 'Image URL', placeholder: 'https://…' },
+        { key: 'image', label: 'Image', type: 'image', placeholder: 'https://…' },
         { key: 'published', label: 'Published', type: 'checkbox' },
       ]}
     />
@@ -61,7 +61,7 @@ const [elections, candidates, results] = await Promise.all([
         { key: 'previousOffice', label: 'Previous office', placeholder: 'Gwamnan Kaduna' },
         { key: 'education', label: 'Education', type: 'textarea', placeholder: 'PhD Economics, ABU Zaria' },
         { key: 'platform', label: 'Platform', type: 'textarea', placeholder: 'One promise per line' },
-        { key: 'image', label: 'Image URL', placeholder: 'https://…' },
+        { key: 'image', label: 'Image', type: 'image', placeholder: 'https://…' },
         { key: 'order', label: 'Order', type: 'number' },
       ]}
     />

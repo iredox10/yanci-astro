@@ -1,10 +1,14 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { listAutofetchSources } from '@lib/autofetch-store';
+import { getAutofetchDrafts } from '@lib/admin-store';
 
 export const prerender = false;
 
-const sources = await listAutofetchSources(false);
+const [sources, drafts] = await Promise.all([
+  listAutofetchSources(false),
+  getAutofetchDrafts(20),
+]);
 const day = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 ---
 
@@ -25,6 +29,36 @@ const day = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', h
   <div id="sync-result" class="mt-3 hidden text-sm"></div>
 
   <div class="mt-5 overflow-hidden border border-yanci-primary/15 bg-white/60">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-yanci-primary/10 bg-yanci-primary/5 px-4 py-3">
+      <div>
+        <h2 class="font-serif text-lg font-bold text-yanci-primary">Review drafts ({drafts.length})</h2>
+        <p class="text-xs text-yanci-primary/60">Labarai da autofetch ya fitar, suna jiran amincewa. Zaɓi sannan danna "Buga (Publish)".</p>
+      </div>
+      <button id="publish-selected" class="bg-emerald-700 px-4 py-2 text-xs font-bold uppercase tracking-wide text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-40" disabled>
+        Buga zaɓaƙɓu
+      </button>
+    </div>
+    {drafts.length === 0 ? (
+      <p class="px-4 py-8 text-center text-sm text-yanci-primary/50">No autofetch drafts waiting for review.</p>
+    ) : (
+      <ul class="divide-y divide-yanci-primary/10">
+        {drafts.map((d) => (
+          <li class="flex items-start gap-3 px-4 py-3 hover:bg-white/60">
+            <input type="checkbox" class="mt-1 size-4 accent-emerald-700 shrink-0" data-draft={d.$id} aria-label={`Publish select: ${String(d.headline ?? '')}`} />
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium text-yanci-dark">{String(d.headline ?? '')}</p>
+              <p class="mt-0.5 text-xs text-yanci-primary/50">
+                {String(d.section ?? '') || 'No section'} · {d.$createdAt ? day.format(new Date(String(d.$createdAt))) : ''}
+              </p>
+            </div>
+            <a href={`/admin/articles/${encodeURIComponent(String(d.$id ?? ''))}`} class="shrink-0 text-xs font-medium text-yanci-teal hover:text-yanci-teal/70">Gyara</a>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+
+  <div class="mt-8 overflow-hidden border border-yanci-primary/15 bg-white/60">
     <table class="w-full text-left text-sm">
       <thead class="bg-yanci-primary/5 text-xs uppercase tracking-wide text-yanci-primary/60">
         <tr>
@@ -200,5 +234,27 @@ const day = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', h
       syncBtn.textContent = 'Run sync';
       syncBtn.removeAttribute('disabled');
     }
+  });
+
+  const publishBtn = document.getElementById('publish-selected');
+  const draftBoxes = document.querySelectorAll('input[type="checkbox"][data-draft]');
+  const updatePublishState = () => {
+    const any = [...draftBoxes].some((b) => b.checked);
+    if (!publishBtn) return;
+    publishBtn.disabled = !any;
+    publishBtn.textContent = any ? `Buga zaɓaƙɓu (${[...draftBoxes].filter((b) => b.checked).length})` : 'Buga zaɓaƙɓu';
+  };
+  draftBoxes.forEach((b) => b.addEventListener('change', updatePublishState));
+  publishBtn?.addEventListener('click', async () => {
+    const ids = [...draftBoxes].filter((b) => b.checked).map((b) => b.dataset.draft);
+    if (ids.length === 0) return;
+    const res = await fetch('/api/admin/articles/publish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) window.location.reload();
+    else setMsg(data.message ?? 'Publish failed');
   });
 </script>

@@ -2,6 +2,7 @@
 import '../styles/global.css';
 import Nav from '../components/Nav.astro';
 import Footer from '../components/Footer.astro';
+import { getSettings } from '@lib/appwrite-server';
 
 interface Props {
   title?: string;
@@ -11,15 +12,20 @@ interface Props {
   disableFooter?: boolean;
 }
 
+const settings = await getSettings();
+const siteName = settings.site_name || 'Yanci';
+const siteTagline = settings.tagline || 'Jaridar Hausa mai zuwa';
+
 const {
-  title = 'Yanci — Muryar Arewa',
-  description = 'Yanci: Jaridar Hausa mai zuwa. Labarai, siyasa, wasanni da al’adu a yaren Hausa, kai tsaye daga Najeriya.',
+  title = `${siteName} — ${siteTagline}`,
+  description = settings.default_meta_desc ||
+    'Yanci: Jaridar Hausa mai zuwa. Labarai, siyasa, wasanni da al’adu a yaren Hausa, kai tsaye daga Najeriya.',
   path = '/',
   disableNav = false,
   disableFooter = false,
 } = Astro.props;
 
-const canonical = new URL(path, Astro.site ?? 'https://yanci.ng').href;
+const canonical = new URL(path, Astro.site ?? settings.site_url ?? 'https://yanci.ng').href;
 ---
 
 <!doctype html>
@@ -37,7 +43,7 @@ const canonical = new URL(path, Astro.site ?? 'https://yanci.ng').href;
     />
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
-    <meta property="og:site_name" content="Yanci" />
+    <meta property="og:site_name" content={siteName} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />

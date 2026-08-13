@@ -1,24 +1,146 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import AdminCrud from '../../components/admin/AdminCrud.astro';
 import { adminListCollection } from '@lib/admin-collections';
 
 export const prerender = false;
 
 const docs = await adminListCollection('settings');
+const doc = docs[0] ?? null;
+
+const GROUPS: { title: string; fields: { key: string; label: string; type: 'text' | 'textarea' | 'checkbox' }[] }[] = [
+  {
+    title: 'Bayanin shafin',
+    fields: [
+      { key: 'site_name', label: 'Sunan shafin', type: 'text' },
+      { key: 'site_url', label: 'Adireshin shafin', type: 'text' },
+      { key: 'tagline', label: 'Taken', type: 'text' },
+      { key: 'default_meta_desc', label: 'Default meta description', type: 'textarea' },
+    ],
+  },
+  {
+    title: 'Tuntuɓa',
+    fields: [
+      { key: 'contact_email', label: 'Imel na tuntuɓa', type: 'text' },
+      { key: 'advertising_email', label: 'Imel na talla', type: 'text' },
+      { key: 'contact_phone', label: 'Wayar tuntuɓa', type: 'text' },
+      { key: 'address', label: 'Adireshin ofis', type: 'textarea' },
+    ],
+  },
+  {
+    title: 'Kafofin sada zumunta',
+    fields: [
+      { key: 'twitter_url', label: 'Twitter / X', type: 'text' },
+      { key: 'facebook_url', label: 'Facebook', type: 'text' },
+      { key: 'instagram_url', label: 'Instagram', type: 'text' },
+      { key: 'youtube_url', label: 'YouTube', type: 'text' },
+    ],
+  },
+  {
+    title: 'Abubuwan shafin gida',
+    fields: [
+      { key: 'ticker_items', label: 'Ticker (daya a kowane layi)', type: 'textarea' },
+      { key: 'newsletter_enabled', label: 'Kunna newsletter', type: 'checkbox' },
+      { key: 'comments_enabled', label: 'Kunna comments', type: 'checkbox' },
+    ],
+  },
+  {
+    title: 'Maintenance',
+    fields: [
+      { key: 'maintenance_mode', label: 'Kunna yanayin gyara', type: 'checkbox' },
+      { key: 'maintenance_message', label: 'Sakon gyara', type: 'textarea' },
+    ],
+  },
+  {
+    title: 'SMTP (aika imel)',
+    fields: [
+      { key: 'smtp_host', label: 'Host', type: 'text' },
+      { key: 'smtp_port', label: 'Port', type: 'text' },
+      { key: 'smtp_user', label: 'User', type: 'text' },
+      { key: 'smtp_pass', label: 'Password', type: 'text' },
+    ],
+  },
+];
 ---
 
 <AdminLayout title="Settings" active="settings">
-  <AdminCrud
-    collection="settings"
-    title="Site settings"
-    description="Key/value settings consumed by the site. Add keys such as site_name, tagline, contact_email, advertising_email, social_twitter, …"
-    docs={docs}
-    fields={[
-      { key: 'key', label: 'Key', placeholder: 'site_name' },
-      { key: 'value', label: 'Value', type: 'textarea', placeholder: 'Value' },
-      { key: 'description', label: 'Description', placeholder: 'What is this used for?' },
-      { key: 'category', label: 'Category', options: ['general', 'contact', 'social', 'advertising', 'newsletter'], type: 'select' },
-    ]}
-  />
+  <div class="mb-6">
+    <h1 class="font-serif text-2xl font-bold text-yanci-primary">Site settings</h1>
+    <p class="mt-1 max-w-xl text-sm text-yanci-primary/60">
+      Wadannan saitin suna sarrafa abin da masu karatu ke gani a duk shafin. Ajiye bayanai sannan a sabunta shafi.
+    </p>
+  </div>
+
+  {!doc && (
+    <div class="mb-6 border border-yanci-red/30 bg-red-50 p-5 text-sm text-red-700">
+      Ba a sami bayanan saitin ba. Run <code>node scripts/seed-settings.mjs</code> don ƙirƙirar saitin farko.
+    </div>
+  )}
+
+  {doc && (
+    <form id="settings-form" class="grid gap-6 lg:grid-cols-2">
+      <input type="hidden" name="id" value={String(doc.$id ?? '')} />
+      {GROUPS.map((group) => (
+        <fieldset class="border border-yanci-primary/15 bg-white/60 p-5">
+          <legend class="px-2 font-serif text-base font-bold text-yanci-primary">{group.title}</legend>
+          <div class="space-y-4">
+            {group.fields.map((f) => (
+              <label class="block">
+                <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">{f.label}</span>
+                {f.type === 'checkbox' ? (
+                  <input type="checkbox" name={f.key} class="size-4 accent-yanci-accent" checked={String(doc[f.key] ?? '') === 'true'} />
+                ) : f.type === 'textarea' ? (
+                  <textarea
+                    name={f.key}
+                    rows={3}
+                    class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40"
+                  >{String(doc[f.key] ?? '')}</textarea>
+                ) : (
+                  <input
+                    type="text"
+                    name={f.key}
+                    value={String(doc[f.key] ?? '')}
+                    class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40"
+                  />
+                )}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      ))}
+      <div class="lg:col-span-2">
+        <button type="submit" class="bg-yanci-primary px-8 py-2.5 text-sm font-bold uppercase tracking-wide text-yanci-paper hover:bg-yanci-primary/90">
+          Ajiye saitin
+        </button>
+        <span id="settings-msg" class="ml-4 text-xs text-yanci-red"></span>
+      </div>
+    </form>
+  )}
 </AdminLayout>
+
+<script>
+  const form = document.getElementById('settings-form') as HTMLFormElement | null;
+  const msg = document.getElementById('settings-msg');
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = (form.elements.namedItem('id') as HTMLInputElement).value;
+    const data: Record<string, unknown> = {};
+    for (const el of form.elements) {
+      const node = el as HTMLInputElement | HTMLTextAreaElement;
+      if (!node.name || node.name === 'id') continue;
+      if (node.type === 'checkbox') data[node.name] = (node as HTMLInputElement).checked;
+      else data[node.name] = node.value;
+    }
+    if (msg) msg.textContent = '';
+    const res = await fetch(`/api/admin/settings/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (msg) msg.textContent = json.message ?? 'Ajiye bai yi nasara ba';
+      return;
+    }
+    if (msg) { msg.textContent = 'An ajiye!'; msg.className = 'ml-4 text-xs font-bold text-yanci-teal'; }
+  });
+</script>

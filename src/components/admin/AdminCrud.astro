@@ -16,7 +16,7 @@
 interface FieldConfig {
   key: string;
   label: string;
-  type?: 'text' | 'number' | 'checkbox' | 'textarea' | 'select' | 'json';
+  type?: 'text' | 'number' | 'checkbox' | 'textarea' | 'select' | 'json' | 'image';
   options?: string[];
   placeholder?: string;
   help?: string;
@@ -148,6 +148,26 @@ const sorted = [...docs].sort(
                   class="w-full font-mono text-xs border border-yanci-primary/25 bg-white px-3 py-2 focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40"
                 ></textarea>
               )}
+              {f.type === 'image' && (
+                <div class="space-y-2">
+                  <div class="flex gap-2">
+                    <input
+                      type="text"
+                      name={f.key}
+                      placeholder={f.placeholder ?? 'https://…'}
+                      class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40"
+                    />
+                    <label
+                      class="shrink-0 cursor-pointer border border-yanci-primary/30 px-4 py-2 text-xs font-bold uppercase tracking-wide text-yanci-primary/70 transition-colors hover:bg-yanci-primary/10"
+                      aria-label="Upload image"
+                    >
+                      Loda
+                      <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" data-upload={f.key} />
+                    </label>
+                  </div>
+                  <span class="mt-0.5 block text-xs text-yanci-primary/40" data-upload-status={f.key}></span>
+                </div>
+              )}
               {f.help && <span class="mt-0.5 block text-xs text-yanci-primary/40">{f.help}</span>}
             </label>
           ))}
@@ -254,6 +274,27 @@ const sorted = [...docs].sort(
   });
 
   reset?.addEventListener('click', resetForm);
+
+  document.querySelectorAll('input[type="file"][data-upload]').forEach((fileInput) => {
+    const key = fileInput.dataset.upload;
+    const status = form.querySelector(`[data-upload-status="${key}"]`);
+    const urlInput = form.elements.namedItem(key);
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      if (status) { status.textContent = 'Loda…'; status.className = 'mt-0.5 block text-xs text-yanci-teal'; }
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/admin/media', { method: 'POST', body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) {
+        if (status) { status.textContent = data.message ?? 'Upload failed'; status.className = 'mt-0.5 block text-xs font-bold text-yanci-red'; }
+        return;
+      }
+      if (urlInput instanceof HTMLInputElement) urlInput.value = data.url;
+      if (status) { status.textContent = '✓ ' + data.url; status.className = 'mt-0.5 block truncate text-xs text-yanci-teal'; }
+    });
+  });
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();

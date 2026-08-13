@@ -17,19 +17,22 @@ import {
   getHomepageStats,
   getSportsData,
   getSettings,
+  getTrending,
 } from '@lib/appwrite-server';
 
-const [published, dbHighlights, dbStats, dbSports, settings] = await Promise.all([
+const [published, dbHighlights, dbStats, dbSports, settings, trending] = await Promise.all([
   loadArticles(),
   getHighlights(),
   getHomepageStats(),
   getSportsData(),
   getSettings(),
+  getTrending(),
 ]);
 
 const highlights = dbHighlights.length > 0 ? dbHighlights : SEED_HIGHLIGHTS;
 const stats = dbStats.length > 0 ? dbStats : SEED_STATS;
 const sports = dbSports ?? SEED_SPORTS;
+const trendingTags = trending.length > 0 ? trending : SEED_TRENDING;
 const ticker = (settings.ticker_items ? settings.ticker_items.split('\n').filter(Boolean) : [])
   .length > 0
   ? settings.ticker_items.split('\n').filter(Boolean)
@@ -449,7 +452,7 @@ const sportPattern =
         <div class="mt-8">
           <h4 class="mb-4 text-xs font-bold uppercase tracking-widest text-gray-400">Batutuwan da suka fi shahara</h4>
           <div class="flex flex-wrap gap-2">
-            {SEED_TRENDING.map((tag) => (
+            {trendingTags.map((tag) => (
               <a href="/search" class="cursor-pointer rounded-full bg-gray-100 px-4 py-2 text-xs font-bold text-gray-600 transition-all hover:bg-[#0f3036] hover:text-white">{tag}</a>
             ))}
           </div>

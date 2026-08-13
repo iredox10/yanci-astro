@@ -113,6 +113,28 @@ export async function adminDeleteArticle(id: string): Promise<boolean> {
   }
 }
 
+/** Drafts created by the autofetch pipeline (author marker), newest first. */
+export async function getAutofetchDrafts(limit = 20): Promise<Record<string, unknown>[]> {
+  const env = writable();
+  if (!env) return [];
+  try {
+    const { documents } = await new Databases(env.client).listDocuments(
+      env.databaseId,
+      env.collection,
+      [
+        Query.equal('author', 'AI Fetcher'),
+        Query.equal('status', 'draft'),
+        Query.orderDesc('$createdAt'),
+        Query.limit(Math.min(limit, 50)),
+      ],
+    );
+    return documents ?? [];
+  } catch (error) {
+    console.error('[admin-store] getAutofetchDrafts failed', error);
+    return [];
+  }
+}
+
 export async function createRevision(articleId: string, previous: unknown, editorName: string): Promise<void> {
   const env = writable();
   if (!env || !env.revisions) return;

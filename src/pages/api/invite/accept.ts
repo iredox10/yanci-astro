@@ -71,7 +71,10 @@ export const POST: APIRoute = async ({ request }) => {
       user = existing.users[0];
       if (!user) throw error;
     }
-    await users.updateLabels({ userId: user.$id, labels: [role] });
+    // Appwrite labels forbid underscores; map roles to the legacy label
+    // spellings (superadmin, managingeditor) that roleFromLabels accepts.
+    const label = role.replace(/_/g, '');
+    await users.updateLabels({ userId: user.$id, labels: [label] });
 
     await db.updateDocument({
       databaseId: PUBLIC_APPWRITE_DATABASE_ID,

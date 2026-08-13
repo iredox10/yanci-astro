@@ -49,12 +49,11 @@ export const POST: APIRoute = async ({ request }) => {
         trail: draft.trail,
         body: draft.body,
         image: draft.image,
-        author: draft.author,
+        author: 'AI Fetcher',
         status: 'draft',
         section: draft.section,
         pillar: draft.pillar,
         isLive: false,
-        created_by: 'autofetch',
       });
       if (ok) persisted++;
     }

@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
-import { subscribeNewsletter, unsubscribeNewsletter } from '../../lib/appwrite-server';
+import { subscribeNewsletter, unsubscribeNewsletter, getSettings } from '../../lib/appwrite-server';
+import { sendMail } from '../../lib/mailer';
 
 export const prerender = false;
 
@@ -28,6 +29,16 @@ export const POST: APIRoute = async ({ request }) => {
         }),
         { status: action === 'unsubscribe' ? 404 : 503 },
       );
+    }
+    if (action === 'subscribe') {
+      const settings = await getSettings();
+      const siteName = settings.site_name || 'Yanci';
+      await sendMail(settings, {
+        to: email,
+        subject: `Barka da zuwa ${siteName}!`,
+        text: `Na gode da yin rajista a jaridar ${siteName}. Za ku sami labarai masu zafi kai tsaye a akwatin imelinku.\n\nIdan ba ku so kuka ci gaba da samun sakonni, amfani da hanyar "Cire rajista" a shafinmu.`,
+        html: `<p>Barka da zuwa <strong>${siteName}</strong>!</p><p>Za ku sami labarai masu zafi kai tsaye a akwatin imelinku.</p>`,
+      });
     }
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
   } catch (error) {

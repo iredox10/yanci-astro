@@ -185,6 +185,47 @@ export function viewCountFor(articleId: string, most: Awaited<ReturnType<typeof 
   return most.find((m) => m.articleId === articleId)?.views ?? 0;
 }
 
+/**
+ * Trending tags derived from the most-read articles' tags (by view count),
+ * padded with the top sections. Returns [] when there is no DB data so the
+ * caller can fall back to seed content.
+ */
+export async function getTrending(limit = 6): Promise<string[]> {
+  const c = collections();
+  if (!c) return [];
+  try {
+    const most = await getMostRead(20);
+    if (most.length === 0) return [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const { articleId } of most) {
+      const article = await getArticleById(articleId);
+      for (const tag of article?.tags ?? []) {
+        const clean = tag.trim();
+        if (clean && !seen.has(clean)) {
+          seen.add(clean);
+          out.push(clean.startsWith('#') ? clean : `#${clean}`);
+        }
+        if (out.length >= limit) return out;
+      }
+    }
+    if (out.length === 0) {
+      for (const a of await getArticles(20)) {
+        const section = a.section?.trim();
+        if (section && !seen.has(section)) {
+          seen.add(section);
+          out.push(`#${section}`);
+        }
+        if (out.length >= limit) break;
+      }
+    }
+    return out;
+  } catch (error) {
+    console.error('[appwrite] getTrending failed', error);
+    return [];
+  }
+}
+
 // ─── Newsletter subscriptions ────────────────────────────────────────────────
 export async function subscribeNewsletter(email: string): Promise<boolean> {
   const c = collections();
@@ -364,12 +405,15 @@ export async function getSettings(limit = 100): Promise<Record<string, string>> 
   if (!dbId || !id) return {};
   try {
     const { documents } = await databases().listDocuments(dbId, id, [
-      Query.limit(limit),
+      Query.limit(1),
     ]);
+    const doc = documents?.[0];
+    if (!doc) return {};
     const out: Record<string, string> = {};
-    for (const doc of documents ?? []) {
-      const key = String(doc.key ?? '');
-      if (key) out[key] = String(doc.value ?? '');
+    for (const [key, value] of Object.entries(doc)) {
+      if (key.startsWith('$')) continue;
+      if (value === null || value === undefined) continue;
+      out[key] = String(value);
     }
     return out;
   } catch (error) {

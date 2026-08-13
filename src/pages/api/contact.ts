@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { getSettings } from '@lib/appwrite-server';
 import { sanitizePlainText } from '@lib/sanitize';
+import { sendMail } from '@lib/mailer';
 
 export const prerender = false;
 
@@ -10,10 +11,9 @@ const json = (data: unknown, status = 200) =>
 /**
  * POST /api/contact
  *
- * Forwards the contact form to the configured contact email via a mailto
- * fallback — no SMTP in the stack, so the message is logged server-side and
- * the page confirms receipt. The `mailto` link in the UI remains the primary
- * channel.
+ * Forwards the contact form to the configured contact email. Sends via SMTP
+ * when smtp_* settings are configured; otherwise logs the message server-side
+ * (SMTP not configured) and confirms receipt.
  */
 export const POST: APIRoute = async ({ request }) => {
   let body: Record<string, unknown>;
@@ -36,8 +36,15 @@ export const POST: APIRoute = async ({ request }) => {
 
   const settings = await getSettings();
   const to = settings.contact_email || 'labulabari@yanci.ng';
+  const siteName = settings.site_name || 'Yanci';
 
-  console.log(`[contact] from ${name} <${email}> to ${to}: ${message.slice(0, 200)}`);
+  const ok = await sendMail(settings, {
+    to,
+    subject: `[${siteName}] Sabon sako daga ${name}`,
+    text: `Sunan-mai-aiko: ${name}\nImel: ${email}\n\n${message}`,
+    html: `<p><strong>${name}</strong> &lt;${email}&gt;</p><p>${message.replace(/</g, '&lt;').replace(/\n/g, '<br>')}</p>`,
+  });
 
+  if (!ok) return json({ ok: false, message: 'Could not send message' }, 500);
   return json({ ok: true });
 };
