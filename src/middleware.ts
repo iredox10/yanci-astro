@@ -2,7 +2,10 @@ import { defineMiddleware } from 'astro:middleware';
 import { requireUser } from '@lib/auth';
 
 const isAdminPath = (p: string) => p === '/admin' || p.startsWith('/admin/');
-const isPublicAdminPath = (p: string) => p.startsWith('/admin/login');
+const isPublicAdminPath = (p: string) =>
+  p.startsWith('/admin/login') ||
+  p.startsWith('/admin/forgot-password') ||
+  p.startsWith('/admin/reset-password');
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const { pathname } = new URL(context.request.url);
