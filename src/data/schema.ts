@@ -62,6 +62,17 @@ export interface LiveUpdate {
   image?: string;
 }
 
+/** Reader comment on an article. */
+export interface Comment {
+  $id?: string;
+  articleId: string;
+  name: string;
+  body: string;
+  likes: number;
+  ownerToken?: string;
+  $createdAt?: string;
+}
+
 /** Article card data passed to NewsCard/etc. */
 export type ArticleCard = Pick<
   Article,

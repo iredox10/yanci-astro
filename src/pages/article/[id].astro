@@ -2,6 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import NewsCard from '../../components/NewsCard.astro';
 import LiveTimeline from '../../components/LiveTimeline.astro';
+import CommentsSection from '../../components/CommentsSection.astro';
 import { pillarAccent } from '../../data/schema';
 import { loadArticles, loadArticle, toCards } from '../../lib/content';
 
@@ -147,6 +148,9 @@ const sectionLabel = String(article.section ?? article.pillar ?? 'Labarai');
           ))}
         </div>
       </div>
+
+      <!-- Comments -->
+      <CommentsSection articleId={idStr} />
     </article>
 
     <!-- Related -->

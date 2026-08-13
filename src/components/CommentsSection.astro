@@ -1,0 +1,310 @@
+---
+import { getComments } from '@lib/appwrite-server';
+import type { Comment } from '../data/schema';
+
+interface Props {
+  articleId: string;
+}
+
+const { articleId } = Astro.props;
+const initialComments = await getComments(articleId);
+
+function timeAgo(iso?: string): string {
+  if (!iso) return '';
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Yanzu';
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  return `${Math.floor(hrs / 24)}d`;
+}
+---
+
+<section id="comments" class="mt-16 border-t border-gray-200 pt-8 md:mt-20 md:pt-10" data-article-id={articleId}>
+  <h2 class="mb-2 font-serif text-2xl font-black text-[#121212] md:text-3xl">Sharhi</h2>
+  <p class="mb-8 text-sm text-gray-500">Ra'ayinka yana da muhimmanci — ka raba shi da mu.</p>
+
+  <form id="comment-form" class="mb-10 rounded-sm border border-gray-100 bg-gray-50 p-5 shadow-sm md:p-6">
+    <label for="comment-name" class="mb-1 block text-xs font-bold uppercase tracking-widest text-gray-500">Sunanka</label>
+    <input
+      id="comment-name"
+      type="text"
+      maxlength="60"
+      required
+      placeholder="Misali: Amina Bello"
+      class="mb-4 w-full rounded-sm border border-gray-200 bg-white px-3 py-2 text-sm focus:border-[#0f3036] focus:outline-none"
+    />
+    <label for="comment-body" class="mb-1 block text-xs font-bold uppercase tracking-widest text-gray-500">Sharhinka</label>
+    <textarea
+      id="comment-body"
+      rows="4"
+      maxlength="2000"
+      required
+      placeholder="Ka rubuta ra'ayinka a nan..."
+      class="mb-3 w-full rounded-sm border border-gray-200 bg-white px-3 py-2 text-sm focus:border-[#0f3036] focus:outline-none"
+    ></textarea>
+    <p id="comment-error" class="mb-3 hidden text-sm font-bold text-[#c70000]" role="alert"></p>
+    <button id="comment-submit" type="submit" class="rounded-sm bg-[#0f3036] px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#c70000]">Aika sharhi</button>
+  </form>
+
+  <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <p id="comment-count" class="text-sm font-bold text-gray-600">{initialComments.length} sharhi</p>
+    <div class="flex gap-2" role="group" aria-label="Daidaita sharhi">
+      <button type="button" class="comment-sort rounded-full border border-[#121212] bg-[#121212] px-3 py-1 text-xs font-bold text-white" data-sort="latest">Sabbi</button>
+      <button type="button" class="comment-sort rounded-full border border-gray-200 px-3 py-1 text-xs font-bold text-gray-500" data-sort="top">Mafi so</button>
+    </div>
+  </div>
+
+  <div id="comment-list" class="divide-y divide-gray-100">
+    {initialComments.map((c) => (
+      <article class="py-4" data-comment-id={c.$id}>
+        <div class="flex items-start gap-3">
+          <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0f3036] text-xs font-bold text-white">
+            {(c.name || 'A')[0]?.toUpperCase()}
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="mb-1 flex flex-wrap items-center gap-2">
+              <span class="text-sm font-bold text-gray-900">{c.name}</span>
+              <span class="text-xs text-gray-400">{timeAgo(c.$createdAt)}</span>
+            </div>
+            <p class="break-words text-sm leading-relaxed text-gray-700">{c.body}</p>
+            <div class="mt-2 flex items-center gap-4">
+              <button type="button" data-comment-like class="flex items-center gap-1 text-xs text-gray-400 transition-colors hover:text-[#c70000]">
+                <svg class="h-3 w-3" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M47.6 300.4 228.3 469.1c7.5 7 17.4 10.9 27.7 10.9s20.2-3.9 27.7-10.9L464.4 300.4c30.4-28.3 47.6-68 47.6-109.5v-5.8c0-69.9-50.5-129.5-119.4-141C347 36.5 300.6 51.4 268 84L256 96 244 84c-32.6-32.6-79-47.5-124.6-39.9C50.5 55.6 0 115.2 0 185.1v5.8c0 41.5 17.2 81.2 47.6 109.5z"/></svg>
+                <span data-comment-likes>{c.likes > 0 ? c.likes : ''}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </article>
+    ))}
+  </div>
+  <p id="comment-empty" class:list={[{ hidden: initialComments.length > 0 }]} class="py-10 text-center font-serif italic text-gray-400">
+    Babu sharhi tukuna — ka zama farko!
+  </p>
+</section>
+
+<script>
+  const section = document.getElementById('comments') as HTMLElement | null;
+  if (section) {
+    const articleId = section.dataset.articleId ?? '';
+    const list = document.getElementById('comment-list') as HTMLElement;
+    const countEl = document.getElementById('comment-count') as HTMLElement;
+    const emptyEl = document.getElementById('comment-empty') as HTMLElement;
+    const errorEl = document.getElementById('comment-error') as HTMLElement;
+    const form = document.getElementById('comment-form') as HTMLFormElement | null;
+    const nameInput = document.getElementById('comment-name') as HTMLInputElement | null;
+    const bodyInput = document.getElementById('comment-body') as HTMLTextAreaElement | null;
+    const sortBtns = [...document.querySelectorAll<HTMLElement>('.comment-sort')];
+
+    function escapeHtml(s: string): string {
+      return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function timeAgo(iso?: string): string {
+      if (!iso) return '';
+      const diff = Date.now() - new Date(iso).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 1) return 'Yanzu';
+      if (mins < 60) return `${mins}m`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return `${hrs}h`;
+      return `${Math.floor(hrs / 24)}d`;
+    }
+
+    interface CommentData {
+      $id?: string;
+      name: string;
+      body: string;
+      likes: number;
+      $createdAt?: string;
+    }
+
+    function itemHtml(c: CommentData): string {
+      return `
+        <article class="py-4" data-comment-id="${escapeHtml(String(c.$id ?? ''))}">
+          <div class="flex items-start gap-3">
+            <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0f3036] text-xs font-bold text-white">${escapeHtml((c.name || 'A')[0]?.toUpperCase() ?? 'A')}</div>
+            <div class="min-w-0 flex-1">
+              <div class="mb-1 flex flex-wrap items-center gap-2">
+                <span class="text-sm font-bold text-gray-900">${escapeHtml(c.name)}</span>
+                <span class="text-xs text-gray-400">${escapeHtml(timeAgo(c.$createdAt))}</span>
+              </div>
+              <p class="break-words text-sm leading-relaxed text-gray-700">${escapeHtml(c.body)}</p>
+              <div class="mt-2 flex items-center gap-4">
+                <button type="button" data-comment-like class="flex items-center gap-1 text-xs text-gray-400 transition-colors hover:text-[#c70000]">
+                  <svg class="h-3 w-3" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M47.6 300.4 228.3 469.1c7.5 7 17.4 10.9 27.7 10.9s20.2-3.9 27.7-10.9L464.4 300.4c30.4-28.3 47.6-68 47.6-109.5v-5.8c0-69.9-50.5-129.5-119.4-141C347 36.5 300.6 51.4 268 84L256 96 244 84c-32.6-32.6-79-47.5-124.6-39.9C50.5 55.6 0 115.2 0 185.1v5.8c0 41.5 17.2 81.2 47.6 109.5z"/></svg>
+                  <span data-comment-likes>${c.likes > 0 ? escapeHtml(String(c.likes)) : ''}</span>
+                </button>
+                ${myComments.has(String(c.$id ?? '')) ? '<button type="button" data-comment-delete class="flex items-center gap-1 text-xs text-gray-400 transition-colors hover:text-[#c70000]">Share</button>' : ''}
+              </div>
+            </div>
+          </div>
+        </article>`;
+    }
+
+    function refresh(count: number): void {
+      countEl.textContent = `${count} ${count === 1 ? 'sharhi' : 'sharhi'}`;
+      emptyEl.classList.toggle('hidden', count > 0);
+    }
+
+    function showError(message: string): void {
+      errorEl.textContent = message;
+      errorEl.classList.remove('hidden');
+    }
+
+    function ownerToken(): string {
+      const KEY = 'yc_owner_token';
+      let token = localStorage.getItem(KEY);
+      if (!token) {
+        token =
+          typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+        localStorage.setItem(KEY, token);
+      }
+      return token;
+    }
+
+    const MY_KEY = 'yc_my_comments';
+    const myComments = new Set<string>(
+      JSON.parse(localStorage.getItem(MY_KEY) ?? '[]') as string[],
+    );
+    function rememberComment(id: string): void {
+      myComments.add(id);
+      localStorage.setItem(MY_KEY, JSON.stringify([...myComments]));
+    }
+
+    document.querySelectorAll<HTMLElement>('#comment-list [data-comment-id]').forEach((item) => {
+      if (!myComments.has(item.dataset.commentId ?? '')) return;
+      if (item.querySelector('[data-comment-delete]')) return;
+      const row = item.querySelector('.flex.items-center.gap-4');
+      if (!row) return;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.dataset.commentDelete = '';
+      btn.className = 'flex items-center gap-1 text-xs text-gray-400 transition-colors hover:text-[#c70000]';
+      btn.textContent = 'Share';
+      row.appendChild(btn);
+    });
+
+    list.addEventListener('click', async (e) => {
+      const likeBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-comment-like]');
+      const delBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-comment-delete]');
+      if (delBtn) {
+        const item = delBtn.closest<HTMLElement>('[data-comment-id]');
+        const id = item?.dataset.commentId;
+        if (!id) return;
+        if (!window.confirm('Ka tabbatar kana son goge wannan sharhin?')) return;
+        try {
+          const res = await fetch(`/api/comments/${id}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ownerToken: ownerToken() }),
+          });
+          const data = await res.json();
+          if (res.ok && data.ok) {
+            item?.remove();
+            myComments.delete(id);
+            localStorage.setItem(MY_KEY, JSON.stringify([...myComments]));
+            refresh(list.querySelectorAll('[data-comment-id]').length);
+          } else {
+            showError(data.message ?? 'An kasa aikawa');
+          }
+        } catch {
+          showError('An kasa aikawa — ka sake gwadawa');
+        }
+        return;
+      }
+      if (!likeBtn) return;
+      const item = likeBtn.closest<HTMLElement>('[data-comment-id]');
+      const id = item?.dataset.commentId;
+      if (!id || likeBtn.dataset.liking) return;
+      likeBtn.dataset.liking = '1';
+      try {
+        const res = await fetch(`/api/comments/${id}`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          const span = likeBtn.querySelector('[data-comment-likes]');
+          if (span) span.textContent = data.likes > 0 ? String(data.likes) : '';
+        } else {
+          showError(data.message ?? 'An kasa aikawa');
+        }
+      } catch {
+        showError('An kasa aikawa — ka sake gwadawa');
+      } finally {
+        delete likeBtn.dataset.liking;
+      }
+    });
+
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorEl.classList.add('hidden');
+      const name = nameInput?.value.trim() ?? '';
+      const body = bodyInput?.value.trim() ?? '';
+      if (!name || !body) {
+        showError('Ka cika sunanka da sharhinka');
+        return;
+      }
+      const submit = document.getElementById('comment-submit') as HTMLButtonElement | null;
+      if (submit) {
+        submit.disabled = true;
+        submit.textContent = 'Ana aikawa...';
+      }
+      try {
+        const res = await fetch('/api/comments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ articleId, name, body, ownerToken: ownerToken() }),
+        });
+        const data = await res.json();
+        if (res.ok && data.ok && data.comment) {
+          rememberComment(String(data.comment.$id ?? ''));
+          list.insertAdjacentHTML('afterbegin', itemHtml(data.comment));
+          refresh(list.querySelectorAll('[data-comment-id]').length);
+          if (nameInput) nameInput.value = '';
+          if (bodyInput) bodyInput.value = '';
+        } else {
+          showError(data.message ?? 'An kasa aikawa');
+        }
+      } catch {
+        showError('An kasa aikawa — ka sake gwadawa');
+      } finally {
+        if (submit) {
+          submit.disabled = false;
+          submit.textContent = 'Aika sharhi';
+        }
+      }
+    });
+
+    sortBtns.forEach((btn) =>
+      btn.addEventListener('click', async () => {
+        const sort = btn.dataset.sort ?? 'latest';
+        sortBtns.forEach((b) => {
+          const active = b.dataset.sort === sort;
+          b.classList.toggle('border-[#121212]', active);
+          b.classList.toggle('bg-[#121212]', active);
+          b.classList.toggle('text-white', active);
+          b.classList.toggle('border-gray-200', !active);
+          b.classList.toggle('text-gray-500', !active);
+        });
+        try {
+          const res = await fetch(`/api/comments?articleId=${encodeURIComponent(articleId)}&sort=${sort}`);
+          const data = await res.json();
+          if (res.ok && data.ok && Array.isArray(data.comments)) {
+            list.innerHTML = data.comments.map(itemHtml).join('');
+            refresh(data.comments.length);
+          }
+        } catch {
+          showError('An kasa loda sharhi');
+        }
+      }),
+    );
+  }
+</script>

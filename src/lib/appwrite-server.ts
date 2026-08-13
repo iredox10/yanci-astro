@@ -19,8 +19,9 @@ import {
   PUBLIC_APPWRITE_COLLECTION_RESULTS,
   PUBLIC_APPWRITE_COLLECTION_FACTCHECKS,
   PUBLIC_APPWRITE_COLLECTION_STAFF,
+  PUBLIC_APPWRITE_COLLECTION_COMMENTS,
 } from 'astro:env/client';
-import type { Article, LiveUpdate } from '../data/schema';
+import type { Article, LiveUpdate, Comment } from '../data/schema';
 
 /**
  * Server-only Appwrite access. The secret `APPWRITE_API_KEY` stays on the
@@ -54,6 +55,7 @@ type Collections = {
   articles: string;
   views: string | null;
   newsletter: string | null;
+  comments: string | null;
 };
 
 function collections(): Collections | null {
@@ -70,6 +72,7 @@ function collections(): Collections | null {
     articles: PUBLIC_APPWRITE_COLLECTION_ARTICLES,
     views: PUBLIC_APPWRITE_COLLECTION_VIEWS ?? null,
     newsletter: APPWRITE_COLLECTION_NEWSLETTER ?? null,
+    comments: PUBLIC_APPWRITE_COLLECTION_COMMENTS ?? null,
   };
 }
 
@@ -149,6 +152,27 @@ export async function getArticleBySlug(slug: string): Promise<Article | null> {
       : null;
   } catch {
     return null;
+  }
+}
+
+// ─── Comments ────────────────────────────────────────────────────────────────
+export async function getComments(
+  articleId: string,
+  sort: 'latest' | 'top' = 'latest',
+  limit = 100,
+): Promise<Comment[]> {
+  const c = collections();
+  if (!c || !c.comments) return [];
+  try {
+    const { documents } = await databases().listDocuments(c.databaseId, c.comments, [
+      Query.equal('articleId', articleId),
+      sort === 'top' ? Query.orderDesc('likes') : Query.orderDesc('$createdAt'),
+      Query.limit(Math.min(limit, 200)),
+    ]);
+    return (documents ?? []).map((d) => d as unknown as Comment);
+  } catch (error) {
+    console.error('[appwrite] getComments failed', error);
+    return [];
   }
 }
 
