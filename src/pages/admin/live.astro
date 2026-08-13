@@ -1,0 +1,246 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getArticles } from '@lib/appwrite-server';
+
+export const prerender = false;
+
+const all = await getArticles(200);
+const liveArticles = all.filter((a) => Boolean(a.isLive));
+const day = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+interface LiveUpdate {
+  id?: string | number;
+  timestamp?: string;
+  time?: string;
+  title?: string;
+  content?: string;
+  type?: string;
+  pinned?: boolean;
+  author?: string;
+  image?: string;
+}
+
+function updatesOf(article: { liveUpdates?: unknown }): LiveUpdate[] {
+  if (Array.isArray(article.liveUpdates)) {
+    return (article.liveUpdates as unknown[])
+      .map((u) => {
+        if (typeof u === 'string') {
+          try {
+            return JSON.parse(u);
+          } catch {
+            return null;
+          }
+        }
+        return u;
+      })
+      .filter((u): u is LiveUpdate => u !== null && typeof u === 'object');
+  }
+  if (typeof article.liveUpdates === 'string') {
+    try {
+      const parsed = JSON.parse(article.liveUpdates);
+      return Array.isArray(parsed) ? (parsed as LiveUpdate[]) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+---
+
+<AdminLayout title="Live console" active="live">
+  <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h1 class="font-serif text-2xl font-bold text-yanci-primary">Live blog console</h1>
+      <p class="mt-1 max-w-xl text-sm text-yanci-primary/60">
+        Start or end live coverage and post updates. Every update is appended to the article's
+        timeline and shows immediately on the public page.
+      </p>
+    </div>
+    <a href="/admin/articles/new" class="bg-yanci-primary px-4 py-2 text-sm font-bold uppercase tracking-wide text-yanci-paper hover:bg-yanci-primary/90">
+      New article
+    </a>
+  </div>
+
+  {liveArticles.length === 0 && (
+    <div class="border border-dashed border-yanci-primary/30 bg-white/60 p-10 text-center">
+      <p class="text-sm text-yanci-primary/60">No live articles right now.</p>
+      <p class="mt-1 text-xs text-yanci-primary/40">
+        Open an article in the editor and tick "Live / visible on site", then come back here to post updates.
+      </p>
+    </div>
+  )}
+
+  <div class="space-y-8">
+    {liveArticles.map((article) => {
+      const updates = [...updatesOf(article)].sort((a, b) =>
+        String(b.timestamp ?? '').localeCompare(String(a.timestamp ?? '')),
+      );
+      return (
+        <section class="overflow-hidden border border-yanci-primary/15 bg-white/60">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-yanci-primary/10 bg-yanci-primary/5 px-4 py-3">
+            <div class="min-w-0">
+              <h2 class="truncate font-serif text-lg font-bold text-yanci-primary">{String(article.headline ?? '')}</h2>
+              <p class="text-xs text-yanci-primary/50">{updates.length} updates · created {article.$createdAt ? day.format(new Date(String(article.$createdAt))) : ''}</p>
+            </div>
+            <div class="flex shrink-0 items-center gap-3">
+              <span class="flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-red-700">
+                <span class="h-2 w-2 animate-pulse rounded-full bg-red-600"></span> Kai tsaye
+              </span>
+              <a href={`/admin/articles/${encodeURIComponent(String(article.$id ?? ''))}`} class="text-xs font-medium text-yanci-teal hover:text-yanci-teal/70">
+                Gyara
+              </a>
+              <button
+                data-end-live={article.$id}
+                class="border border-yanci-primary/25 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-yanci-primary/70 transition-colors hover:bg-yanci-primary/10"
+              >
+                End coverage
+              </button>
+            </div>
+          </div>
+
+          <div class="grid gap-6 p-4 md:grid-cols-5">
+            <form class="space-y-3 md:col-span-2" data-update-form={article.$id}>
+              <h3 class="text-xs font-bold uppercase tracking-widest text-yanci-primary/70">Sabuwar wallafa</h3>
+              <label class="block">
+                <span class="mb-1 block text-[11px] font-bold uppercase tracking-wide text-yanci-primary/50">Title</span>
+                <input name="title" maxlength={300} placeholder="Babban ci gaba…" class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40" />
+              </label>
+              <label class="block">
+                <span class="mb-1 block text-[11px] font-bold uppercase tracking-wide text-yanci-primary/50">Content (HTML)</span>
+                <textarea name="content" rows={3} placeholder="Abin da ya faru…" class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40"></textarea>
+              </label>
+              <div class="grid grid-cols-2 gap-3">
+                <label class="block">
+                  <span class="mb-1 block text-[11px] font-bold uppercase tracking-wide text-yanci-primary/50">Type</span>
+                  <select name="type" class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none">
+                    <option value="update">Sabuwa</option>
+                    <option value="key-event">Muhimmin abu</option>
+                    <option value="repo">Repo</option>
+                  </select>
+                </label>
+                <label class="block">
+                  <span class="mb-1 block text-[11px] font-bold uppercase tracking-wide text-yanci-primary/50">Author</span>
+                  <input name="author" maxlength={120} placeholder="Edita" class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none" />
+                </label>
+              </div>
+              <label class="flex items-center gap-2 text-sm text-yanci-dark/80">
+                <input type="checkbox" name="pinned" class="size-4 accent-yanci-primary" />
+                Daka (pinned to top)
+              </label>
+              <button type="submit" class="w-full bg-yanci-primary px-4 py-2 text-sm font-bold uppercase tracking-wide text-yanci-paper transition-colors hover:bg-yanci-primary/90">
+                Post update
+              </button>
+              <p class="hidden text-xs" data-form-msg></p>
+            </form>
+
+            <div class="md:col-span-3">
+              <h3 class="mb-3 text-xs font-bold uppercase tracking-widest text-yanci-primary/70">Timeline ({updates.length})</h3>
+              {updates.length === 0 && (
+                <p class="border border-dashed border-yanci-primary/20 px-4 py-6 text-center text-sm text-yanci-primary/40">
+                  No updates yet — post the first one.
+                </p>
+              )}
+              <ul class="divide-y divide-yanci-primary/10">
+                {updates.map((u) => (
+                  <li class="flex items-start gap-3 py-3">
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        {u.pinned && <span class="rounded bg-yanci-accent/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yanci-primary">Pinned</span>}
+                        {String(u.type ?? '') === 'key-event' && <span class="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">Muhimmin abu</span>}
+                        <time class="text-[11px] font-medium text-yanci-primary/50">{String(u.time ?? u.timestamp ?? '')}</time>
+                        {u.author && <span class="text-[11px] text-yanci-primary/50">· {String(u.author)}</span>}
+                      </div>
+                      {u.title && <p class="mt-1 text-sm font-bold text-yanci-dark">{String(u.title)}</p>}
+                      {u.content && (
+                        <div class="mt-1 line-clamp-2 text-sm text-yanci-primary/70" set:html={String(u.content)} />
+                      )}
+                    </div>
+                    <button
+                      data-delete-update={u.id}
+                      class="shrink-0 text-xs font-medium text-yanci-red transition-colors hover:text-yanci-red/70"
+                    >
+                      Delete
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </section>
+      );
+    })}
+  </div>
+</AdminLayout>
+
+<script>
+  const csrf = new Headers({ 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' });
+
+  async function call(url: string, method: string, body: unknown) {
+    const res = await fetch(url, { method, headers: csrf, body: JSON.stringify(body) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error(data.message ?? 'Request failed');
+    return data;
+  }
+
+  function msg(el: Element | null, text: string, ok: boolean) {
+    if (!el) return;
+    el.textContent = text;
+    el.className = `text-xs font-bold ${ok ? 'text-yanci-teal' : 'text-yanci-red'}`;
+  }
+
+  document.querySelectorAll('[data-update-form]').forEach((form) => {
+    const articleId = form.getAttribute('data-update-form');
+    const message = form.querySelector('[data-form-msg]');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!(form instanceof HTMLFormElement)) return;
+      const fd = new FormData(form);
+      const update = {
+        id: `u${Date.now()}`,
+        title: String(fd.get('title') ?? '').trim(),
+        content: String(fd.get('content') ?? '').trim(),
+        type: String(fd.get('type') ?? 'update'),
+        author: String(fd.get('author') ?? '').trim() || undefined,
+        pinned: Boolean(fd.get('pinned')),
+        time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+      };
+      try {
+        await call('/api/admin/articles/live', 'POST', { articleId, update });
+        msg(message, 'Posted — reloading…', true);
+        window.location.reload();
+      } catch (err) {
+        msg(message, err instanceof Error ? err.message : 'Failed', false);
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-delete-update]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const updateId = btn.getAttribute('data-delete-update');
+      const section = btn.closest('section');
+      const articleId = section?.querySelector('[data-update-form]')?.getAttribute('data-update-form');
+      if (!updateId || !articleId) return;
+      if (!window.confirm('Delete this update permanently?')) return;
+      try {
+        await call('/api/admin/articles/live', 'DELETE', { articleId, updateId });
+        window.location.reload();
+      } catch {
+        window.alert('Delete failed');
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-end-live]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const articleId = btn.getAttribute('data-end-live');
+      if (!articleId) return;
+      if (!window.confirm('End live coverage for this article? Updates stay visible but the LIVE badge is removed.')) return;
+      try {
+        await call('/api/admin/articles/live', 'PUT', { articleId, isLive: false });
+        window.location.reload();
+      } catch {
+        window.alert('Failed to end coverage');
+      }
+    });
+  });
+</script>

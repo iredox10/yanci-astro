@@ -74,7 +74,21 @@ function collections(): Collections | null {
 }
 
 function parseLiveUpdates(raw: unknown): LiveUpdate[] | undefined {
-  if (Array.isArray(raw)) return raw as LiveUpdate[];
+  if (Array.isArray(raw)) {
+    // Collection stores each update as a JSON string (legacy format).
+    return raw
+      .map((u) => {
+        if (typeof u === 'string') {
+          try {
+            return JSON.parse(u);
+          } catch {
+            return null;
+          }
+        }
+        return u;
+      })
+      .filter((u): u is LiveUpdate => u !== null && typeof u === 'object');
+  }
   if (typeof raw === 'string') {
     try {
       const parsed = JSON.parse(raw);

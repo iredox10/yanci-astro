@@ -5,7 +5,41 @@ import { sanitizeRichText, sanitizePlainText, sanitizeImageUrl } from '@lib/sani
 
 export const prerender = false;
 
+function sanitizeLiveUpdate(raw: unknown): Record<string, unknown> | null {
+  if (typeof raw === 'string') {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (!raw || typeof raw !== 'object') return null;
+  const u = raw as Record<string, unknown>;
+  const title = sanitizePlainText(String(u.title ?? ''), 300);
+  const content = sanitizeRichText(String(u.content ?? ''));
+  const type = ['key-event', 'update', 'repo'].includes(String(u.type)) ? String(u.type) : 'update';
+  const pinned = Boolean(u.pinned);
+  if (!title && !content) return null;
+  return {
+    id: sanitizePlainText(String(u.id ?? ''), 40),
+    timestamp: typeof u.timestamp === 'string' ? u.timestamp.slice(0, 40) : undefined,
+    time: sanitizePlainText(String(u.time ?? ''), 40),
+    title,
+    content,
+    type,
+    pinned,
+    author: sanitizePlainText(String(u.author ?? ''), 120),
+    image: sanitizeImageUrl(String(u.image ?? '')) ?? undefined,
+  };
+}
+
 function sanitizeInput(body: Record<string, unknown>) {
+  const liveUpdates = Array.isArray(body.liveUpdates)
+    ? body.liveUpdates
+        .map(sanitizeLiveUpdate)
+        .filter((u): u is Record<string, unknown> => u !== null)
+        .map((u) => JSON.stringify(u))
+    : undefined;
   return {
     headline: sanitizePlainText(String(body.headline ?? ''), 200),
     kicker: sanitizePlainText(String(body.kicker ?? ''), 120),
@@ -27,6 +61,7 @@ function sanitizeInput(body: Record<string, unknown>) {
     isSensitive: Boolean(body.isSensitive),
     metaTitle: sanitizePlainText(String(body.metaTitle ?? ''), 200),
     metaDescription: sanitizePlainText(String(body.metaDescription ?? ''), 300),
+    liveUpdates,
   };
 }
 

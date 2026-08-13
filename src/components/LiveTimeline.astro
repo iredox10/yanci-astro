@@ -1,0 +1,136 @@
+---
+import type { LiveUpdate } from '../data/schema';
+
+interface Props {
+  updates: LiveUpdate[];
+  isLive: boolean;
+  accent: string;
+}
+
+const { updates, isLive, accent } = Astro.props;
+
+const sorted = [...updates].sort((a, b) =>
+  String(b.timestamp ?? '').localeCompare(String(a.timestamp ?? '')) ||
+  String(b.time ?? '').localeCompare(String(a.time ?? '')),
+);
+const keyEvents = sorted.filter((u) => String(u.type ?? '') === 'key-event');
+const pinned = sorted.find((u) => Boolean(u.pinned));
+const feed = pinned ? sorted.filter((u) => !Boolean(u.pinned)) : sorted;
+
+const formatTime = (u: LiveUpdate): string =>
+  String(u.time ?? '') ||
+  (u.timestamp
+    ? new Date(String(u.timestamp)).toLocaleTimeString('ha-NG', { hour: '2-digit', minute: '2-digit' })
+    : '');
+---
+
+{/* Live status bar */}
+<div
+  id="live-status"
+  class="mb-8 flex items-center gap-3 rounded-sm border-l-4 bg-[#0f3036] px-4 py-3 text-white shadow-md"
+  style={`border-color: ${accent}`}
+>
+  <span class={`flex items-center gap-2 text-xs font-black uppercase tracking-widest ${isLive ? 'text-red-400' : 'text-gray-300'}`}>
+    <span class={`h-2.5 w-2.5 rounded-full ${isLive ? 'animate-pulse bg-red-500' : 'bg-gray-400'}`}></span>
+    {isLive ? 'Kai Tsaye' : 'An Kammala'}
+  </span>
+  <span class="text-xs text-gray-300">· {sorted.length} wallafa</span>
+  <button
+    id="live-refresh"
+    type="button"
+    class="ml-auto text-[11px] font-bold uppercase tracking-widest text-gray-300 underline-offset-2 transition-colors hover:text-white hover:underline"
+  >
+    Sabunta
+  </button>
+</div>
+
+{pinned && (
+  <article class="mb-8 border-l-[6px] border-[#c70000] bg-[#fff5f5] p-6 shadow-sm md:p-8" data-live-update>
+    <div class="mb-4 flex items-center justify-between gap-3">
+      <span class="flex items-center gap-1.5 bg-[#c70000] px-2 py-1 text-[10px] font-black uppercase tracking-widest text-white">
+        <svg class="h-3 w-3 -rotate-45" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M512 194.8c0 9.2-7.4 16.7-16.6 16.7H351.6c-8.6 0-15.6 7-15.6 15.6v16.7c0 8.6 7 15.6 15.6 15.6h124.1c9.2 0 16.7 7.4 16.7 16.7v16.7c0 9.2-7.4 16.7-16.6 16.7H351.6c-8.6 0-15.6 7-15.6 15.6v16.7c0 8.6 7 15.6 15.6 15.6h124.1c9.2 0 16.7 7.4 16.7 16.7v16.7c0 9.2-7.4 16.7-16.6 16.7H351.6c-8.6 0-15.6 7-15.6 15.6v16.7c0 8.6 7 15.6 15.6 15.6h124.1c9.2 0 16.7 7.4 16.7 16.7v16.7c0 9.2-7.4 16.7-16.6 16.7H329.8c-15.2 0-27.5-12.3-27.5-27.5V68.2c0-4.3 1.7-8.4 4.7-11.4L439.2 3.1C444.1-1.3 451 1.1 452.1 7.5c2.6 16.7 16.4 29.6 33.3 29.6 18.4 0 33.3 14.9 33.3 33.3v124.4zM336.4 32.4v26.8h-19.2c-17.8 0-32.2 14.4-32.2 32.2v46.8l34.4-23.4c6.1-4.1 14.2-2.7 18.3 3.4 4.1 6.1 2.7 14.2-3.4 18.3l-49.3 33.5v88.1l34.4-23.4c6.1-4.1 14.2-2.7 18.3 3.4 4.1 6.1 2.7 14.2-3.4 18.3l-49.3 33.5v88.1l34.4-23.4c6.1-4.1 14.2-2.7 18.3 3.4 4.1 6.1 2.7 14.2-3.4 18.3l-49.3 33.5v79.5c0 4.3-1.7 8.4-4.7 11.4L197.1 508.9c-4.9 4.4-12 2-13.1-4.4-2.6-16.7-16.4-29.6-33.3-29.6-18.4 0-33.3-14.9-33.3-33.3V317.3c0-9.2 7.4-16.7 16.6-16.7h15.2c8.6 0 15.6-7 15.6-15.6v-16.7c0-8.6-7-15.6-15.6-15.6H75.9c-9.2 0-16.7-7.4-16.7-16.7v-16.7c0-9.2 7.4-16.7 16.6-16.7h85.3c8.6 0 15.6-7 15.6-15.6v-16.7c0-8.6-7-15.6-15.6-15.6H75.9c-9.2 0-16.7-7.4-16.7-16.7V219c0-9.2 7.4-16.7 16.6-16.7h85.3c8.6 0 15.6-7 15.6-15.6v-16.7c0-8.6-7-15.6-15.6-15.6H75.9c-9.2 0-16.7-7.4-16.7-16.7V137.2c0-9.2 7.4-16.7 16.6-16.7h85.3c8.6 0 15.6-7 15.6-15.6V92.3c0-8.6 7-15.6 15.6-15.6h16.5c8.6 0 15.6-7 15.6-15.6V31.9c0-9.2 7.4-16.7 16.7-16.7h135.2c8.6 0 15.6 7 15.6 15.6v1.6z"/></svg>
+        Daka
+      </span>
+      <time class="text-xs font-bold text-[#c70000]">{formatTime(pinned)}</time>
+    </div>
+    {pinned.title && <h2 class="mb-4 font-serif text-2xl font-black leading-tight text-[#121212] md:text-3xl">{pinned.title}</h2>}
+    {pinned.image && (
+      <figure class="mb-5 overflow-hidden rounded-sm bg-gray-100">
+        <img src={pinned.image} alt={String(pinned.title ?? '')} class="h-auto w-full object-cover" loading="lazy" />
+      </figure>
+    )}
+    {pinned.content && <div class="prose max-w-none font-serif leading-relaxed text-gray-800" set:html={String(pinned.content)} />}
+    {pinned.author && (
+      <p class="mt-5 border-t border-[#c70000]/10 pt-4 text-[11px] font-bold uppercase tracking-widest text-gray-500">
+        Daga {pinned.author}
+      </p>
+    )}
+  </article>
+)}
+
+{/* Filter chips */}
+<div class="mb-6 flex flex-wrap items-center gap-2">
+  {[
+    { key: 'all', label: `Duka (${feed.length})` },
+    { key: 'key-event', label: `Muhimman Abubuwa (${keyEvents.length})` },
+  ].map((f) => (
+    <button
+      type="button"
+      data-live-filter={f.key}
+      class="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 font-sans text-xs font-bold text-gray-500 transition-all hover:border-[#121212] hover:text-[#121212]"
+    >
+      {f.label}
+    </button>
+  ))}
+</div>
+
+{/* Timeline */}
+<div id="live-feed" class="relative">
+  <div class="absolute bottom-0 left-[7px] top-0 hidden w-[2px] bg-gray-100 md:block"></div>
+  <div class="space-y-10">
+    {feed.map((u, i) => (
+      <article
+        class="relative pl-0 md:pl-10"
+        data-live-update
+        data-live-type={String(u.type ?? 'update')}
+      >
+        <div class={`absolute left-0 top-[22px] z-10 hidden h-4 w-4 rounded-full border-[3px] border-white shadow-sm md:block ${String(u.type ?? '') === 'key-event' ? 'bg-[#c70000] ring-4 ring-[#c70000]/10' : 'bg-[#121212]'}`}></div>
+        <div class="mb-4 flex items-center gap-3 md:hidden">
+          <time class="text-xs font-bold text-gray-400">{formatTime(u)}</time>
+          <div class="h-px flex-1 bg-gray-100"></div>
+        </div>
+        <div>
+          <div class="mb-3 flex flex-wrap items-center gap-2">
+            <time class="hidden text-xs font-extrabold uppercase tracking-widest text-[#c70000] md:block">{formatTime(u)}</time>
+            {String(u.type ?? '') === 'key-event' && (
+              <span class="border border-[#c70000] bg-[#fff0f0] px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[#c70000]">
+                Muhimmin Abu
+              </span>
+            )}
+            {i === 0 && (
+              <span class="border border-[#0f3036]/30 bg-[#0f3036]/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[#0f3036]">
+                Sabuwa
+              </span>
+            )}
+          </div>
+          {u.title && <h3 class="mb-3 font-serif text-xl font-black leading-tight text-[#121212] md:text-2xl">{u.title}</h3>}
+          {u.image && (
+            <figure class="mb-5 overflow-hidden rounded-sm bg-gray-100">
+              <img src={u.image} alt={String(u.title ?? '')} class="h-auto w-full object-cover" loading="lazy" />
+            </figure>
+          )}
+          {u.content && <div class="prose max-w-none font-serif leading-relaxed text-gray-800" set:html={String(u.content)} />}
+          {u.author && (
+            <p class="mt-4 text-[11px] font-bold uppercase tracking-widest text-gray-400">Daga {u.author}</p>
+          )}
+        </div>
+      </article>
+    ))}
+  </div>
+
+  {feed.length === 0 && (
+    <p class="border border-dashed border-gray-200 py-12 text-center font-serif italic text-gray-400">
+      Babu wallafa har yanzu — sabunta daga daga na redaksha.
+    </p>
+  )}
+</div>

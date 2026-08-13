@@ -58,6 +58,8 @@ export interface LiveUpdate {
   content?: string;
   type?: 'key-event' | 'update' | 'repo';
   pinned?: boolean;
+  author?: string;
+  image?: string;
 }
 
 /** Article card data passed to NewsCard/etc. */

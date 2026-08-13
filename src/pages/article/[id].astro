@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import NewsCard from '../../components/NewsCard.astro';
+import LiveTimeline from '../../components/LiveTimeline.astro';
 import { pillarAccent } from '../../data/schema';
 import { loadArticles, loadArticle, toCards } from '../../lib/content';
 
@@ -15,6 +16,8 @@ if (!article) {
 const accent = pillarAccent(article.pillar);
 const idStr = String(article.$id ?? article.id);
 const body = article.body;
+const isLive = Boolean(article.isLive);
+const liveUpdates = Array.isArray(article.liveUpdates) ? article.liveUpdates : [];
 
 const words = (body ?? '').replace(/<[^>]*>/g, ' ').trim().split(/\s+/).filter(Boolean).length;
 const readTime = Math.max(1, Math.ceil(words / 200));
@@ -53,6 +56,11 @@ const sectionLabel = String(article.section ?? article.pillar ?? 'Labarai');
             {sectionLabel}
           </a>
           <span class="text-xs text-gray-300">/</span>
+          {isLive && (
+            <span class="flex items-center gap-1.5 rounded-full bg-[#c70000] px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white">
+              <span class="h-2 w-2 animate-pulse rounded-full bg-white"></span> Kai Tsaye
+            </span>
+          )}
           <span class="flex items-center gap-1 font-sans text-xs font-bold uppercase tracking-widest text-gray-500">
             <svg class="h-3 w-3 text-gray-400" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M256 0C114.6 0 0 114.6 0 256s114.6 256 256 256 256-114.6 256-256S397.4 0 256 0zm112 288c0 8.8-7.2 16-16 16h-96c-8.8 0-16-7.2-16-16V128c0-8.8 7.2-16 16-16s16 7.2 16 16v128h80c8.8 0 16 7.2 16 16z"/></svg>
             {readTime} Min Read
@@ -121,6 +129,13 @@ const sectionLabel = String(article.section ?? article.pillar ?? 'Labarai');
         )}
       </div>
 
+      <!-- Live blog timeline -->
+      {liveUpdates.length > 0 && (
+        <section class="mt-14 border-t-4 border-gray-100 pt-10 md:mt-20">
+          <LiveTimeline updates={liveUpdates} isLive={isLive} accent={accent} />
+        </section>
+      )}
+
       <!-- Tags -->
       <div class="mt-16 border-t border-gray-200 pt-8 md:mt-20 md:pt-10">
         <h4 class="mb-4 font-sans text-xs font-bold uppercase tracking-widest text-gray-400 md:mb-6">Taken Labarai</h4>
@@ -182,4 +197,111 @@ const sectionLabel = String(article.section ?? article.pillar ?? 'Labarai');
     }),
     keepalive: true,
   }).catch(() => {});
+
+  // ── Live blog: filters + polling ──────────────────────────────────────────
+  const liveFeed = document.getElementById('live-feed');
+  const filterBtns = [...document.querySelectorAll('[data-live-filter]')];
+
+  function applyFilter(type: string): void {
+    if (!liveFeed) return;
+    liveFeed
+      .querySelectorAll('[data-live-update]')
+      .forEach((el) => el.classList.toggle('hidden', type !== 'all' && el.getAttribute('data-live-type') !== type));
+    filterBtns.forEach((btn) => {
+      const active = btn.getAttribute('data-live-filter') === type;
+      btn.classList.toggle('border-[#121212]', active);
+      btn.classList.toggle('bg-[#121212]', active);
+      btn.classList.toggle('text-white', active);
+      btn.classList.toggle('text-gray-500', !active);
+    });
+  }
+
+  filterBtns.forEach((btn) =>
+    btn.addEventListener('click', () => applyFilter(btn.getAttribute('data-live-filter') ?? 'all')),
+  );
+
+  function timeOf(u: { time?: string; timestamp?: string }): string {
+    return String(u.time ?? '') || (u.timestamp ? new Date(String(u.timestamp)).toLocaleTimeString('ha-NG', { hour: '2-digit', minute: '2-digit' }) : '');
+  }
+
+  interface PollUpdate {
+    id?: string | number;
+    timestamp?: string;
+    time?: string;
+    title?: string;
+    content?: string;
+    type?: string;
+    pinned?: boolean;
+    author?: string;
+    image?: string;
+  }
+
+  function updateHtml(u: PollUpdate): string {
+    const type = String(u.type ?? 'update');
+    return `<article class="relative pl-0 md:pl-10" data-live-update data-live-type="${type}">
+      <div class="absolute left-0 top-[22px] z-10 hidden h-4 w-4 rounded-full border-[3px] border-white shadow-sm md:block ${type === 'key-event' ? 'bg-[#c70000] ring-4 ring-[#c70000]/10' : 'bg-[#121212]'}"></div>
+      <div class="mb-4 flex items-center gap-3 md:hidden"><time class="text-xs font-bold text-gray-400">${timeOf(u)}</time><div class="h-px flex-1 bg-gray-100"></div></div>
+      <div>
+        <div class="mb-3 flex flex-wrap items-center gap-2">
+          <time class="hidden text-xs font-extrabold uppercase tracking-widest text-[#c70000] md:block">${timeOf(u)}</time>
+          ${type === 'key-event' ? '<span class="border border-[#c70000] bg-[#fff0f0] px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[#c70000]">Muhimmin Abu</span>' : ''}
+        </div>
+        ${u.title ? `<h3 class="mb-3 font-serif text-xl font-black leading-tight text-[#121212] md:text-2xl">${escapeHtml(String(u.title))}</h3>` : ''}
+        ${u.image ? `<figure class="mb-5 overflow-hidden rounded-sm bg-gray-100"><img src="${escapeAttr(String(u.image))}" alt="" class="h-auto w-full object-cover" loading="lazy"></figure>` : ''}
+        ${u.content ? `<div class="prose max-w-none font-serif leading-relaxed text-gray-800">${String(u.content)}</div>` : ''}
+        ${u.author ? `<p class="mt-4 text-[11px] font-bold uppercase tracking-widest text-gray-400">Daga ${escapeHtml(String(u.author))}</p>` : ''}
+      </div>
+    </article>`;
+  }
+
+  function escapeHtml(s: string): string {
+    return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c as '&' | '<' | '>' | '"' | "'"]);
+  }
+  function escapeAttr(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  }
+
+  function renderUpdates(updates: PollUpdate[]): void {
+    if (!liveFeed) return;
+    const list = liveFeed.querySelector('.space-y-10');
+    const empty = liveFeed.querySelector('.border-dashed');
+    if (!list) return;
+    const sorted = [...updates].sort((a, b) => String(b.timestamp ?? '').localeCompare(String(a.timestamp ?? '')) || String(b.time ?? '').localeCompare(String(a.time ?? '')));
+    const feed = sorted.filter((u) => !u.pinned);
+    if (empty) empty.remove();
+    list.innerHTML = feed.map(updateHtml).join('');
+    const first = list.querySelector('[data-live-update]');
+    if (first) {
+      const badge = document.createElement('span');
+      badge.className = 'border border-[#0f3036]/30 bg-[#0f3036]/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[#0f3036]';
+      badge.textContent = 'Sabuwa';
+      first.querySelector('div > div > div.mb-3')?.appendChild(badge);
+    }
+    const counts = document.querySelectorAll('[data-live-filter]');
+    if (counts[0]) counts[0].textContent = `Duka (${feed.length})`;
+    const keyCount = feed.filter((u) => String(u.type ?? '') === 'key-event').length;
+    if (counts[1]) counts[1].textContent = `Muhimman Abubuwa (${keyCount})`;
+  }
+
+  // Refresh by re-fetching the article JSON; rebuild the timeline when updates changed.
+  let lastJson = '';
+  async function refreshLive() {
+    if (!liveFeed) return;
+    try {
+      const res = await fetch(`/api/articles/${encodeURIComponent(articleId)}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok || !data.ok || !data.article) return;
+      const newUpdates = Array.isArray(data.article.liveUpdates) ? data.article.liveUpdates : [];
+      const json = JSON.stringify(newUpdates);
+      if (json !== lastJson) {
+        lastJson = json;
+        renderUpdates(newUpdates);
+      }
+    } catch {
+      /* keep current timeline on network errors */
+    }
+  }
+
+  document.getElementById('live-refresh')?.addEventListener('click', refreshLive);
+  setInterval(refreshLive, 30000);
 </script>
