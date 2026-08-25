@@ -1,0 +1,32 @@
+{
+  "name": "Yanci",
+  "short_name": "Yanci",
+  "description": "Jaridar Hausa mai zuwa. Labarai, siyasa, wasanni da al'adu a yaren Hausa, kai tsaye daga Najeriya.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "lang": "ha",
+  "theme_color": "#052962",
+  "background_color": "#052962",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/yc-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/yc-mark-white.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
