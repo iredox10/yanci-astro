@@ -1,0 +1,90 @@
+---
+import { Client, Query, Storage } from 'node-appwrite';
+import { APPWRITE_API_KEY } from 'astro:env/server';
+import {
+  PUBLIC_APPWRITE_ENDPOINT,
+  PUBLIC_APPWRITE_PROJECT_ID,
+  PUBLIC_APPWRITE_BUCKET_ID,
+} from 'astro:env/client';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import MediaManager from '../../components/admin/MediaManager';
+import { isMediaConfigured, mediaFileUrl } from '@lib/admin-media';
+
+export const prerender = false;
+
+const PAGE_SIZE = 200;
+
+interface MediaItem {
+  id: string;
+  name: string;
+  size: number;
+  mimeType: string;
+  createdAt: string;
+  url: string;
+}
+
+function errorCode(error: unknown): number | null {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return null;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'number' ? code : null;
+}
+
+const bucketId = PUBLIC_APPWRITE_BUCKET_ID;
+let files: MediaItem[] = [];
+let notice: string | null = null;
+
+if (!isMediaConfigured() || !bucketId) {
+  notice = 'Storage is not configured. Set PUBLIC_APPWRITE_BUCKET_ID and APPWRITE_API_KEY to manage media.';
+} else {
+  try {
+    const client = new Client()
+      .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
+      .setProject(PUBLIC_APPWRITE_PROJECT_ID)
+      .setKey(APPWRITE_API_KEY ?? '');
+    const storage = new Storage(client);
+    const { files: bucketFiles } = await storage.listFiles({
+      bucketId,
+      queries: [Query.orderDesc('$createdAt'), Query.limit(PAGE_SIZE)],
+    });
+    files = bucketFiles.map((f) => ({
+      id: f.$id,
+      name: f.name,
+      size: f.sizeOriginal,
+      mimeType: f.mimeType,
+      createdAt: f.$createdAt,
+      url: mediaFileUrl(f.$id),
+    }));
+  } catch (error) {
+    console.error('[admin/media] listing failed', error);
+    const code = errorCode(error);
+    notice =
+      code === 401 || code === 403
+        ? 'Storage access denied (403). The Appwrite API key needs read access to the media bucket.'
+        : 'Could not load the media library. Check the storage configuration and try again.';
+  }
+}
+---
+
+<AdminLayout title="Media" active="media">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h1 class="font-serif text-2xl font-bold text-yanci-primary">Media Library</h1>
+      <p class="mt-1 text-sm text-yanci-primary/60">Gudanar da hotuna da fayiloli.</p>
+    </div>
+  </div>
+
+  {notice && (
+    <div class="mt-5 border border-yanci-red/30 bg-yanci-red/5 px-4 py-3 text-sm text-yanci-red">
+      {notice}
+    </div>
+  )}
+
+  {!notice && (
+    <>
+      <MediaManager client:load initialFiles={files} />
+      <p class="mt-2 text-xs text-yanci-primary/50">
+        Showing the newest {Math.min(files.length, PAGE_SIZE)} of {files.length} files.
+      </p>
+    </>
+  )}
+</AdminLayout>
