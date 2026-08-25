@@ -1,0 +1,80 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import CandidateGrid from '../../components/elections/CandidateGrid';
+import type { CandidateView } from '../../components/elections/CandidateGrid';
+import type { CandidateDoc } from '@lib/appwrite-server';
+import { getCandidates, getElections } from '@lib/appwrite-server';
+
+export const prerender = false;
+
+const PARTY_NAMES: Record<string, string> = {
+  apc: 'APC',
+  pdp: 'PDP',
+  nnpp: 'NNPP',
+  lpp: 'LPP',
+  apga: 'APGA',
+  independent: 'Independent',
+};
+const PARTY_COLORS: Record<string, string> = {
+  apc: '#2f6db3',
+  pdp: '#3a9e5f',
+  nnpp: '#b33a2f',
+  lpp: '#7a4fb3',
+  apga: '#b38a2f',
+  independent: '#6b7280',
+};
+
+const elections = await getElections();
+const active =
+  elections.find((e) => e.status === 'active' && e.published !== false) ?? elections[0];
+
+const docs = active ? await getCandidates(active.$id, 200) : await getCandidates(undefined, 200);
+
+function toView(c: CandidateDoc): CandidateView {
+  return {
+    id: c.$id ?? '',
+    name: c.name,
+    partyName: PARTY_NAMES[c.party] ?? c.party,
+    partyColor: PARTY_COLORS[c.party] ?? '#6b7280',
+    state: c.state,
+    bio: c.previousOffice || c.education,
+    experience: c.previousOffice,
+    education: c.education,
+    runningMate: c.runningMate,
+    image: c.image,
+    priorities: c.platform
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean),
+  };
+}
+
+const candidates = [...docs].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map(toView);
+---
+
+<BaseLayout
+  title="'Yan Takara — Zabe 2027 | Yanci"
+  description="Bayanin dukkan 'yan takara a zaben shugaban kasa Najeriya 2027 — manufofi, tarihi, da alkawurai."
+  path="/zabe/yan-takara"
+>
+  <section class="border-b border-yanci-primary/15 bg-yanci-primary/5">
+    <div class="mx-auto max-w-[1400px] px-4 py-10 md:px-6">
+      <span class="text-xs font-bold uppercase tracking-widest text-yanci-accent">Zabe 2027</span>
+      <h1 class="mt-2 font-serif text-3xl font-black text-yanci-primary md:text-4xl">'Yan Takara</h1>
+      <p class="mt-2 max-w-2xl text-sm text-yanci-primary/60">
+        Bayanin cikakke game da dukkan 'yan takara — manufofinsu, tarihin siyasa, da alkawuran da suka yi wa dan kasa.
+        Zabi har zuwa 'yan takara uku don kwatanta su gefe-da-gefe.
+      </p>
+    </div>
+  </section>
+
+  <main class="mx-auto max-w-[1400px] px-4 py-12 md:px-6">
+    <CandidateGrid client:load candidates={candidates} />
+
+    <div class="pt-12 text-center">
+      <a href="/zabe" class="inline-flex items-center gap-2 rounded-lg bg-yanci-primary px-6 py-3 font-bold text-white transition-colors hover:bg-[#1a454c]">
+        Komawa Babban Shafin Zabe
+      </a>
+    </div>
+  </main>
+</BaseLayout>
