@@ -1,0 +1,66 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import HomepageBuilder, { type BuilderRow } from '../../components/admin/HomepageBuilder';
+import {
+  DEFAULT_HOMEPAGE_LAYOUT,
+  getHomepageLayout,
+  listHomepageLayoutDocs,
+  moduleDef,
+} from '@lib/homepage-layout';
+
+export const prerender = false;
+
+const [layout, docs] = await Promise.all([getHomepageLayout(), listHomepageLayoutDocs()]);
+const docIdByKey = new Map(docs.map((doc) => [doc.key, doc.$id]));
+
+const rows: BuilderRow[] = layout.flatMap((item) => {
+  const def = moduleDef(item.key);
+  if (!def) return [];
+  return [
+    {
+      key: item.key,
+      label: def.label,
+      blurb: def.blurb,
+      position: item.position,
+      enabled: item.enabled,
+      live: def.live,
+      docId: docIdByKey.get(item.key) ?? null,
+    },
+  ];
+});
+
+const enabledCount = rows.filter((row) => row.enabled).length;
+---
+
+<AdminLayout title="Shafin farko" active="homepage">
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h1 class="font-serif text-2xl font-bold text-yanci-primary">Mai tsara shafin farko</h1>
+      <p class="mt-1 text-sm text-yanci-primary/60">
+        Tsara oda da bayyanar sassu shafin farko — sauye-sauye ana ajiye su nan take.
+      </p>
+    </div>
+  </div>
+
+  <div class="mt-5 grid gap-4 sm:grid-cols-3">
+    <div class="border border-yanci-primary/15 bg-white/60 p-5">
+      <p class="text-xs font-bold uppercase tracking-wide text-yanci-primary/60">Sassu</p>
+      <p class="mt-2 font-serif text-3xl font-bold text-yanci-dark">{rows.length}</p>
+      <p class="mt-1 text-xs text-yanci-primary/50">Duka sassun da aka yi rajista.</p>
+    </div>
+    <div class="border border-yanci-primary/15 bg-white/60 p-5">
+      <p class="text-xs font-bold uppercase tracking-wide text-yanci-primary/60">Ana nuna</p>
+      <p class="mt-2 font-serif text-3xl font-bold text-emerald-700">{enabledCount}</p>
+      <p class="mt-1 text-xs text-yanci-primary/50">Sassun da ke bayyana wa masu karatu.</p>
+    </div>
+    <div class="border border-yanci-primary/15 bg-white/60 p-5">
+      <p class="text-xs font-bold uppercase tracking-wide text-yanci-primary/60">An kashe</p>
+      <p class="mt-2 font-serif text-3xl font-bold text-yanci-primary/40">{rows.length - enabledCount}</p>
+      <p class="mt-1 text-xs text-yanci-primary/50">Sassun da aka boye a shafin farko.</p>
+    </div>
+  </div>
+
+  <div class="mt-6">
+    <HomepageBuilder client:load initial={rows} defaults={DEFAULT_HOMEPAGE_LAYOUT} />
+  </div>
+</AdminLayout>
