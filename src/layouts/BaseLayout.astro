@@ -9,6 +9,13 @@ interface Props {
   title?: string;
   description?: string;
   path?: string;
+  image?: string;
+  ogType?: string;
+  publishedTime?: string;
+  modifiedTime?: string;
+  authorName?: string;
+  tags?: string[];
+  section?: string;
   disableNav?: boolean;
   disableFooter?: boolean;
 }
@@ -22,13 +29,56 @@ const {
   description = settings.default_meta_desc ||
     'Yanci: Jaridar Hausa mai zuwa. Labarai, siyasa, wasanni da al’adu a yaren Hausa, kai tsaye daga Najeriya.',
   path = '/',
+  image,
+  ogType = 'website',
+  publishedTime,
+  modifiedTime,
+  authorName,
+  tags,
+  section,
   disableNav = false,
   disableFooter = false,
 } = Astro.props;
 
-const canonical = new URL(path, Astro.site ?? settings.site_url ?? 'https://yanci.ng').href;
+const siteUrl =
+  import.meta.env.PUBLIC_SITE_URL || new URL(Astro.site ?? settings.site_url ?? 'https://yanci.ng').href;
+const canonical = new URL(path, siteUrl).href;
+const imageUrl = image ? new URL(image, siteUrl).href : undefined;
 
 const feedSection = SECTIONS.find((s) => path === `/${s.slug}/` || path === `/${s.slug}`);
+
+const jsonLd = publishedTime
+  ? {
+      '@context': 'https://schema.org',
+      '@type': 'NewsArticle',
+      headline: title,
+      description,
+      ...(imageUrl ? { image: [imageUrl] } : {}),
+      datePublished: publishedTime,
+      dateModified: modifiedTime ?? publishedTime,
+      author: { '@type': 'Person', name: authorName || 'Marubuci Yanci' },
+      publisher: {
+        '@type': 'Organization',
+        name: siteName,
+        logo: { '@type': 'ImageObject', url: new URL('/icons/yc-mark.svg', siteUrl).href },
+      },
+      mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
+      ...(section ? { articleSection: section } : {}),
+      ...(tags?.length ? { keywords: tags.join(', ') } : {}),
+    }
+  : {
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      name: siteName,
+      url: siteUrl,
+      potentialAction: {
+        '@type': 'SearchAction',
+        target: `${new URL('/search/', siteUrl).href}?q={search_term_string}`,
+        'query-input': 'required name=search_term_string',
+      },
+    };
+
+const jsonLdHtml = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
 ---
 
 <!doctype html>
@@ -38,6 +88,7 @@ const feedSection = SECTIONS.find((s) => path === `/${s.slug}/` || path === `/${
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/icons/yc-mark.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -58,13 +109,38 @@ const feedSection = SECTIONS.find((s) => path === `/${s.slug}/` || path === `/${
     <meta property="og:site_name" content={siteName} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:locale" content="ha_NG" />
+    {imageUrl && <meta property="og:image" content={imageUrl} />}
+    {ogType === 'article' && publishedTime && (
+      <meta property="article:published_time" content={publishedTime} />
+    )}
+    {ogType === 'article' && modifiedTime && (
+      <meta property="article:modified_time" content={modifiedTime} />
+    )}
+    {ogType === 'article' && authorName && <meta property="article:author" content={authorName} />}
+    {ogType === 'article' && section && <meta property="article:section" content={section} />}
+    {ogType === 'article' && tags && tags.length > 0 && (
+      <meta property="article:tag" content={tags.join(', ')} />
+    )}
+    <meta name="twitter:card" content={imageUrl ? 'summary_large_image' : 'summary'} />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    {imageUrl && <meta name="twitter:image" content={imageUrl} />}
+    <script type="application/ld+json" set:html={jsonLdHtml} />
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
   </head>
   <body class="flex min-h-screen flex-col">
+    <a
+      href="#main-content"
+      class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-sm focus:bg-yanci-accent focus:px-4 focus:py-2 focus:text-sm focus:font-bold focus:text-[#0f3036] focus:shadow-lg"
+    >
+      Tsallake zuwa babban abun ciki
+    </a>
     {!disableNav && <Nav />}
-    <main class="flex-1">
+    <main id="main-content" class="flex-1" tabindex="-1">
       <slot />
     </main>
     {!disableFooter && <Footer />}
