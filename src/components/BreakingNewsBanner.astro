@@ -1,0 +1,160 @@
+---
+import { loadArticles } from '../lib/content';
+import type { Article } from '../data/schema';
+
+type WithBreaking = Article & { is_breaking?: boolean; breaking_until?: string };
+
+function activeBreaking(a: Article, now: number): a is WithBreaking {
+  if ((a.status ?? 'published') !== 'published') return false;
+  const candidate = a as WithBreaking;
+  if (!candidate.is_breaking) return false;
+  if (!candidate.breaking_until) return true;
+  const until = new Date(candidate.breaking_until).getTime();
+  return Number.isFinite(until) && until > now;
+}
+
+const now = Date.now();
+const matches = (await loadArticles()).filter((a) => activeBreaking(a, now));
+matches.sort(
+  (x, y) => new Date(y.$createdAt ?? 0).getTime() - new Date(x.$createdAt ?? 0).getTime(),
+);
+
+const breaking = matches.length > 0 ? matches[0] : null;
+const articleId = breaking ? String(breaking.$id ?? breaking.id ?? '') : '';
+const untilMs =
+  breaking?.breaking_until && Number.isFinite(new Date(breaking.breaking_until).getTime())
+    ? String(new Date(breaking.breaking_until).getTime())
+    : null;
+const show = Boolean(breaking && articleId);
+---
+
+{show && breaking && (
+  <div
+    id="breaking-news-banner"
+    class="relative overflow-hidden bg-[#c70000] text-white"
+    role="alert"
+    aria-live="assertive"
+    data-article-id={articleId}
+    data-until={untilMs}
+  >
+    <div class="breaking-shimmer absolute inset-0" aria-hidden="true"></div>
+    <div class="relative mx-auto flex max-w-7xl items-center gap-3 px-4 py-2.5 sm:gap-4">
+      <p class="flex shrink-0 items-center gap-2">
+        <svg
+          class="breaking-bolt h-4 w-4 text-yellow-300"
+          viewBox="0 0 384 512"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path
+            d="M349.4 44.6c5.9-13.7 1.5-29.7-10.6-38.5s-28.6-8-39.9 1.8l-256 224c-10 8.8-13.6 22.9-8.9 35.3S50.7 288 64 288h111.5L98.6 467.4c-5.9 13.7-1.5 29.7 10.6 38.5s28.6 8 39.9-1.8l256-224c10-8.8 13.6-22.9 8.9-35.3s-16.6-20.7-29.9-20.7H272.5L349.4 44.6z"
+          ></path>
+        </svg>
+        <span class="rounded bg-white/20 px-2 py-0.5 text-xs font-black uppercase tracking-widest">
+          Breaking
+        </span>
+        <span class="hidden text-xs font-bold uppercase tracking-widest text-white/80 md:inline">
+          Labari na nan kuna
+        </span>
+      </p>
+      <a
+        href={`/article/${articleId}`}
+        class="min-w-0 flex-1 truncate text-sm font-bold hover:underline"
+      >
+        {breaking.headline}
+      </a>
+      <button
+        type="button"
+        id="breaking-news-close"
+        class="shrink-0 rounded p-1 transition-colors hover:bg-white/20"
+        aria-label="Rufe labari na nan kuna"
+      >
+        <svg class="h-4 w-4" viewBox="0 0 320 512" fill="currentColor" aria-hidden="true">
+          <path
+            d="M310.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L160 210.7 54.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L114.7 256 9.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L160 301.3l105.4 105.3c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L205.3 256 310.6 150.6z"
+          ></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+)}
+
+<style>
+  .breaking-shimmer {
+    background-image: linear-gradient(90deg, #7a0000 0%, #c70000 40%, #d81f1f 60%, #c70000 100%);
+    background-size: 200% 100%;
+    animation: breaking-glow 3.2s ease-in-out infinite;
+  }
+
+  .breaking-bolt {
+    animation: breaking-flash 1.6s ease-in-out infinite;
+  }
+
+  @keyframes breaking-glow {
+    0%,
+    100% {
+      background-position: 0% 50%;
+      opacity: 0.85;
+    }
+    50% {
+      background-position: 100% 50%;
+      opacity: 1;
+    }
+  }
+
+  @keyframes breaking-flash {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.6;
+      transform: scale(0.92);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .breaking-shimmer,
+    .breaking-bolt {
+      animation: none;
+    }
+  }
+</style>
+
+<script>
+  const DISMISS_KEY = 'yanci:breaking-dismissed';
+
+  const banner = document.getElementById<HTMLElement>('breaking-news-banner');
+  if (banner) {
+    const hide = () => {
+      banner.hidden = true;
+    };
+
+    const id = banner.dataset.articleId;
+    let dismissed: string | null = null;
+    try {
+      dismissed = localStorage.getItem(DISMISS_KEY);
+    } catch {}
+
+    if (dismissed !== null && dismissed === id) {
+      hide();
+    } else {
+      const until = Number(banner.dataset.until);
+      if (Number.isFinite(until) && until > 0) {
+        const remaining = until - Date.now();
+        if (remaining <= 0) {
+          hide();
+        } else {
+          window.setTimeout(hide, remaining);
+        }
+      }
+      banner.querySelector<HTMLButtonElement>('button')?.addEventListener('click', () => {
+        try {
+          localStorage.setItem(DISMISS_KEY, id ?? '');
+        } catch {}
+        hide();
+      });
+    }
+  }
+</script>
