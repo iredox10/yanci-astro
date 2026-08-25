@@ -1,0 +1,214 @@
+---
+// Registers /sw.js and offers web push opt-in. The integrator places this
+// once in BaseLayout; it self-guards and silently exits when unsupported.
+---
+
+<style is:global>
+  .ypush-toast {
+    position: fixed;
+    left: 50%;
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    transform: translate(-50%, 0);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: min(22rem, calc(100vw - 2rem));
+    padding: 1rem;
+    background: #052962;
+    color: #fff;
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 30px rgba(5, 41, 98, 0.35);
+    font-family: inherit;
+    opacity: 0;
+    translate: 0 0.5rem;
+    transition: opacity 200ms ease, translate 200ms ease;
+  }
+  .ypush-toast[data-visible='true'] {
+    opacity: 1;
+    translate: 0 0;
+  }
+  .ypush-title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+  .ypush-copy {
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.85);
+  }
+  .ypush-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+  }
+  .ypush-btn {
+    border: 0;
+    border-radius: 0.5rem;
+    padding: 0.45rem 0.9rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.75);
+  }
+  .ypush-btn[data-primary='true'] {
+    background: #c59d5f;
+    color: #052962;
+  }
+  .ypush-btn:focus-visible {
+    outline: 2px solid #c59d5f;
+    outline-offset: 2px;
+  }
+</style>
+
+<script>
+  const STORAGE_KEY = 'yanci-push-choice';
+
+  function urlBase64ToUint8Array(base64String: string) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(base64);
+    const output = new Uint8Array(new ArrayBuffer(raw.length));
+    for (let i = 0; i < raw.length; i += 1) output[i] = raw.charCodeAt(i);
+    return output;
+  }
+
+  function bufferToBase64Url(buffer: ArrayBuffer | null): string {
+    if (!buffer) return '';
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  async function syncSubscription(
+    registration: ServiceWorkerRegistration,
+    vapidKey: string,
+  ): Promise<void> {
+    try {
+      const existing = await registration.pushManager.getSubscription();
+      const subscription =
+        existing ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        }));
+      const payload = {
+        endpoint: subscription.endpoint,
+        keys: {
+          p256dh: bufferToBase64Url(subscription.getKey('p256dh')),
+          auth: bufferToBase64Url(subscription.getKey('auth')),
+        },
+      };
+      if (!payload.keys.p256dh || !payload.keys.auth) return;
+      await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      // Silent: subscription failures must never break page use.
+    }
+  }
+
+  function showToast(onAccept: () => void, onDismiss: () => void): void {
+    if (document.querySelector('.ypush-toast')) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'ypush-toast';
+    toast.setAttribute('role', 'status');
+
+    const title = document.createElement('p');
+    title.className = 'ypush-title';
+    title.textContent = 'Karɓi sanarwa';
+
+    const copy = document.createElement('p');
+    copy.className = 'ypush-copy';
+    copy.textContent = 'Karɓi manyan labarai kai tsaye a wayarka. Za ka iya dakata daga baya.';
+
+    const actions = document.createElement('div');
+    actions.className = 'ypush-actions';
+
+    const later = document.createElement('button');
+    later.type = 'button';
+    later.className = 'ypush-btn';
+    later.textContent = 'Daga baya';
+
+    const accept = document.createElement('button');
+    accept.type = 'button';
+    accept.className = 'ypush-btn';
+    accept.dataset.primary = 'true';
+    accept.textContent = 'Amince';
+
+    const close = () => {
+      toast.dataset.visible = 'false';
+      setTimeout(() => toast.remove(), 220);
+    };
+
+    later.addEventListener('click', () => {
+      close();
+      onDismiss();
+    });
+    accept.addEventListener('click', () => {
+      close();
+      onAccept();
+    });
+
+    actions.append(later, accept);
+    toast.append(title, copy, actions);
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => {
+      toast.dataset.visible = 'true';
+    });
+  }
+
+  async function main(): Promise<void> {
+    if (!('serviceWorker' in navigator)) return;
+    if (!('Notification' in window) || !('PushManager' in window)) return;
+
+    try {
+      await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    } catch {
+      return;
+    }
+
+    const vapidKey = String(import.meta.env.PUBLIC_VAPID_PUBLIC_KEY ?? '');
+    if (!vapidKey) return;
+
+    const registration = await navigator.serviceWorker.ready;
+    const choice = localStorage.getItem(STORAGE_KEY);
+
+    if (choice === 'granted') {
+      await syncSubscription(registration, vapidKey);
+      return;
+    }
+    if (choice === 'dismissed') return;
+
+    if (Notification.permission === 'granted') {
+      localStorage.setItem(STORAGE_KEY, 'granted');
+      await syncSubscription(registration, vapidKey);
+      return;
+    }
+    if (Notification.permission !== 'default') return;
+
+    showToast(
+      () => {
+        void Notification.requestPermission().then((result) => {
+          if (result !== 'granted') {
+            localStorage.setItem(STORAGE_KEY, 'dismissed');
+            return;
+          }
+          localStorage.setItem(STORAGE_KEY, 'granted');
+          void syncSubscription(registration, vapidKey);
+        });
+      },
+      () => localStorage.setItem(STORAGE_KEY, 'dismissed'),
+    );
+  }
+
+  void main();
+</script>
