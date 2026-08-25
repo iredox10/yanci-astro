@@ -1,4 +1,41 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import RevisionHistoryDrawer from './editor/RevisionHistoryDrawer';
+
+const SNAPSHOT_FIELDS = [
+  'headline',
+  'kicker',
+  'trail',
+  'body',
+  'image',
+  'pillar',
+  'section',
+  'author',
+  'slug',
+  'isLive',
+  'status',
+  'publishAt',
+  'isSensitive',
+  'tags',
+  'metaTitle',
+  'metaDescription',
+] as const;
+
+function normField(value: unknown): string {
+  return Array.isArray(value) ? value.join('\u0000') : String(value ?? '');
+}
+
+function formSignature(f: ArticleDraft): string {
+  return SNAPSHOT_FIELDS.map((k) => normField(f[k] as unknown)).join('\u0001');
+}
+
+function changedFields(prev: ArticleDraft | null, next: ArticleDraft): string[] {
+  if (!prev) return ['create'];
+  const out: string[] = [];
+  for (const key of SNAPSHOT_FIELDS) {
+    if (normField(prev[key] as unknown) !== normField(next[key] as unknown)) out.push(key);
+  }
+  return out;
+}
 
 export interface ArticleDraft {
   $id?: string;
@@ -46,9 +83,77 @@ export default function AdminArticleEditor({ initial }: { initial?: Partial<Arti
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [info, setInfo] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const lastSavedRef = useRef<ArticleDraft | null>(null);
+  const snapshotBusyRef = useRef(false);
 
   const set = <K extends keyof ArticleDraft>(key: K, value: ArticleDraft[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
+
+  async function maybeSnapshot(current: ArticleDraft): Promise<void> {
+    const articleId = current.$id;
+    if (!articleId || snapshotBusyRef.current) return;
+    const prev = lastSavedRef.current;
+    if (prev && formSignature(prev) === formSignature(current)) return;
+    snapshotBusyRef.current = true;
+    try {
+      await fetch('/api/admin/revisions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          articleId,
+          title: current.headline,
+          changedFields: changedFields(prev, current),
+          snapshot: current,
+          authorName: current.author || 'unknown',
+        }),
+      });
+    } catch {
+      // revisions are best-effort; a failed snapshot must never block saving
+    } finally {
+      lastSavedRef.current = { ...current };
+      snapshotBusyRef.current = false;
+    }
+  }
+
+  function restoreFrom(snapshot: Record<string, unknown>): void {
+    try {
+      const status = String(snapshot.status ?? '');
+      setForm((f) => ({
+        ...f,
+        headline: String(snapshot.headline ?? f.headline),
+        kicker: String(snapshot.kicker ?? ''),
+        trail: String(snapshot.trail ?? ''),
+        body: String(snapshot.body ?? ''),
+        image: String(snapshot.image ?? ''),
+        pillar: String(snapshot.pillar ?? f.pillar),
+        section: String(snapshot.section ?? ''),
+        author: String(snapshot.author ?? ''),
+        slug: String(snapshot.slug ?? ''),
+        isLive: Boolean(snapshot.isLive),
+        status: ['draft', 'published', 'scheduled'].includes(status)
+          ? status
+          : f.status,
+        publishAt: typeof snapshot.publishAt === 'string' && snapshot.publishAt ? snapshot.publishAt : undefined,
+        isSensitive: Boolean(snapshot.isSensitive),
+        tags: Array.isArray(snapshot.tags)
+          ? snapshot.tags.map(String).filter(Boolean).slice(0, 40)
+          : [],
+        metaTitle:
+          typeof snapshot.metaTitle === 'string' && snapshot.metaTitle ? snapshot.metaTitle : undefined,
+        metaDescription:
+          typeof snapshot.metaDescription === 'string' && snapshot.metaDescription
+            ? snapshot.metaDescription
+            : undefined,
+      }));
+      setInfo('An dawo da wannan sigar — danna "Save changes" don ajiya.');
+      setError(null);
+      setSaved(false);
+    } catch {
+      // ignore malformed snapshots; form state stays as-is
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -77,6 +182,8 @@ export default function AdminArticleEditor({ initial }: { initial?: Partial<Arti
         return;
       }
       setSaved(true);
+      setBusy(false);
+      void maybeSnapshot(form);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
       setBusy(false);
@@ -249,6 +356,9 @@ export default function AdminArticleEditor({ initial }: { initial?: Partial<Arti
           Saved.
         </p>
       )}
+      {info && (
+        <p className="border border-yanci-teal/30 bg-yanci-teal/10 px-3 py-2 text-sm text-yanci-teal">{info}</p>
+      )}
 
       <div className="flex items-center gap-3">
         <button
@@ -258,10 +368,26 @@ export default function AdminArticleEditor({ initial }: { initial?: Partial<Arti
         >
           {busy ? 'Saving…' : form.$id ? 'Save changes' : 'Create article'}
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            setInfo(null);
+            setHistoryOpen(true);
+          }}
+          disabled={!form.$id}
+          title="Tarihin gyare-gyre"
+          className="border border-yanci-primary/25 px-4 py-2.5 text-sm font-bold uppercase tracking-wide text-yanci-primary transition-colors hover:bg-yanci-primary/5 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Tarihi
+        </button>
         <a href="/admin/articles" className="px-3 py-2 text-sm font-medium text-yanci-primary/70 hover:text-yanci-primary">
           Cancel
         </a>
       </div>
+
+      {historyOpen && form.$id && (
+        <RevisionHistoryDrawer articleId={form.$id} onClose={() => setHistoryOpen(false)} onRestore={restoreFrom} />
+      )}
     </form>
   );
 }
