@@ -1,0 +1,71 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import NotificationComposer from '../../components/admin/NotificationComposer';
+import { SECTIONS } from '@/data/sections';
+import { Client, Databases, Query } from 'node-appwrite';
+import { APPWRITE_API_KEY } from 'astro:env/server';
+import {
+  PUBLIC_APPWRITE_ENDPOINT,
+  PUBLIC_APPWRITE_PROJECT_ID,
+  PUBLIC_APPWRITE_DATABASE_ID,
+} from 'astro:env/client';
+
+export const prerender = false;
+
+const SUBSCRIPTIONS_COLLECTION =
+  process.env.APPWRITE_COLLECTION_PUSH_SUBSCRIPTIONS || 'push_subscriptions';
+
+async function subscriberCount(): Promise<number | null> {
+  if (!PUBLIC_APPWRITE_ENDPOINT || !PUBLIC_APPWRITE_PROJECT_ID || !PUBLIC_APPWRITE_DATABASE_ID) {
+    return null;
+  }
+  const client = new Client()
+    .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
+    .setProject(PUBLIC_APPWRITE_PROJECT_ID)
+    .setKey(APPWRITE_API_KEY ?? '');
+  try {
+    const { total } = await new Databases(client).listDocuments({
+      databaseId: PUBLIC_APPWRITE_DATABASE_ID,
+      collectionId: SUBSCRIPTIONS_COLLECTION,
+      queries: [Query.limit(1)],
+    });
+    return total;
+  } catch {
+    return null;
+  }
+}
+
+const subscribers = await subscriberCount();
+const sectionOptions = SECTIONS.map((s) => ({ slug: s.slug, label: s.label }));
+---
+
+<AdminLayout title="Sanarwa" active="notifications">
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h1 class="font-serif text-2xl font-bold text-yanci-primary">Sanarwar kai tsaye</h1>
+      <p class="mt-1 text-sm text-yanci-primary/60">
+        Ka rubuta sanarwa, ka zabo masu karba, aka saka ta cikin jerin aikawa.
+      </p>
+    </div>
+  </div>
+
+  <div class="mt-5 grid gap-4 sm:grid-cols-3">
+    <div class="border border-yanci-primary/15 bg-white/60 p-5">
+      <p class="text-xs font-bold uppercase tracking-wide text-yanci-primary/60">Masu karba</p>
+      <p class="mt-2 font-serif text-3xl font-bold text-yanci-dark">
+        {subscribers === null ? '\u2014' : subscribers.toLocaleString('en-NG')}
+      </p>
+      <p class="mt-1 text-xs text-yanci-primary/50">
+        {subscribers === null
+          ? 'Adadi ba a samu ba yanzu.'
+          : subscribers === 0
+            ? 'Babu wanda ya yi rajistar sanarwa tukuna.'
+            : 'Na\'urorin da suka amince da sanarwa.'}
+      </p>
+    </div>
+  </div>
+
+  <div class="mt-6">
+    <NotificationComposer client:load sections={sectionOptions} subscribers={subscribers ?? 0} />
+  </div>
+</AdminLayout>
