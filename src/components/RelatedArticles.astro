@@ -1,0 +1,72 @@
+---
+import { loadArticles, toCard } from '../lib/content';
+import { pillarAccent } from '../data/schema';
+import type { Article } from '../data/schema';
+import SectionContainer from './SectionContainer.astro';
+import NewsCard from './NewsCard.astro';
+
+interface Props {
+  articleId: string;
+  section?: string;
+  tags?: string[];
+  pillar?: string;
+}
+
+const LIMIT = 4;
+const MIN_RESULTS = 2;
+
+const { articleId, section, tags = [], pillar } = Astro.props;
+
+const key = (value?: string) => value?.trim().toLowerCase() ?? '';
+const sectionKey = key(section);
+const pillarKey = key(pillar);
+const wantedTags = new Set(tags.map(key));
+
+/** Legacy rows without a status are treated as published. */
+function isPublished(article: Article): boolean {
+  return (article.status ?? 'published') === 'published';
+}
+
+function relevance(article: Article): [rank: number, tagHits: number] {
+  const articleSection = key(article.section);
+  const articlePillar = key(String(article.pillar ?? ''));
+  const tagHits = (article.tags ?? []).filter((t) => wantedTags.has(key(t))).length;
+  if (sectionKey && articleSection === sectionKey) return [3, tagHits];
+  if (pillarKey && articlePillar === pillarKey) return [2, tagHits];
+  if (tagHits > 0) return [1, tagHits];
+  return [0, 0];
+}
+
+const pool = (await loadArticles()).filter((article) => {
+  const id = String(article.id ?? '');
+  const docId = article.$id ?? '';
+  return id !== articleId && docId !== articleId && isPublished(article);
+});
+
+const related = pool
+  .map((article) => ({ article, score: relevance(article) }))
+  .filter(({ score }) => score[0] > 0)
+  .sort((a, b) => {
+    const [rankA, tagHitsA] = a.score;
+    const [rankB, tagHitsB] = b.score;
+    return (
+      rankB - rankA ||
+      tagHitsB - tagHitsA ||
+      new Date(b.article.$createdAt ?? 0).getTime() - new Date(a.article.$createdAt ?? 0).getTime()
+    );
+  })
+  .slice(0, LIMIT)
+  .map(({ article }) => article);
+
+const accent = pillarAccent(pillar);
+---
+
+{
+  related.length >= MIN_RESULTS && (
+    <SectionContainer title="Labarin da suka dace" accent={accent}>
+      {related.map((article) => (
+        <NewsCard data={{ ...toCard(article), type: 'standard' }} variant="standard" />
+      ))}
+    </SectionContainer>
+  )
+}
