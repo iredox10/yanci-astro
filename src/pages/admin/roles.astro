@@ -1,0 +1,40 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import RolesManager from '../../components/admin/RolesManager';
+import {
+  DEFAULT_ROLE_PERMISSIONS,
+  PERMISSION_GROUPS,
+  PERMISSION_LABELS,
+  countRoleMembers,
+  listRoles,
+  toRoleView,
+} from '@lib/roles';
+
+export const prerender = false;
+
+const [roles, counts] = await Promise.all([listRoles(), countRoleMembers()]);
+const views = roles.map((role) => toRoleView(role, counts));
+
+const groups = PERMISSION_GROUPS.map((group) => ({
+  group: group.group as string,
+  permissions: [...group.permissions],
+}));
+---
+
+<AdminLayout title="Roles & permissions" active="users">
+  <div class="mb-6">
+    <h1 class="font-serif text-2xl font-bold text-yanci-primary">Roles & permissions</h1>
+    <p class="mt-1 max-w-2xl text-sm text-yanci-primary/60">
+      Define what each team role can access. Permissions are stored in the
+      <code class="rounded bg-yanci-primary/10 px-1 font-mono text-xs">roles</code> collection and enforced by the admin API.
+    </p>
+  </div>
+
+  <RolesManager
+    client:load
+    roles={views}
+    groups={groups}
+    labels={PERMISSION_LABELS}
+    defaults={DEFAULT_ROLE_PERMISSIONS}
+  />
+</AdminLayout>
