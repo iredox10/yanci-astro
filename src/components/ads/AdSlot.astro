@@ -1,0 +1,113 @@
+---
+interface Props {
+  variant: 'banner' | 'sidebar' | 'inline' | 'sponsored';
+  slotId?: string;
+  className?: string;
+  sponsoredContent?: {
+    label: string;
+    title: string;
+    href: string;
+    image?: string;
+  };
+}
+
+const { variant, slotId, className = '', sponsoredContent } = Astro.props;
+
+type Variant = Props['variant'];
+type Boxed = Exclude<Variant, 'sponsored'>;
+
+const BOXES: Record<Boxed, { hint: string; box: string }> = {
+  banner: { hint: 'Leaderboard · 728×90 / 320×50', box: 'h-[50px] w-full max-w-[728px] md:h-[90px]' },
+  sidebar: { hint: 'Box · 300×250', box: 'h-[250px] w-full max-w-[300px]' },
+  inline: { hint: 'In-article · 100% × 120', box: 'h-[120px] w-full' },
+};
+
+const WRAPPERS: Record<Variant, string> = {
+  banner: 'my-6 flex justify-center',
+  sidebar: 'my-4',
+  inline: 'my-8 border-y border-gray-100 py-5',
+  sponsored: 'my-6',
+};
+
+const isSponsored = variant === 'sponsored';
+const boxed: (typeof BOXES)[Boxed] | undefined = isSponsored ? undefined : BOXES[variant];
+---
+
+<div class:list={['w-full', WRAPPERS[variant], className]} data-ad-variant={variant}>
+  {
+    !isSponsored && (
+      <div class="mb-1.5 flex justify-center">
+        <span class="rounded-sm border border-gray-200 px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-gray-400">
+          Tallafi
+        </span>
+      </div>
+    )
+  }
+
+  {
+    isSponsored && sponsoredContent ? (
+      <a
+        href={sponsoredContent.href}
+        rel="sponsored"
+        class="group flex items-center gap-4 overflow-hidden rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-all duration-300 hover:border-gray-200 hover:shadow-lg"
+      >
+        {sponsoredContent.image ? (
+          <img
+            src={sponsoredContent.image}
+            alt={sponsoredContent.title}
+            loading="lazy"
+            width="192"
+            height="192"
+            class="h-24 w-24 flex-shrink-0 rounded-lg object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        ) : (
+          <div class="flex h-24 w-24 flex-shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50">
+            <span class="font-serif text-3xl font-bold text-gray-300">Y</span>
+          </div>
+        )}
+        <div class="min-w-0 flex-1">
+          <span class="mb-2 inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-800">
+            <span class="h-1.5 w-1.5 rounded-full bg-amber-500" />
+            Tallafi · Sponsored
+          </span>
+          <p class="line-clamp-2 font-serif text-lg font-bold leading-snug text-[#1c1917] transition-colors group-hover:text-[#0f3036]">
+            {sponsoredContent.title}
+          </p>
+          <p class="mt-1 truncate text-xs font-medium text-gray-500">{sponsoredContent.label}</p>
+        </div>
+      </a>
+    ) : isSponsored ? (
+      <div
+        data-ad-slot={slotId}
+        data-ad-variant={variant}
+        class="flex h-[220px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 bg-gray-50 px-6 text-center select-none"
+      >
+        <span class="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-800">
+          <span class="h-1.5 w-1.5 rounded-full bg-amber-500" />
+          Tallafi · Sponsored
+        </span>
+        <p class="text-xs font-medium text-gray-400">Wurin tallan abun ciki</p>
+        {slotId && <p class="text-[10px] tracking-wide text-gray-300">slot: {slotId}</p>}
+      </div>
+    ) : (
+      boxed && (
+        <div
+          data-ad-slot={slotId}
+          data-ad-variant={variant}
+          class:list={[
+            'flex items-center justify-center rounded-md border border-dashed border-gray-300 bg-gray-50 select-none',
+            boxed.box,
+          ]}
+        >
+          <div class="flex flex-col items-center gap-1 px-4 text-center">
+            <span class="rounded-sm border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+              Tallafi
+            </span>
+            <p class="text-xs font-medium text-gray-400">{boxed.hint}</p>
+            {slotId && <p class="text-[10px] tracking-wide text-gray-300">slot: {slotId}</p>}
+          </div>
+        </div>
+      )
+    )
+  }
+</div>
