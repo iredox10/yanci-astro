@@ -1,0 +1,129 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getArticles, getMostRead } from '@lib/appwrite-server';
+import AdminReviveButton from '../../components/admin/AdminReviveButton';
+
+export const prerender = false;
+
+interface Stale {
+  id: string;
+  headline: string;
+  section: string;
+  age: number;
+  updatedLabel: string;
+  views: number | null;
+}
+
+const DAY_MS = 86_400_000;
+const THRESHOLDS = [30, 60, 90] as const;
+
+const url = new URL(Astro.request.url);
+const rawDays = Number(url.searchParams.get('days') ?? 60);
+const days = (THRESHOLDS as readonly number[]).includes(rawDays) ? rawDays : 60;
+
+const articles = await getArticles(100);
+// Single cheap read; [] when the views collection is absent or fails.
+const most = await getMostRead(1000);
+const viewsByArticle = new Map(most.map((m) => [m.articleId, m.views]));
+
+const stale: Stale[] = articles
+  .filter((a) => String(a.status ?? (a.isLive ? 'published' : 'draft')) === 'published')
+  .map((a) => {
+    const id = String(a.$id);
+    const updated = String(a.$updatedAt ?? a.$createdAt ?? '');
+    const ts = updated ? new Date(updated).getTime() : NaN;
+    return {
+      id,
+      headline: String(a.headline ?? a.ogTitle ?? 'Untitled'),
+      section: String(a.section ?? '—'),
+      age: Number.isFinite(ts) ? Math.floor((Date.now() - ts) / DAY_MS) : 9_999,
+      updatedLabel: updated ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(updated)) : '—',
+      views: viewsByArticle.get(id) ?? null,
+    };
+  })
+  .filter((a) => a.age >= days)
+  .sort((a, b) => b.age - a.age);
+
+const bucketFor = (age: number) =>
+  age > 90
+    ? { cls: 'bg-yanci-red/10 text-yanci-red' }
+    : age > 60
+      ? { cls: 'bg-amber-100 text-amber-800' }
+      : { cls: 'bg-yanci-primary/10 text-yanci-primary/70' };
+---
+
+<AdminLayout title="Maidowa" active="articles">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h1 class="font-serif text-2xl font-bold text-yanci-primary">Maido da labarai</h1>
+      <p class="mt-1 text-sm text-yanci-primary/60">
+        Nemo labaran da aka buga amma sun dade ba a sabunta su ba — ka maido da su.
+      </p>
+    </div>
+  </div>
+
+  <div class="mt-4 flex flex-wrap items-center gap-1">
+    <span class="px-3 py-1.5 text-sm font-medium text-yanci-primary/50">Fiye da kwanaki:</span>
+    {THRESHOLDS.map((t) => (
+      <a
+        href={`?days=${t}`}
+        class:list={[
+          'px-3 py-1.5 text-sm font-medium transition-colors',
+          t === days ? 'bg-yanci-primary text-yanci-paper' : 'text-yanci-primary/70 hover:bg-yanci-primary/10',
+        ]}
+      >
+        {t}
+      </a>
+    ))}
+  </div>
+
+  <div class="mt-5 overflow-hidden border border-yanci-primary/15 bg-white/60">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-yanci-primary/5 text-xs uppercase tracking-wide text-yanci-primary/60">
+        <tr>
+          <th class="px-4 py-2.5 font-semibold">Labari</th>
+          <th class="hidden px-4 py-2.5 font-semibold md:table-cell">Sashe</th>
+          <th class="px-4 py-2.5 font-semibold">Kwanaki</th>
+          <th class="hidden px-4 py-2.5 font-semibold sm:table-cell">Masu kallo</th>
+          <th class="hidden px-4 py-2.5 font-semibold lg:table-cell">Sabunta na karshe</th>
+          <th class="px-4 py-2.5 text-right font-semibold">Ayyuka</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-yanci-primary/10">
+        {stale.length === 0 && (
+          <tr>
+            <td colspan={6} class="px-4 py-10 text-center text-yanci-primary/50">
+              Babu labara masu tsufa fiye da kwanaki {days}. Abin sha'awa!
+            </td>
+          </tr>
+        )}
+        {stale.map((a) => (
+          <tr class="hover:bg-white/60">
+            <td class="max-w-md px-4 py-3">
+              <a href={`/admin/articles/${a.id}`} class="font-medium leading-snug text-yanci-dark hover:text-yanci-primary">
+                {a.headline}
+              </a>
+            </td>
+            <td class="hidden px-4 py-3 capitalize text-yanci-dark/70 md:table-cell">{a.section}</td>
+            <td class="px-4 py-3" data-cell="age">
+              <span class:list={['rounded-sm px-2 py-0.5 text-xs font-semibold whitespace-nowrap', bucketFor(a.age).cls]}>
+                kwanaki {a.age}
+              </span>
+            </td>
+            <td class="hidden px-4 py-3 text-yanci-dark/70 sm:table-cell">{a.views ?? '—'}</td>
+            <td class="hidden px-4 py-3 text-yanci-dark/50 lg:table-cell" data-cell="updated">{a.updatedLabel}</td>
+            <td class="whitespace-nowrap px-4 py-3 text-right">
+              <a href={`/admin/articles/${a.id}`} class="mr-3 font-medium text-yanci-teal hover:text-yanci-teal/70">
+                Gyara
+              </a>
+              <AdminReviveButton client:load articleId={a.id} />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+  <p class="mt-2 text-xs text-yanci-primary/50">
+    Ana nuna labarai {stale.length} daga cikin {articles.length}.
+  </p>
+</AdminLayout>
