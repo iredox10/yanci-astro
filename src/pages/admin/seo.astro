@@ -1,0 +1,44 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import SeoManager, { SEO_KEYS, type SeoValues } from '../../components/admin/SeoManager';
+import { adminListCollection } from '@lib/admin-collections';
+
+export const prerender = false;
+
+const docs = await adminListCollection('settings');
+const doc = docs[0] ?? null;
+
+const values = Object.fromEntries(
+  SEO_KEYS.map((key) => [key, String(doc?.[key] ?? '')]),
+) as SeoValues;
+
+const siteName = String(doc?.site_name ?? '') || 'Yanci';
+const tagline = String(doc?.tagline ?? '') || 'Jaridar Hausa mai zuwa';
+const siteUrl = String(doc?.site_url ?? '') || 'https://yanci.ng';
+---
+
+<AdminLayout title="SEO" active="seo">
+  <div class="mb-6">
+    <h1 class="font-serif text-2xl font-bold text-yanci-primary">Kula da SEO</h1>
+    <p class="mt-1 max-w-xl text-sm text-yanci-primary/60">
+      Saitunan take, bayani, tabbatarwa da ma'aunin ziyara na dukan shafin.
+    </p>
+  </div>
+
+  {!doc && (
+    <div class="mb-6 border border-yanci-red/30 bg-red-50 p-5 text-sm text-red-700">
+      Ba a sami bayanan saitin ba. Run <code>node scripts/seed-settings.mjs</code> don ƙirƙirar saitin farko.
+    </div>
+  )}
+
+  {doc && (
+    <SeoManager
+      client:load
+      docId={String(doc.$id)}
+      values={values}
+      siteName={siteName}
+      tagline={tagline}
+      siteUrl={siteUrl}
+    />
+  )}
+</AdminLayout>
