@@ -1,0 +1,336 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { Account, Client, Users } from 'node-appwrite';
+import type { Models } from 'node-appwrite';
+import { APPWRITE_API_KEY } from 'astro:env/server';
+import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
+import { requireUser, roleName, sessionTokenFrom } from '@lib/auth';
+import { getStaff } from '@lib/appwrite-server';
+
+export const prerender = false;
+
+const MONTHS_HA = [
+  'Janairu', 'Faburairu', 'Maris', 'Afrilu', 'Mayu', 'Yuni',
+  'Yuli', 'Agusta', 'Satumba', 'Oktoba', 'Nuwamba', 'Disamba',
+];
+
+function hausaDate(iso: string | undefined | null): string {
+  if (!iso) return '\u2014';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '\u2014';
+  return `${date.getDate()} ${MONTHS_HA[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+const auth = await requireUser(Astro.request);
+if (!auth.ok) {
+  return Astro.redirect(`/admin/login?next=${encodeURIComponent('/admin/profile')}`);
+}
+const user = auth.user;
+
+const ROLE_HAUSA: Record<string, string> = {
+  super_admin: 'Babban Mai Gadi',
+  admin: 'Babban Mai Gadi',
+  managing_editor: 'Babban Edita',
+  editor: 'Edita',
+  author: 'Marubuci',
+  contributor: 'Mai Ba da Gudummawa',
+};
+const roleLabel = ROLE_HAUSA[user.role] ?? roleName(user.role);
+
+const initials =
+  user.name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((word) => word.charAt(0).toUpperCase())
+    .join('') || '?';
+
+// Full Appwrite record adds the registration date; the staff row may carry a photo and bio.
+let registeredAt: string | null = null;
+let staffPhoto: string | null = null;
+let configured = Boolean(APPWRITE_API_KEY && PUBLIC_APPWRITE_ENDPOINT && PUBLIC_APPWRITE_PROJECT_ID);
+if (configured) {
+  try {
+    const api = new Users(
+      new Client()
+        .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
+        .setProject(PUBLIC_APPWRITE_PROJECT_ID)
+        .setKey(APPWRITE_API_KEY ?? ''),
+    );
+    const [record, staff] = await Promise.all([api.get(user.id), getStaff(200)]);
+    registeredAt = record.registration;
+    staffPhoto =
+      staff.find((s) => s.email.toLowerCase() === user.email.toLowerCase())?.image || null;
+  } catch (error) {
+    console.error('[admin/profile] failed to load account details', error);
+  }
+}
+
+interface SessionInfo {
+  provider: string;
+  device: string;
+  ip: string;
+  created: string;
+  expire: string;
+}
+
+let currentSession: SessionInfo | null = null;
+let otherSessionCount = 0;
+const token = await sessionTokenFrom(Astro.request);
+if (token && configured) {
+  try {
+    const account = new Account(
+      new Client()
+        .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
+        .setProject(PUBLIC_APPWRITE_PROJECT_ID)
+        .setSession(token),
+    );
+    const list = await account.listSessions();
+    otherSessionCount = Math.max(list.sessions.length - 1, 0);
+    const active = list.sessions.find((s: Models.Session) => s.current);
+    if (active) {
+      currentSession = {
+        provider: active.provider.replace(/_/g, ' '),
+        device: [active.osName, active.clientName].filter(Boolean).join(' \u00b7 ') || '\u2014',
+        ip: active.ip || '\u2014',
+        created: hausaDate(active.$createdAt),
+        expire: hausaDate(active.expire),
+      };
+    }
+  } catch {
+    currentSession = null;
+  }
+}
+---
+
+<AdminLayout title="Profile" active="profile">
+  <div class="mb-6">
+    <h1 class="font-serif text-2xl font-bold text-yanci-primary">Bayanina</h1>
+    <p class="mt-1 max-w-xl text-sm text-yanci-primary/60">
+      Sarrafa asusunka: sunarka, kalmar sirri, da bayanin zama na yanzu.
+    </p>
+  </div>
+
+  <div class="grid max-w-3xl gap-6">
+    <!-- Identity card -->
+    <section class="border border-yanci-primary/15 bg-white/60 p-5">
+      <div class="flex items-center gap-4">
+        <div class="size-20 shrink-0 overflow-hidden border border-yanci-primary/20 bg-yanci-accent font-serif text-2xl font-bold text-yanci-primary">
+          {staffPhoto ? (
+            <img src={staffPhoto} alt={user.name} class="size-full object-cover" />
+          ) : (
+            <span id="initials" class="flex size-full items-center justify-center">{initials}</span>
+          )}
+        </div>
+        <div class="min-w-0">
+          <p id="display-name" class="truncate font-serif text-xl font-bold text-yanci-primary">{user.name}</p>
+          <p class="truncate text-sm text-yanci-primary/60">{user.email}</p>
+          <div class="mt-1 flex flex-wrap items-center gap-2 text-xs">
+            <span class="bg-yanci-accent px-2 py-0.5 font-bold uppercase tracking-widest text-yanci-primary">{roleLabel}</span>
+            <span class="text-yanci-primary/60">Memba tun {hausaDate(registeredAt)}</span>
+          </div>
+        </div>
+      </div>
+
+      <form id="name-form" class="mt-6 space-y-4">
+        <label class="block">
+          <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">Sunar nunaƙa</span>
+          <input
+            id="name-input"
+            type="text"
+            value={user.name}
+            maxlength="64"
+            required
+            class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40"
+          />
+        </label>
+        <label class="block">
+          <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">Imel</span>
+          <input
+            type="email"
+            value={user.email}
+            disabled
+            class="w-full cursor-not-allowed border border-yanci-primary/15 bg-yanci-paper px-3 py-2 text-sm text-yanci-primary/50"
+          />
+          <span class="mt-1 block text-xs text-yanci-primary/50">Ba a iya canza imel ba.</span>
+        </label>
+        <p id="name-error" class="hidden text-xs font-bold text-yanci-red"></p>
+        <button
+          type="submit"
+          data-label="Ajiye suna"
+          class="bg-yanci-primary px-8 py-2.5 text-sm font-bold uppercase tracking-wide text-yanci-paper transition-colors hover:bg-yanci-primary/90 disabled:opacity-50"
+        >
+          Ajiye suna
+        </button>
+      </form>
+    </section>
+
+    <!-- Password card -->
+    <section class="border border-yanci-primary/15 bg-white/60 p-5">
+      <h2 class="font-serif text-base font-bold text-yanci-primary">Canza kalmar sirri</h2>
+      <form id="pw-form" class="mt-4 space-y-4">
+        <label class="block">
+          <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">Kalmar sirri ta yanzu</span>
+          <input id="pw-current" type="password" required autocomplete="current-password"
+            class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40" />
+        </label>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="block">
+            <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">Sabuwar kalmar sirri</span>
+            <input id="pw-new" type="password" required minlength="8" autocomplete="new-password"
+              class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40" />
+          </label>
+          <label class="block">
+            <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">Tabbatar da sabuwar</span>
+            <input id="pw-confirm" type="password" required minlength="8" autocomplete="new-password"
+              class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40" />
+          </label>
+        </div>
+        <p class="text-xs text-yanci-primary/50">A kalla haruffa 8.</p>
+        <p id="pw-error" class="hidden text-xs font-bold text-yanci-red"></p>
+        <button
+          type="submit"
+          data-label="Sabunta kalmar sirri"
+          class="bg-yanci-primary px-8 py-2.5 text-sm font-bold uppercase tracking-wide text-yanci-paper transition-colors hover:bg-yanci-primary/90 disabled:opacity-50"
+        >
+          Sabunta kalmar sirri
+        </button>
+      </form>
+    </section>
+
+    <!-- Session card -->
+    <section class="border border-yanci-primary/15 bg-white/60 p-5">
+      <h2 class="font-serif text-base font-bold text-yanci-primary">Zama na yanzu</h2>
+      {currentSession ? (
+        <dl class="mt-4 grid gap-x-8 gap-y-2 text-sm sm:grid-cols-[10rem_1fr]">
+          <dt class="text-xs font-bold uppercase tracking-wide text-yanci-primary/60">Hanyar shiga</dt>
+          <dd class="capitalize text-yanci-primary">{currentSession.provider}</dd>
+          <dt class="text-xs font-bold uppercase tracking-wide text-yanci-primary/60">Na'ura / burauza</dt>
+          <dd class="text-yanci-primary">{currentSession.device}</dd>
+          <dt class="text-xs font-bold uppercase tracking-wide text-yanci-primary/60">Adireshin IP</dt>
+          <dd class="text-yanci-primary">{currentSession.ip}</dd>
+          <dt class="text-xs font-bold uppercase tracking-wide text-yanci-primary/60">Bude ranar</dt>
+          <dd class="text-yanci-primary">{currentSession.created}</dd>
+          <dt class="text-xs font-bold uppercase tracking-wide text-yanci-primary/60">Karewa</dt>
+          <dd class="text-yanci-primary">{currentSession.expire}</dd>
+        </dl>
+      ) : (
+        <p class="mt-4 text-sm text-yanci-primary/60">Bayanan zama ba a samu ba.</p>
+      )}
+      {otherSessionCount > 0 && (
+        <p class="mt-3 text-xs text-yanci-primary/60">
+          Akwai wasu zamanai {otherSessionCount} masu aiki akan asusunka.
+        </p>
+      )}
+    </section>
+  </div>
+
+  <div id="toast" role="status"
+    class="pointer-events-none fixed bottom-6 right-6 translate-y-2 bg-yanci-primary px-5 py-2.5 text-sm font-bold uppercase tracking-wide text-yanci-paper opacity-0 shadow-lg transition-all duration-300">
+    An sabunta
+  </div>
+</AdminLayout>
+
+<script>
+  const toast = document.getElementById('toast');
+  let toastTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function showToast(): void {
+    if (!toast) return;
+    toast.classList.remove('opacity-0', 'translate-y-2');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toast.classList.add('opacity-0', 'translate-y-2');
+    }, 2500);
+  }
+
+  function setError(el: HTMLElement | null, message: string): void {
+    if (!el) return;
+    el.textContent = message;
+    el.classList.toggle('hidden', message === '');
+  }
+
+  async function post(payload: Record<string, unknown>): Promise<{ ok: boolean; message?: string; name?: unknown }> {
+    const res = await fetch('/api/admin/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return (await res.json().catch(() => ({}))) as { ok: boolean; message?: string; name?: unknown };
+  }
+
+  function busy(form: HTMLFormElement, loading: boolean): void {
+    const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (!button) return;
+    button.disabled = loading;
+    button.textContent = loading ? 'Ana aiki\u2026' : (button.dataset.label ?? button.textContent);
+  }
+
+  const nameForm = document.getElementById('name-form') as HTMLFormElement | null;
+  nameForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = document.getElementById('name-input') as HTMLInputElement | null;
+    if (!input) return;
+    if (!input.value.trim()) {
+      setError(document.getElementById('name-error'), 'Sunan ba zai iya komai ba');
+      return;
+    }
+    setError(document.getElementById('name-error'), '');
+    busy(nameForm, true);
+    const out = await post({ action: 'name', name: input.value.trim() });
+    busy(nameForm, false);
+    if (!out.ok) {
+      setError(document.getElementById('name-error'), out.message ?? 'An kasa sabunta suna');
+      return;
+    }
+    const name = typeof out.name === 'string' && out.name ? out.name : input.value.trim();
+    const display = document.getElementById('display-name');
+    if (display) display.textContent = name;
+    const badge = document.getElementById('initials');
+    if (badge) {
+      badge.textContent =
+        name
+          .split(/\s+/)
+          .slice(0, 2)
+          .map((w) => w.charAt(0).toUpperCase())
+          .join('') || '?';
+    }
+    showToast();
+  });
+
+  const pwForm = document.getElementById('pw-form') as HTMLFormElement | null;
+  pwForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const current = document.getElementById('pw-current') as HTMLInputElement | null;
+    const next = document.getElementById('pw-new') as HTMLInputElement | null;
+    const confirm = document.getElementById('pw-confirm') as HTMLInputElement | null;
+    if (!current || !next || !confirm) return;
+
+    setError(document.getElementById('pw-error'), '');
+    if (next.value !== confirm.value) {
+      setError(document.getElementById('pw-error'), 'Sababbin kalmomin sirri ba su dace ba');
+      return;
+    }
+    if (next.value.length < 8) {
+      setError(document.getElementById('pw-error'), 'Kalmar sirri ta fi gajarta (a kalla haruffa 8)');
+      return;
+    }
+
+    busy(pwForm, true);
+    const out = await post({
+      action: 'password',
+      currentPassword: current.value,
+      newPassword: next.value,
+      confirmPassword: confirm.value,
+    });
+    busy(pwForm, false);
+    if (!out.ok) {
+      setError(document.getElementById('pw-error'), out.message ?? 'An kasa canza kalmar sirri');
+      return;
+    }
+    current.value = '';
+    next.value = '';
+    confirm.value = '';
+    showToast();
+  });
+</script>
