@@ -125,7 +125,7 @@ const show = Boolean(breaking && articleId);
 <script>
   const DISMISS_KEY = 'yanci:breaking-dismissed';
 
-  const banner = document.getElementById<HTMLElement>('breaking-news-banner');
+  const banner = document.getElementById('breaking-news-banner') as HTMLElement | null;
   if (banner) {
     const hide = () => {
       banner.hidden = true;
