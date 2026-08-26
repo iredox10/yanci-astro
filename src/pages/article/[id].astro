@@ -3,6 +3,10 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import NewsCard from '../../components/NewsCard.astro';
 import LiveTimeline from '../../components/LiveTimeline.astro';
 import CommentsSection from '../../components/CommentsSection.astro';
+import AudioPlayer from '../../components/AudioPlayer';
+import AdSlot from '../../components/ads/AdSlot.astro';
+import Corrections from '../../components/Corrections.astro';
+import WhatsAppTipLine from '../../components/WhatsAppTipLine.astro';
 import { pillarAccent } from '../../data/schema';
 import { loadArticles, loadArticle, toCards } from '../../lib/content';
 
@@ -23,9 +27,33 @@ const liveUpdates = Array.isArray(article.liveUpdates) ? article.liveUpdates : [
 const words = (body ?? '').replace(/<[^>]*>/g, ' ').trim().split(/\s+/).filter(Boolean).length;
 const readTime = Math.max(1, Math.ceil(words / 200));
 
-const related = await toCards(
-  (await loadArticles()).filter((a) => String(a.$id ?? a.id) !== idStr).slice(0, 4),
-);
+const plainBody = (body ?? '')
+  .replace(/<(style|script)[\s\S]*?<\/\1>/gi, ' ')
+  .replace(/<[^>]*>/g, ' ')
+  .replace(/&nbsp;/g, ' ')
+  .replace(/&amp;/g, '&')
+  .replace(/&lt;/g, '<')
+  .replace(/&gt;/g, '>')
+  .replace(/&quot;/g, '"')
+  .replace(/&#39;/g, ''')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const tagList = Array.isArray(article.tags) ? article.tags : [];
+const corrections = Array.isArray((article as { corrections?: unknown }).corrections)
+  ? ((article as { corrections?: Array<{ date: string | Date; text: string }> }).corrections ?? [])
+  : undefined;
+
+const others = (await loadArticles()).filter((a) => String(a.$id ?? a.id) !== idStr);
+const relevance = (a: (typeof others)[number]) => {
+  const otherTags = Array.isArray(a.tags) ? a.tags : [];
+  return (
+    (String(a.section ?? '') === sectionLabel ? 20 : 0) +
+    otherTags.filter((t) => tagList.includes(t)).length * 5 +
+    (String(a.pillar ?? '') === String(article.pillar ?? '') ? 3 : 0)
+  );
+};
+const related = await toCards([...others].sort((a, b) => relevance(b) - relevance(a)).slice(0, 4));
 
 const formatDate = (iso?: string) =>
   iso ? new Date(iso).toLocaleDateString('ha-NG', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
@@ -42,6 +70,13 @@ const sectionLabel = String(article.section ?? article.pillar ?? 'Labarai');
   title={article.headline}
   description={article.trail}
   path={`/article/${idStr}`}
+  image={article.image}
+  ogType="article"
+  publishedTime={article.$createdAt}
+  modifiedTime={article.$updatedAt}
+  authorName={article.author}
+  tags={tagList}
+  section={sectionLabel}
 >
   <!-- Reading progress -->
   <div class="fixed left-0 top-0 z-50 h-1.5 w-full bg-gray-100">
@@ -130,6 +165,12 @@ const sectionLabel = String(article.section ?? article.pillar ?? 'Labarai');
         )}
       </div>
 
+      <Corrections corrections={corrections} className="mt-10" />
+
+      <AudioPlayer client:load title={article.headline} text={plainBody} />
+
+      <AdSlot variant="inline" slotId="article-inline" className="mt-10" />
+
       <!-- Live blog timeline -->
       {liveUpdates.length > 0 && (
         <section class="mt-14 border-t-4 border-gray-100 pt-10 md:mt-20">
@@ -147,6 +188,11 @@ const sectionLabel = String(article.section ?? article.pillar ?? 'Labarai');
             </a>
           ))}
         </div>
+      </div>
+
+      <!-- Reader tips -->
+      <div class="mt-14">
+        <WhatsAppTipLine />
       </div>
 
       <!-- Comments -->
