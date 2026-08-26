@@ -41,6 +41,7 @@ export function isAppwriteConfigured(): boolean {
 
 function databases(): Databases {
   if (!_databases) {
+    void tuneFetch();
     const client = new Client()
       .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
       .setProject(PUBLIC_APPWRITE_PROJECT_ID)
@@ -48,6 +49,23 @@ function databases(): Databases {
     _databases = new Databases(client);
   }
   return _databases;
+}
+
+let _fetchTuned = false;
+async function tuneFetch(): Promise<void> {
+  if (_fetchTuned) return;
+  _fetchTuned = true;
+  try {
+    const { Agent, setGlobalDispatcher } = await import('undici');
+    setGlobalDispatcher(
+      new Agent({
+        connect: { timeout: 4_000, family: 4 },
+        keepAliveTimeout: 60_000,
+      }),
+    );
+  } catch {
+    // undici unavailable — keep default fetch timeouts
+  }
 }
 
 interface CacheEntry<T> {
@@ -397,28 +415,31 @@ export async function getHighlights(limit = 20): Promise<HomepageHighlight[]> {
   const id = docCollection(PUBLIC_APPWRITE_COLLECTION_HIGHLIGHTS);
   const dbId = databaseId();
   if (!dbId || !id) return [];
+  const key = `highlights:${limit}`;
   try {
-    const { documents } = await databases().listDocuments(dbId, id, [
-      Query.limit(limit),
-    ]);
-    return (documents ?? [])
-      .filter((d) => d.active !== false)
-      .sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0))
-      .map((d) => ({
-        $id: d.$id,
-        tag: String(d.tag ?? ''),
-        title: String(d.title ?? ''),
-        copy: String(d.copy ?? ''),
-        icon: String(d.icon ?? 'trend'),
-        accent: String(d.accent ?? '#10b981'),
-        gradient: String(d.gradient ?? ''),
-        link: d.link ? String(d.link) : undefined,
-        order: Number(d.order ?? 0),
-        active: d.active !== false,
-      }));
+    return await cachedRead(key, 60_000, async () => {
+      const { documents } = await databases().listDocuments(dbId, id, [
+        Query.limit(limit),
+      ]);
+      return (documents ?? [])
+        .filter((d) => d.active !== false)
+        .sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0))
+        .map((d) => ({
+          $id: d.$id,
+          tag: String(d.tag ?? ''),
+          title: String(d.title ?? ''),
+          copy: String(d.copy ?? ''),
+          icon: String(d.icon ?? 'trend'),
+          accent: String(d.accent ?? '#10b981'),
+          gradient: String(d.gradient ?? ''),
+          link: d.link ? String(d.link) : undefined,
+          order: Number(d.order ?? 0),
+          active: d.active !== false,
+        }));
+    });
   } catch (error) {
     console.error('[appwrite] getHighlights failed', error);
-    return [];
+    return staleOr<HomepageHighlight[]>(key, []);
   }
 }
 
@@ -436,25 +457,28 @@ export async function getHomepageStats(limit = 20): Promise<HomepageStat[]> {
   const id = docCollection(PUBLIC_APPWRITE_COLLECTION_HOMEPAGE_STATS);
   const dbId = databaseId();
   if (!dbId || !id) return [];
+  const key = `hpstats:${limit}`;
   try {
-    const { documents } = await databases().listDocuments(dbId, id, [
-      Query.limit(limit),
-    ]);
-    return (documents ?? [])
-      .filter((d) => d.active !== false)
-      .sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0))
-      .map((d) => ({
-        $id: d.$id,
-        label: String(d.label ?? ''),
-        value: Number(d.value ?? 0),
-        suffix: String(d.suffix ?? ''),
-        icon: String(d.icon ?? 'article'),
-        order: Number(d.order ?? 0),
-        active: d.active !== false,
-      }));
+    return await cachedRead(key, 60_000, async () => {
+      const { documents } = await databases().listDocuments(dbId, id, [
+        Query.limit(limit),
+      ]);
+      return (documents ?? [])
+        .filter((d) => d.active !== false)
+        .sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0))
+        .map((d) => ({
+          $id: d.$id,
+          label: String(d.label ?? ''),
+          value: Number(d.value ?? 0),
+          suffix: String(d.suffix ?? ''),
+          icon: String(d.icon ?? 'article'),
+          order: Number(d.order ?? 0),
+          active: d.active !== false,
+        }));
+    });
   } catch (error) {
     console.error('[appwrite] getHomepageStats failed', error);
-    return [];
+    return staleOr<HomepageStat[]>(key, []);
   }
 }
 
@@ -482,21 +506,24 @@ export async function getSportsData(): Promise<SportsData | null> {
   const id = docCollection(PUBLIC_APPWRITE_COLLECTION_SPORTS);
   const dbId = databaseId();
   if (!dbId || !id) return null;
+  const key = 'sports';
   try {
-    const { documents } = await databases().listDocuments(dbId, id, [
-      Query.limit(1),
-    ]);
-    const doc = documents?.[0];
-    if (!doc) return null;
-    return {
-      $id: doc.$id,
-      liveMatches: parseJsonArray(doc.liveMatches) ?? [],
-      standings: parseJsonArray(doc.standings) ?? [],
-      fixtures: parseJsonArray(doc.fixtures) ?? [],
-    };
+    return await cachedRead(key, 60_000, async () => {
+      const { documents } = await databases().listDocuments(dbId, id, [
+        Query.limit(1),
+      ]);
+      const doc = documents?.[0];
+      if (!doc) throw new Error('no sports doc');
+      return {
+        $id: doc.$id,
+        liveMatches: parseJsonArray(doc.liveMatches) ?? [],
+        standings: parseJsonArray(doc.standings) ?? [],
+        fixtures: parseJsonArray(doc.fixtures) ?? [],
+      };
+    });
   } catch (error) {
     console.error('[appwrite] getSportsData failed', error);
-    return null;
+    return staleOr<SportsData | null>(key, null);
   }
 }
 
