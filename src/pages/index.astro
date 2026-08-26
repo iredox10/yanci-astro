@@ -2,6 +2,9 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import NewsCard from '../components/NewsCard.astro';
 import OpinionCard from '../components/OpinionCard.astro';
+import BreakingNewsBanner from '../components/BreakingNewsBanner.astro';
+import AdSlot from '../components/ads/AdSlot.astro';
+import PwaRegister from '../components/PwaRegister.astro';
 import HomeTabs from '../components/home/HomeTabs';
 import StatCounter from '../components/home/StatCounter';
 import {
@@ -73,6 +76,8 @@ const sportPattern =
   description="Yanci: Jaridar Hausa mai zuwa. Labarai, siyasa, wasanni da al’adu a yaren Hausa, kai tsaye daga Najeriya."
   path="/"
 >
+  <BreakingNewsBanner />
+
   <!-- Breaking News Ticker -->
   <section class="sticky top-[48px] z-30 border-b border-gray-200/50 bg-white/80 shadow-sm backdrop-blur-md">
     <div class="mx-auto max-w-[1400px] px-4 md:px-6">
@@ -95,6 +100,8 @@ const sportPattern =
       </div>
     </div>
   </section>
+
+  <AdSlot variant="banner" slotId="home-top" />
 
   <!-- Hero -->
   <section class="relative overflow-hidden pb-16 pt-8">
@@ -211,6 +218,8 @@ const sportPattern =
       </div>
     </div>
   </section>
+
+  <AdSlot variant="banner" slotId="home-mid" />
 
   <!-- Sport -->
   <section class="relative overflow-hidden bg-gradient-to-b from-[#0f3036] via-[#1a454c] to-[#0f3036] py-20">
@@ -480,4 +489,6 @@ const sportPattern =
       <p class="mt-4 text-xs text-gray-500">Masu karatu 50,000+ sun riga sun yi rajista. Kana iya soke rajista a kowane lokaci.</p>
     </div>
   </section>
+
+  <PwaRegister />
 </BaseLayout>
