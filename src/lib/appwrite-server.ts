@@ -50,6 +50,30 @@ function databases(): Databases {
   return _databases;
 }
 
+interface CacheEntry<T> {
+  value: T;
+  expires: number;
+}
+
+const _readCache = new Map<string, CacheEntry<unknown>>();
+
+async function cachedRead<T>(
+  key: string,
+  ttlMs: number,
+  load: () => Promise<T>,
+): Promise<T> {
+  const hit = _readCache.get(key) as CacheEntry<T> | undefined;
+  if (hit && hit.expires > Date.now()) return hit.value;
+  const value = await load();
+  _readCache.set(key, { value, expires: Date.now() + ttlMs });
+  return value;
+}
+
+function staleOr<T>(key: string, fallback: T): T {
+  const hit = _readCache.get(key) as CacheEntry<T> | undefined;
+  return hit ? hit.value : fallback;
+}
+
 type Collections = {
   databaseId: string;
   articles: string;
@@ -116,15 +140,19 @@ export function toArticle(doc: Record<string, unknown>): Article {
 export async function getArticles(limit = 200): Promise<Article[]> {
   const c = collections();
   if (!c) return [];
+  const key = `articles:${limit}`;
   try {
-    const { documents } = await databases().listDocuments(c.databaseId, c.articles, [
-      Query.orderDesc('$createdAt'),
-      Query.limit(Math.min(limit, 100)),
-    ]);
-    return (documents ?? []).map((doc) => toArticle(doc as unknown as Record<string, unknown>));
+    return await cachedRead(key, 30_000, async () => {
+      const { documents } = await databases().listDocuments(c.databaseId, c.articles, [
+        Query.orderDesc('$createdAt'),
+        Query.limit(Math.min(limit, 100)),
+      ]);
+      if (!documents || documents.length === 0) throw new Error('no articles');
+      return (documents ?? []).map((doc) => toArticle(doc as unknown as Record<string, unknown>));
+    });
   } catch (error) {
     console.error('[appwrite] getArticles failed', error);
-    return [];
+    return staleOr<Article[]>(key, []);
   }
 }
 
@@ -132,8 +160,10 @@ export async function getArticleById(id: string): Promise<Article | null> {
   const c = collections();
   if (!c) return null;
   try {
-    const doc = await databases().getDocument(c.databaseId, c.articles, id);
-    return toArticle(doc as unknown as Record<string, unknown>);
+    return await cachedRead(`article:id:${id}`, 30_000, async () => {
+      const doc = await databases().getDocument(c.databaseId, c.articles, id);
+      return toArticle(doc as unknown as Record<string, unknown>);
+    });
   } catch {
     return null;
   }
@@ -143,13 +173,14 @@ export async function getArticleBySlug(slug: string): Promise<Article | null> {
   const c = collections();
   if (!c) return null;
   try {
-    const { documents } = await databases().listDocuments(c.databaseId, c.articles, [
-      Query.equal('slug', slug),
-      Query.limit(1),
-    ]);
-    return documents?.[0]
-      ? toArticle(documents[0] as unknown as Record<string, unknown>)
-      : null;
+    return await cachedRead(`article:slug:${slug}`, 30_000, async () => {
+      const { documents } = await databases().listDocuments(c.databaseId, c.articles, [
+        Query.equal('slug', slug),
+        Query.limit(1),
+      ]);
+      if (!documents?.[0]) throw new Error('not found');
+      return toArticle(documents[0] as unknown as Record<string, unknown>);
+    });
   } catch {
     return null;
   }
@@ -229,21 +260,25 @@ export async function trackView(input: {
 export async function getMostRead(limit = 10): Promise<{ articleId: string; views: number }[]> {
   const c = collections();
   if (!c || !c.views) return [];
+  const key = `mostread:${limit}`;
+  const viewsId = c.views;
   try {
-    const { documents } = await databases().listDocuments(c.databaseId, c.views, [
-      Query.limit(1000),
-    ]);
-    const counts = new Map<string, number>();
-    for (const doc of documents ?? []) {
-      const id = (doc as any).article_id;
-      if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
-    }
-    return [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, limit)
-      .map(([articleId, views]) => ({ articleId, views }));
+    return await cachedRead(key, 60_000, async () => {
+      const { documents } = await databases().listDocuments(c.databaseId, viewsId, [
+        Query.limit(1000),
+      ]);
+      const counts = new Map<string, number>();
+      for (const doc of documents ?? []) {
+        const id = (doc as any).article_id;
+        if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+      }
+      return [...counts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, limit)
+        .map(([articleId, views]) => ({ articleId, views }));
+    });
   } catch {
-    return [];
+    return staleOr<{ articleId: string; views: number }[]>(key, []);
   }
 }
 
@@ -469,22 +504,25 @@ export async function getSettings(limit = 100): Promise<Record<string, string>> 
   const id = docCollection(PUBLIC_APPWRITE_COLLECTION_SETTINGS);
   const dbId = databaseId();
   if (!dbId || !id) return {};
+  const key = 'settings';
   try {
-    const { documents } = await databases().listDocuments(dbId, id, [
-      Query.limit(1),
-    ]);
-    const doc = documents?.[0];
-    if (!doc) return {};
-    const out: Record<string, string> = {};
-    for (const [key, value] of Object.entries(doc)) {
-      if (key.startsWith('$')) continue;
-      if (value === null || value === undefined) continue;
-      out[key] = String(value);
-    }
-    return out;
+    return await cachedRead(key, 60_000, async () => {
+      const { documents } = await databases().listDocuments(dbId, id, [
+        Query.limit(1),
+      ]);
+      const doc = documents?.[0];
+      if (!doc) return {};
+      const out: Record<string, string> = {};
+      for (const [k, value] of Object.entries(doc)) {
+        if (k.startsWith('$')) continue;
+        if (value === null || value === undefined) continue;
+        out[k] = String(value);
+      }
+      return out;
+    });
   } catch (error) {
     console.error('[appwrite] getSettings failed', error);
-    return {};
+    return staleOr<Record<string, string>>(key, {});
   }
 }
 
