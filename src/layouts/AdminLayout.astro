@@ -101,7 +101,7 @@ const initial = userName.charAt(0).toUpperCase();
     <link rel="icon" type="image/svg+xml" href="/icons/yc-mark.svg" />
     <title>{title} — Yanci Admin</title>
   </head>
-  <body class="h-screen overflow-hidden bg-gray-100 font-sans text-yanci-dark">
+  <body class="flex h-screen overflow-hidden bg-gray-100 font-sans text-yanci-dark">
     <div id="admin-overlay" class="fixed inset-0 z-40 hidden bg-black/50 transition-opacity duration-300 lg:hidden"></div>
 
     <aside
@@ -202,23 +202,23 @@ const initial = userName.charAt(0).toUpperCase();
       </main>
     </div>
 
-    <script>
+    <script is:inline>
       const sidebar = document.getElementById('admin-sidebar');
       const overlay = document.getElementById('admin-overlay');
       const openBtn = document.getElementById('sidebar-open');
       const closeBtn = document.getElementById('sidebar-close');
-
-      const setOpen = (open: boolean) => {
+      function setOpen(open) {
         if (!sidebar || !overlay) return;
         sidebar.classList.toggle('-translate-x-full', !open);
         overlay.classList.toggle('hidden', !open);
-      };
-
+        document.body.style.overflow = open && window.innerWidth < 1024 ? 'hidden' : '';
+      }
       openBtn?.addEventListener('click', () => setOpen(true));
       closeBtn?.addEventListener('click', () => setOpen(false));
       overlay?.addEventListener('click', () => setOpen(false));
       sidebar?.addEventListener('click', (e) => {
-        if ((e.target as HTMLElement).closest('a') && window.innerWidth < 1024) setOpen(false);
+        const t = e.target;
+        if (t && t.closest && t.closest('a') && window.innerWidth < 1024) setOpen(false);
       });
     </script>
   </body>

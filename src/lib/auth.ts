@@ -6,6 +6,21 @@ import {
   PUBLIC_APPWRITE_DATABASE_ID,
 } from 'astro:env/client';
 
+let _authFetchTuned = false;
+async function tuneAuthFetch(): Promise<void> {
+  if (_authFetchTuned) return;
+  _authFetchTuned = true;
+  try {
+    const { Agent, setGlobalDispatcher } = await import('undici');
+    setGlobalDispatcher(
+      new Agent({ connect: { timeout: 4_000, family: 4 }, keepAliveTimeout: 60_000 }),
+    );
+  } catch {
+    // undici unavailable — keep default fetch timeouts
+  }
+}
+void tuneAuthFetch();
+
 /**
  * Server-side session verification. The legacy app trusted client-side auth
  * state ("anyone logged in is an editor"); here every admin call re-verifies
@@ -128,6 +143,7 @@ export async function createAdminSession(
   email: string,
   password: string,
 ): Promise<{ token: string; user: SessionUser } | { ok: false; status: number }> {
+  await tuneAuthFetch();
   if (!PUBLIC_APPWRITE_ENDPOINT || !PUBLIC_APPWRITE_PROJECT_ID) {
     return { ok: false, status: 503 };
   }
@@ -169,6 +185,7 @@ function parseSetCookie(headers: Headers, name: string): string | null {
 export async function verifySession(
   token: string,
 ): Promise<Omit<SessionUser, 'role'> | null> {
+  await tuneAuthFetch();
   if (!PUBLIC_APPWRITE_ENDPOINT || !PUBLIC_APPWRITE_PROJECT_ID) return null;
   try {
     const client = new Client()
@@ -188,6 +205,7 @@ export async function verifySession(
 }
 
 export async function roleForUser(userId: string): Promise<string | null> {
+  await tuneAuthFetch();
   if (!PUBLIC_APPWRITE_DATABASE_ID || !APPWRITE_COLLECTION_ROLES) return null;
   try {
     const client = new Client()
