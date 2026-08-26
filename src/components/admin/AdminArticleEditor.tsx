@@ -1,5 +1,19 @@
 import { useRef, useState } from 'react';
 import RevisionHistoryDrawer from './editor/RevisionHistoryDrawer';
+import EditorialNotes from './editor/EditorialNotes';
+import InsertMenu, {
+  applyInsert,
+  filterCommands,
+  slashQueryBefore,
+  type InsertCommand,
+} from './editor/InsertMenu';
+
+const SLASH_LINE_HEIGHT = 20;
+
+function slashTop(el: HTMLTextAreaElement, caret: number): number {
+  const line = el.value.slice(0, caret).split('\n').length;
+  return Math.min(Math.max(8 + (line - 1) * SLASH_LINE_HEIGHT - el.scrollTop, 4), 240);
+}
 
 const SNAPSHOT_FIELDS = [
   'headline',
@@ -87,9 +101,77 @@ export default function AdminArticleEditor({ initial }: { initial?: Partial<Arti
   const [historyOpen, setHistoryOpen] = useState(false);
   const lastSavedRef = useRef<ArticleDraft | null>(null);
   const snapshotBusyRef = useRef(false);
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+  const [slash, setSlash] = useState<{ open: boolean; query: string; index: number; top: number }>({
+    open: false,
+    query: '',
+    index: 0,
+    top: 8,
+  });
+  const slashCommands = filterCommands(slash.query);
+  const slashSelected = slashCommands.length > 0 ? Math.min(slash.index, slashCommands.length - 1) : 0;
 
   const set = <K extends keyof ArticleDraft>(key: K, value: ArticleDraft[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
+
+  function onBodyChange(e: React.ChangeEvent<HTMLTextAreaElement>): void {
+    const el = e.currentTarget;
+    const value = el.value;
+    const caret = el.selectionStart ?? value.length;
+    set('body', value);
+    try {
+      const query = slashQueryBefore(value, caret);
+      if (query !== null) {
+        setSlash({ open: true, query, index: 0, top: slashTop(el, caret) });
+      } else {
+        setSlash((s) => (s.open ? { ...s, open: false } : s));
+      }
+    } catch {
+      setSlash((s) => ({ ...s, open: false }));
+    }
+  }
+
+  function onBodyKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
+    if (!slash.open || slashCommands.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSlash((s) => ({ ...s, index: (slashSelected + 1) % slashCommands.length }));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSlash((s) => ({
+        ...s,
+        index: (slashSelected - 1 + slashCommands.length) % slashCommands.length,
+      }));
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      applyPicked(slashCommands[slashSelected]);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setSlash((s) => ({ ...s, open: false }));
+    }
+  }
+
+  function applyPicked(cmd: InsertCommand): void {
+    try {
+      const el = bodyRef.current;
+      const caret = el?.selectionStart ?? form.body.length;
+      const next = applyInsert(form.body, caret, slash.query.length, cmd);
+      set('body', next.value);
+      setSlash({ open: false, query: '', index: 0, top: slash.top });
+      if (el) {
+        requestAnimationFrame(() => {
+          try {
+            el.focus();
+            el.setSelectionRange(next.caret, next.caret);
+          } catch {
+            // element detached — nothing to restore
+          }
+        });
+      }
+    } catch {
+      setSlash((s) => ({ ...s, open: false }));
+    }
+  }
 
   async function maybeSnapshot(current: ArticleDraft): Promise<void> {
     const articleId = current.$id;
@@ -280,12 +362,27 @@ export default function AdminArticleEditor({ initial }: { initial?: Partial<Arti
 
         <label className="block sm:col-span-4">
           <span className={labelClass}>Body (HTML)</span>
-          <textarea
-            value={form.body}
-            onChange={(e) => set('body', e.target.value)}
-            rows={18}
-            className={`${inputClass} font-mono text-xs leading-relaxed`}
-          />
+          <div className="relative">
+            <textarea
+              ref={bodyRef}
+              value={form.body}
+              onChange={onBodyChange}
+              onKeyDown={onBodyKeyDown}
+              onBlur={() => setSlash((s) => (s.open ? { ...s, open: false } : s))}
+              rows={18}
+              className={`${inputClass} font-mono text-xs leading-relaxed`}
+            />
+            {slash.open && slashCommands.length > 0 && (
+              <InsertMenu
+                commands={slashCommands}
+                selected={slashSelected}
+                top={slash.top}
+                onHover={(i) => setSlash((s) => ({ ...s, index: i }))}
+                onPick={applyPicked}
+              />
+            )}
+          </div>
+          <p className="mt-1 text-[11px] text-yanci-primary/40">Rubuta "/" a jiki don shiga tsokaci.</p>
         </label>
 
         <label className="block sm:col-span-2">
@@ -345,6 +442,10 @@ export default function AdminArticleEditor({ initial }: { initial?: Partial<Arti
             />
             Sensitive content
           </label>
+        </div>
+
+        <div className="sm:col-span-6">
+          <EditorialNotes key={form.$id ?? 'new'} scope={form.$id ?? 'new'} />
         </div>
       </div>
 
