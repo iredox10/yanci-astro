@@ -1,0 +1,24 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import VideoManager from '../../components/admin/VideoManager';
+import { requireUser } from '@lib/auth';
+import { listVideos } from '@lib/videos';
+
+export const prerender = false;
+
+const videos = await listVideos();
+const auth = await requireUser(Astro.request);
+const canDelete = auth.ok && (auth.user.role === 'super_admin' || auth.user.role === 'managing_editor');
+---
+
+<AdminLayout title="Multimedia" active="multimedia">
+  <div class="mb-6 border-b border-yanci-primary/15 pb-4">
+    <h1 class="font-serif text-2xl font-bold text-yanci-primary">Multimedia — Bidiyo</h1>
+    <p class="mt-1 max-w-xl text-sm text-yanci-primary/60">
+      Gudanar da bidiyon YouTube na shafin: ƙara sabo, gyara, tsara jeri ko goge. Bidiyon da aka
+      buga ne kawai suke fitowa wa masu karatu.
+    </p>
+  </div>
+
+  <VideoManager client:load initialVideos={videos} canDelete={canDelete} />
+</AdminLayout>
