@@ -44,10 +44,8 @@ type IconCmp = ComponentType<{ className?: string }>;
 const { title = 'Admin' } = Astro.props;
 const auth = await requireUser(Astro.request);
 
-const ic = (Icon: IconCmp) =>
-  ({ __html: renderToStaticMarkup(createElement(Icon, { className: 'w-5 h-5 shrink-0' })) }) as {
-    __html: string;
-  };
+const ic = (Icon: IconCmp, cls = 'w-5 h-5 shrink-0') =>
+  renderToStaticMarkup(createElement(Icon, { className: cls }));
 
 type NavEntry =
   | { header: string }
@@ -126,7 +124,7 @@ const initial = userName.charAt(0).toUpperCase();
           class="rounded-full p-2 transition-colors hover:bg-white/10 lg:hidden"
           aria-label="Close menu"
         >
-          <span set:html={ic(FaXmark)} />
+          <span set:html={ic(FaXmark, 'w-6 h-6')} />
         </button>
       </div>
 
@@ -189,7 +187,7 @@ const initial = userName.charAt(0).toUpperCase();
           class="rounded-md p-2 transition-colors hover:bg-white/10"
           aria-label="Open menu"
         >
-          <span set:html={ic(FaBars)} />
+          <span set:html={ic(FaBars, 'w-6 h-6')} />
         </button>
         <h1 class="font-serif text-xl font-black tracking-tighter">
           Yanci<span class="text-[#c59d5f]">.</span>

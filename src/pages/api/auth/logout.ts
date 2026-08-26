@@ -18,12 +18,27 @@ export const POST: APIRoute = async ({ request }) => {
       /* session already gone */
     }
   }
+  const cookie = adminCookieHeader('', 0, true);
+  const acceptsHtml = (request.headers.get('accept') ?? '').includes('text/html');
+  const isDocumentPost = request.headers.get('sec-fetch-dest') === 'document';
+
+  if (acceptsHtml || isDocumentPost) {
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: '/admin/login',
+        'Cache-Control': 'no-store',
+        'Set-Cookie': cookie,
+      },
+    });
+  }
+
   return new Response(JSON.stringify({ ok: true }), {
     status: 200,
     headers: {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-store',
-      'Set-Cookie': adminCookieHeader('', 0, true),
+      'Set-Cookie': cookie,
     },
   });
 };
