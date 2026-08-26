@@ -1,109 +1,160 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import StatCard from '../../components/admin/StatCard.astro';
-import StatusBadge from '../../components/admin/StatusBadge.astro';
+import { FaArrowTrendUp, FaEye, FaFileLines } from 'react-icons/fa6';
 import { getArticles, getMostRead } from '@lib/appwrite-server';
-import { pillarColors } from '../../data/schema';
 
 export const prerender = false;
 
 const articles = await getArticles(200);
-const mostRead = await getMostRead(10);
+const mostRead = await getMostRead(5);
 
-const published = articles.filter((a) => a.status === 'published' || a.isLive);
-const drafts = articles.filter((a) => a.status === 'draft' || (!a.isLive && a.status !== 'scheduled'));
-const scheduled = articles.filter((a) => a.status === 'scheduled');
+const liveArticles = articles.filter((a) => a.isLive);
+const newsPillar = articles.filter((a) => String(a.pillar ?? 'news') === 'news');
 
-const byPillar = new Map<string, number>();
-for (const a of articles) {
-  const p = String(a.pillar ?? 'news');
-  byPillar.set(p, (byPillar.get(p) ?? 0) + 1);
-}
+const readById = new Map(mostRead.map((m) => [m.articleId, m.views]));
+const totalViews = mostRead.reduce((sum, m) => sum + m.views, 0);
+const fmt = new Intl.NumberFormat('en-GB');
+
+const titleFor = (a: { headline?: string; ogTitle?: string }) =>
+  String(a.headline ?? a.ogTitle ?? 'Untitled');
+const pillarClass = (pillar: string) =>
+  pillar === 'news'
+    ? 'bg-red-100 text-red-800'
+    : pillar === 'sport'
+      ? 'bg-blue-100 text-blue-800'
+      : 'bg-gray-100 text-gray-800';
 
 const recent = [...articles]
   .sort((a, b) => String(b.$createdAt ?? '').localeCompare(String(a.$createdAt ?? '')))
-  .slice(0, 8);
-
-const readById = new Map(mostRead.map((m) => [m.articleId, m.views]));
-const fmt = new Intl.NumberFormat('en-GB');
-const day = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-const titleFor = (a: { headline?: string; ogTitle?: string }) => String(a.headline ?? a.ogTitle ?? 'Untitled');
+  .slice(0, 5);
 ---
 
 <AdminLayout title="Dashboard" active="dashboard">
-  <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-    <StatCard label="Total" value={fmt.format(articles.length)} />
-    <StatCard label="Published" value={fmt.format(published.length)} />
-    <StatCard label="Drafts" value={fmt.format(drafts.length)} />
-    <StatCard label="Scheduled" value={fmt.format(scheduled.length)} />
+  <div class="flex-1 space-y-6 p-4 md:space-y-8 md:p-8">
+    <div>
+      <h2 class="text-xl font-bold text-gray-800 md:text-2xl">Dashboard Overview</h2>
+      <p class="text-sm text-gray-500 md:text-base">Welcome back.</p>
+    </div>
+
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-4">
+      <StatCard
+        label="Total Articles"
+        value={fmt.format(articles.length)}
+        icon={FaFileLines}
+        color="bg-blue-500"
+      />
+      <StatCard
+        label="Live Stories"
+        value={fmt.format(liveArticles.length)}
+        icon={FaArrowTrendUp}
+        color="bg-red-500"
+      />
+      <StatCard
+        label="News Pillar"
+        value={fmt.format(newsPillar.length)}
+        icon={FaEye}
+        color="bg-green-500"
+      />
+      <div class="relative col-span-1 flex flex-col justify-between overflow-hidden rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:col-span-2 lg:col-span-1 md:p-6">
+        <div class="z-10">
+          <p class="text-xs font-medium uppercase tracking-wider text-gray-500 md:text-sm">
+            Page Views (tracked)
+          </p>
+          <h3 class="mt-1 text-2xl font-bold text-gray-900 md:text-3xl">{fmt.format(totalViews)}</h3>
+          {totalViews > 0 ? (
+            <span class="text-xs font-bold text-green-500">↑ Real-time data</span>
+          ) : (
+            <span class="text-xs font-bold text-gray-400">No views yet</span>
+          )}
+        </div>
+        <div class="absolute -bottom-4 -right-4 z-0 h-32 w-32 rounded-full bg-green-50 blur-2xl"></div>
+      </div>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border border-gray-200 bg-white p-4 shadow-sm md:p-6">
+      <h3 class="mb-4 text-base font-bold text-[#c70000] md:text-lg">Most Read / Trending</h3>
+      {mostRead.length > 0 ? (
+        <ul class="mb-6 space-y-3">
+          {mostRead.map((m, idx) => {
+            const article = articles.find((x) => x.$id === m.articleId);
+            return (
+              <li class="group flex cursor-pointer items-center gap-4 rounded-lg p-2 transition-colors hover:bg-gray-50">
+                <span class="text-2xl font-black text-gray-200 transition-colors group-hover:text-[#c59d5f]">
+                  {idx + 1}
+                </span>
+                <span class="line-clamp-1 flex-1 font-bold text-gray-800">
+                  {article ? titleFor(article) : 'Deleted article'}
+                </span>
+                <span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-bold text-gray-500">
+                  {fmt.format(m.views)} views
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p class="mb-6 text-sm text-gray-400">
+          Babu bayanan karatu tukuna. Masu karatu ba su karanta labarai tukuna.
+        </p>
+      )}
+
+      <h3 class="mb-4 border-t border-gray-100 pt-4 text-base font-bold md:text-lg">
+        Recent Articles
+      </h3>
+      <div class="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+        <table class="w-full min-w-[600px] text-left text-sm">
+          <thead class="bg-gray-50 uppercase tracking-wider text-gray-600">
+            <tr>
+              <th class="p-3">Title</th>
+              <th class="p-3">Pillar</th>
+              <th class="hidden p-3 sm:table-cell">Type</th>
+              <th class="p-3">Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {recent.map((article) => {
+              const pillar = String(article.pillar ?? 'news');
+              const isLive = Boolean(article.isLive);
+              return (
+                <tr class="hover:bg-gray-50">
+                  <td class="max-w-[200px] truncate p-3 font-medium text-gray-900 md:max-w-md">
+                    <a href={`/admin/articles/${article.$id}`} class="hover:underline">
+                      {titleFor(article)}
+                    </a>
+                  </td>
+                  <td class="p-3 text-xs capitalize">
+                    <span class:list={['rounded-full px-2 py-1 font-bold', pillarClass(pillar)]}>
+                      {pillar}
+                    </span>
+                  </td>
+                  <td class="hidden p-3 capitalize text-gray-500 sm:table-cell">
+                    {String(article.format ?? 'Standard')}
+                  </td>
+                  <td class="p-3">
+                    {isLive ? (
+                      <span class="flex items-center gap-1 text-[10px] font-bold text-red-600 md:text-xs">
+                        <span class="h-2 w-2 animate-pulse rounded-full bg-red-600"></span> LIVE
+                      </span>
+                    ) : (
+                      <span class="text-[10px] font-bold uppercase tracking-tight text-green-600 md:text-xs">
+                        {article.status === 'scheduled' ? 'Scheduled' : article.status === 'draft' ? 'Draft' : 'Published'}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {recent.length === 0 && (
+              <tr>
+                <td colspan="4" class="p-4 text-center text-gray-500">
+                  No articles found.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
-
-  <section class="mt-8 grid gap-8 lg:grid-cols-2">
-    <div>
-      <h2 class="border-b border-yanci-primary/20 pb-2 font-serif text-lg font-bold text-yanci-primary">
-        By pillar
-      </h2>
-      <ul class="mt-3 space-y-2">
-        {[...byPillar.entries()].sort((x, y) => y[1] - x[1]).map(([pillar, count]) => (
-          <li class="flex items-center justify-between text-sm">
-            <span class="flex items-center gap-2">
-              <span style={{ backgroundColor: pillarColors(pillar).main }} class="inline-block size-2.5 rounded-full" />
-              <span class="capitalize text-yanci-dark/80">{pillar}</span>
-            </span>
-            <span class="font-semibold text-yanci-primary">{count}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-    <div>
-      <h2 class="border-b border-yanci-primary/20 pb-2 font-serif text-lg font-bold text-yanci-primary">
-        Most read
-      </h2>
-      <ul class="mt-3 space-y-2">
-        {mostRead.length === 0 && (
-          <li class="text-sm text-yanci-primary/50">No view data yet.</li>
-        )}
-        {mostRead.map((m, i) => {
-          const article = articles.find((x) => x.$id === m.articleId);
-          return (
-            <li class="flex items-center gap-3 text-sm">
-              <span class="w-5 font-serif font-bold text-yanci-accent">{i + 1}</span>
-              <a
-                href={article ? `/admin/articles/${article.$id}` : '#'}
-                class="flex-1 truncate text-yanci-dark/80 hover:text-yanci-primary"
-              >
-                {article ? titleFor(article) : 'Deleted article'}
-              </a>
-              <span class="text-xs text-yanci-primary/50">{fmt.format(m.views)} views</span>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  </section>
-
-  <section class="mt-8">
-    <h2 class="border-b border-yanci-primary/20 pb-2 font-serif text-lg font-bold text-yanci-primary">
-      Recent articles
-    </h2>
-    <ul class="mt-3 divide-y divide-yanci-primary/10">
-      {recent.map((a) => (
-        <li class="flex items-center gap-4 py-2.5 text-sm">
-          <a
-            href={`/admin/articles/${a.$id}`}
-            class="flex-1 truncate font-medium text-yanci-dark/85 hover:text-yanci-primary"
-          >
-            {titleFor(a)}
-          </a>
-          <StatusBadge status={String(a.status ?? (a.isLive ? 'published' : 'draft'))} />
-          <span class="w-16 text-right text-xs text-yanci-primary/50">
-            {a.$id && readById.get(a.$id) ? fmt.format(readById.get(a.$id)!) : '—'}
-          </span>
-          <span class="w-28 text-right text-xs text-yanci-primary/50">
-            {day.format(new Date(String(a.$createdAt ?? '')))}
-          </span>
-        </li>
-      ))}
-    </ul>
-  </section>
 </AdminLayout>

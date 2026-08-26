@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FaEnvelope, FaKey } from 'react-icons/fa6';
 
 interface Props {
   next?: string;
@@ -21,53 +22,73 @@ export default function AdminLogin({ next = '/admin/dashboard' }: Props) {
         body: JSON.stringify({ email, password }),
       });
       const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.message ?? 'Sign in failed');
+      if (!res.ok || !data.ok) throw new Error(data.message ?? 'An sami matsala. Gwada sake.');
       window.location.assign(next);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign in failed');
+      setError(err instanceof Error ? err.message : 'An sami matsala. Gwada sake.');
       setBusy(false);
     }
   }
 
   return (
-    <form onSubmit={submit} className="mt-6 space-y-4">
-      <label className="block">
-        <span className="text-xs font-semibold uppercase tracking-wide text-yanci-primary/70">
-          Email
-        </span>
+    <form onSubmit={submit} className="space-y-5">
+      <div>
+        <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700">
+          <FaEnvelope className="mr-1 inline h-3 w-3 text-[#c59d5f]" /> Imel
+        </label>
         <input
           type="email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            setError(null);
+          }}
+          placeholder="admin@yanci.ng"
           required
           autoComplete="username"
-          className="mt-1 w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40"
+          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm transition focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#c59d5f]"
         />
-      </label>
-      <label className="block">
-        <span className="text-xs font-semibold uppercase tracking-wide text-yanci-primary/70">
-          Password
-        </span>
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700">
+          <FaKey className="mr-1 inline h-3 w-3 text-[#c59d5f]" /> Kalmar Sirri
+        </label>
         <input
           type="password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => {
+            setPassword(e.target.value);
+            setError(null);
+          }}
+          placeholder="••••••••"
           required
           autoComplete="current-password"
-          className="mt-1 w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40"
+          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm transition focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#c59d5f]"
         />
-      </label>
+      </div>
+
+      <div className="flex justify-end">
+        <a
+          href="/admin/forgot-password"
+          className="text-xs font-medium text-[#c59d5f] transition-colors hover:text-[#b0884a]"
+        >
+          Manta kalmar sirri?
+        </a>
+      </div>
+
       {error && (
-        <p className="border border-yanci-red/30 bg-yanci-red/10 px-3 py-2 text-sm text-yanci-red">
+        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
           {error}
-        </p>
+        </div>
       )}
+
       <button
         type="submit"
-        disabled={busy}
-        className="w-full bg-yanci-primary px-4 py-2.5 text-sm font-bold uppercase tracking-wide text-yanci-paper transition-colors hover:bg-yanci-primary/90 disabled:opacity-50"
+        disabled={busy || !email || !password}
+        className="w-full rounded-xl bg-[#0f3036] py-3.5 text-sm font-bold tracking-wide text-white transition-colors hover:bg-[#1a4e56] disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {busy ? 'Signing in…' : 'Sign in'}
+        {busy ? 'Ana shiga...' : 'Shiga Tsarin'}
       </button>
     </form>
   );

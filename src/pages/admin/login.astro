@@ -18,30 +18,29 @@ if (auth.ok) {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sign in — Yanci Admin</title>
+    <link rel="icon" type="image/svg+xml" href="/icons/yc-mark.svg" />
+    <title>Shiga — Yanci Admin</title>
   </head>
-  <body class="bg-yanci-paper text-yanci-dark">
-    <div class="flex min-h-screen flex-col items-center justify-center px-4">
-      <a href="/" class="mb-8 flex items-center gap-2">
-        <span class="font-serif text-3xl font-bold text-yanci-primary">Yanci</span>
-        <span class="rounded-sm bg-yanci-accent px-2 py-0.5 text-xs font-bold uppercase tracking-widest text-yanci-primary">
-          Admin
-        </span>
-      </a>
-      <div class="w-full max-w-sm border border-yanci-primary/15 bg-white/60 p-6">
-        <h1 class="font-serif text-xl font-bold text-yanci-primary">Sign in</h1>
-        <p class="mt-1 text-sm text-yanci-primary/60">
-          Use your Yanci account credentials. Only editorial roles are allowed.
-        </p>
-        <AdminLogin client:load next={next} />
+  <body class="bg-[#0f3036] text-yanci-dark">
+    <div class="flex min-h-screen items-center justify-center p-4">
+      <div class="w-full max-w-md">
+        <div class="mb-8 text-center">
+          <div class="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10">
+            <svg class="h-8 w-8 text-[#c59d5f]" viewBox="0 0 448 512" fill="currentColor" aria-hidden="true"><path d="M144 144v48H304V144c0-44.2-35.8-80-80-80s-80 35.8-80 80zM80 192V144C80 64.5 144.5 0 224 0s144 64.5 144 144v48h16c35.3 0 64 28.7 64 64V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V256c0-35.3 28.7-64 64-64H80z"/></svg>
+          </div>
+          <h1 class="text-2xl font-black tracking-tight text-white">Yanci Admin</h1>
+          <p class="mt-1 text-sm text-white/50">Shigar da imel da kalmar sirri don shiga</p>
+        </div>
+
+        <div class="rounded-2xl bg-white p-8 shadow-2xl">
+          <AdminLogin client:load next={next} />
+          <div class="mt-6 text-center">
+            <a href="/" class="text-xs text-gray-400 transition-colors hover:text-[#0f3036]">
+              &larr; Koma Shafin Jama'a
+            </a>
+          </div>
+        </div>
       </div>
-      <a
-        href="/admin/forgot-password"
-        class="mt-4 text-sm text-yanci-primary/60 hover:text-yanci-primary"
-      >
-        An manta kalmar shiga?
-      </a>
-      <a href="/" class="mt-6 text-sm text-yanci-primary/60 hover:text-yanci-primary">← Back to site</a>
     </div>
   </body>
 </html>
