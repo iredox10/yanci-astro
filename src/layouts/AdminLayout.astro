@@ -15,6 +15,7 @@ const links = [
   { href: '/admin/articles', label: 'Articles', id: 'articles' },
   { href: '/admin/articles/new', label: 'New article', id: 'new' },
   { href: '/admin/live', label: 'Live console', id: 'live' },
+  { href: '/admin/comments', label: 'Comments', id: 'comments' },
   { href: '/admin/highlights', label: 'Highlights', id: 'highlights' },
   { href: '/admin/homepage-stats', label: 'Homepage stats', id: 'homepage-stats' },
   { href: '/admin/sports', label: 'Sports', id: 'sports' },
@@ -34,12 +35,14 @@ const current = active ?? links[0].id;
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/icons/yc-mark.svg" />
     <title>{title} — Yanci Admin</title>
   </head>
   <body class="bg-yanci-paper text-yanci-dark">
     <div class="mx-auto flex min-h-screen max-w-6xl flex-col px-4 sm:px-6">
       <header class="flex items-center justify-between border-b border-yanci-primary/15 py-4">
         <a href="/admin/dashboard" class="flex items-center gap-2">
+          <img src="/icons/yc-mark.svg" alt="Yanci" class="h-8 w-8 object-contain" />
           <span class="font-serif text-2xl font-bold text-yanci-primary">Yanci</span>
           <span class="rounded-sm bg-yanci-accent px-2 py-0.5 text-xs font-bold uppercase tracking-widest text-yanci-primary">
             Admin

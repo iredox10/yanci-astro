@@ -70,6 +70,7 @@ export interface Comment {
   body: string;
   likes: number;
   ownerToken?: string;
+  status?: 'pending' | 'approved' | 'rejected';
   $createdAt?: string;
 }
 

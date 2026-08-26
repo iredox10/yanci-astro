@@ -29,7 +29,7 @@ const today = new Date().toLocaleDateString('ha-NG', {
   <div class="bg-[#0f3036] py-6 text-white transition-all md:py-8">
     <div class="mx-auto flex max-w-[1400px] items-center justify-between px-4 md:px-6">
       <a href="/" class="group flex items-center gap-3">
-        <img src="/icons/yc-mark.svg" alt="Yanci Logo" class="h-10 w-10 object-contain md:h-14 md:w-14" />
+        <img src="/icons/yc-mark-white.svg" alt="Yanci Logo" class="h-10 w-10 object-contain md:h-14 md:w-14" />
         <span class="font-serif text-4xl font-black leading-none tracking-tighter md:text-6xl">Yanci<span class="text-yanci-accent">.</span></span>
       </a>
       <div class="flex items-center gap-4 md:gap-6">
@@ -74,7 +74,10 @@ const today = new Date().toLocaleDateString('ha-NG', {
   <div id="nav-menu" hidden class="fixed inset-0 z-[60] overflow-y-auto bg-[#0f3036]/98 px-6 py-8 backdrop-blur-xl">
     <div class="mx-auto max-w-[1400px] h-full">
       <div class="mb-12 flex items-center justify-between border-b border-white/10 pb-6">
-        <span class="font-serif text-3xl font-black text-white">Yanci<span class="text-yanci-accent">.</span></span>
+        <span class="flex items-center gap-3">
+          <img src="/icons/yc-mark-white.svg" alt="Yanci Logo" class="h-8 w-8 object-contain" />
+          <span class="font-serif text-3xl font-black text-white">Yanci<span class="text-yanci-accent">.</span></span>
+        </span>
         <button id="nav-menu-close" type="button" aria-label="Rufe" class="group rounded-full p-2 text-white transition-colors hover:bg-white/10">
           <svg class="h-8 w-8 transition-transform group-hover:rotate-90" viewBox="0 0 352 512" fill="currentColor" aria-hidden="true"><path d="M242.7 256l100-100a24 24 0 0 0-34-34l-100 100-100-100a24 24 0 0 0-34 34l100 100-100 100a24 24 0 0 0 34 34l100-100 100 100a24 24 0 0 0 34-34z"/></svg>
         </button>

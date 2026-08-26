@@ -84,6 +84,7 @@ export const POST: APIRoute = async ({ request }) => {
         name,
         body: commentBody,
         likes: 0,
+        status: 'pending',
         ownerToken: typeof body.ownerToken === 'string' ? sanitizePlainText(body.ownerToken, 64) : '',
       },
     });

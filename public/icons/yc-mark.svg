@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Yanci">
+  <rect x="8" y="8" width="496" height="496" rx="112" fill="#0f3036"/>
+  <path d="M168 148 L256 272 L344 148" fill="none" stroke="#c59d5f" stroke-width="56" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M256 272 L256 388" fill="none" stroke="#c59d5f" stroke-width="56" stroke-linecap="round"/>
+  <path d="M180 434 L332 434" fill="none" stroke="#b2f5ea" stroke-width="10" stroke-linecap="round" opacity="0.9"/>
+</svg>

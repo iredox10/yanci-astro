@@ -15,9 +15,9 @@ const docs = await adminListCollection('sports');
     description="JSON blobs that feed the live match, standings and fixtures widgets. One document keeps all three."
     docs={docs}
     fields={[
-      { key: 'liveMatches', label: 'Live matches', type: 'json', placeholder: '[{ "id": 1, "league": "NPFL", "homeTeam": "...", "awayTeam": "...", "homeScore": 3, "awayScore": 2, "minute": "90+2\'", "isLive": true, "events": [], "streamUrl": "" }]' },
-      { key: 'standings', label: 'Standings', type: 'json', placeholder: '[{ "pos": 1, "team": "...", "p": 24, "w": 18, "d": 4, "l": 2, "gf": 52, "ga": 21, "pts": 58 }]' },
-      { key: 'fixtures', label: 'Fixtures', type: 'json', placeholder: '[{ "id": 1, "league": "NPFL", "homeTeam": "...", "awayTeam": "...", "date": "2026-08-12", "time": "17:00" }]' },
+      { key: 'liveMatches', label: 'Live matches', type: 'json', placeholder: '[{ "id": 1, "league": "NPFL", "homeTeam": "Kano Pillars", "awayTeam": "Enyimba", "homeLogo": "KP", "awayLogo": "EN", "homeScore": 2, "awayScore": 1, "minute": "67\'", "isLive": true, "events": [{ "minute": "12\'", "player": "Ibrahim Mustafa", "team": "home", "score": "1-0" }], "streamUrl": "" }]' },
+      { key: 'standings', label: 'Standings', type: 'json', placeholder: '[{ "pos": 1, "team": "Kano Pillars", "p": 24, "gd": 18, "pts": 52 }]' },
+      { key: 'fixtures', label: 'Fixtures', type: 'json', placeholder: '[{ "id": 1, "league": "NPFL", "home": "Kano Pillars", "away": "Shooters Stars", "date": "Sat", "time": "16:00", "stadium": "Sani Abacha Stadium" }]' },
     ]}
   />
 </AdminLayout>

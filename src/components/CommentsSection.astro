@@ -45,6 +45,9 @@ function timeAgo(iso?: string): string {
       class="mb-3 w-full rounded-sm border border-gray-200 bg-white px-3 py-2 text-sm focus:border-[#0f3036] focus:outline-none"
     ></textarea>
     <p id="comment-error" class="mb-3 hidden text-sm font-bold text-[#c70000]" role="alert"></p>
+    <p id="comment-pending" class="mb-3 hidden rounded-sm border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-700" role="status">
+      An aiko sharhinka. Yana jiran dubawa kafin a buga shi.
+    </p>
     <button id="comment-submit" type="submit" class="rounded-sm bg-[#0f3036] px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#c70000]">Aika sharhi</button>
   </form>
 
@@ -246,6 +249,8 @@ function timeAgo(iso?: string): string {
     form?.addEventListener('submit', async (e) => {
       e.preventDefault();
       errorEl.classList.add('hidden');
+      const pending = document.getElementById('comment-pending');
+      pending?.classList.add('hidden');
       const name = nameInput?.value.trim() ?? '';
       const body = bodyInput?.value.trim() ?? '';
       if (!name || !body) {
@@ -266,8 +271,8 @@ function timeAgo(iso?: string): string {
         const data = await res.json();
         if (res.ok && data.ok && data.comment) {
           rememberComment(String(data.comment.$id ?? ''));
-          list.insertAdjacentHTML('afterbegin', itemHtml(data.comment));
-          refresh(list.querySelectorAll('[data-comment-id]').length);
+          const pending = document.getElementById('comment-pending');
+          if (pending) pending.classList.remove('hidden');
           if (nameInput) nameInput.value = '';
           if (bodyInput) bodyInput.value = '';
         } else {

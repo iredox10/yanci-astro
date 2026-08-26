@@ -156,6 +156,11 @@ export async function getArticleBySlug(slug: string): Promise<Article | null> {
 }
 
 // ─── Comments ────────────────────────────────────────────────────────────────
+/** Public visibility rule: comments without a status (legacy rows) count as approved. */
+export function isCommentVisible(c: { status?: string | null }): boolean {
+  return c.status === undefined || c.status === null || c.status === '' || c.status === 'approved';
+}
+
 export async function getComments(
   articleId: string,
   sort: 'latest' | 'top' = 'latest',
@@ -169,9 +174,32 @@ export async function getComments(
       sort === 'top' ? Query.orderDesc('likes') : Query.orderDesc('$createdAt'),
       Query.limit(Math.min(limit, 200)),
     ]);
-    return (documents ?? []).map((d) => d as unknown as Comment);
+    return (documents ?? [])
+      .map((d) => d as unknown as Comment)
+      .filter((c) => isCommentVisible(c));
   } catch (error) {
     console.error('[appwrite] getComments failed', error);
+    return [];
+  }
+}
+
+/** Admin moderation list: all comments for a status, newest first. */
+export async function getAllComments(
+  status?: string,
+  limit = 200,
+): Promise<Comment[]> {
+  const c = collections();
+  if (!c || !c.comments) return [];
+  try {
+    const queries = [];
+    if (status === 'pending' || status === 'approved' || status === 'rejected') {
+      queries.push(Query.equal('status', status));
+    }
+    queries.push(Query.orderDesc('$createdAt'), Query.limit(Math.min(limit, 200)));
+    const { documents } = await databases().listDocuments(c.databaseId, c.comments, queries);
+    return (documents ?? []).map((d) => d as unknown as Comment);
+  } catch (error) {
+    console.error('[appwrite] getAllComments failed', error);
     return [];
   }
 }

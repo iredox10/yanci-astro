@@ -13,7 +13,10 @@ const socials = [
   <div class="relative z-10 mx-auto max-w-[1400px] px-6">
     <div class="mb-16 grid grid-cols-1 gap-12 lg:grid-cols-12">
       <div class="space-y-8 lg:col-span-4">
-        <h3 class="mb-4 font-serif text-4xl font-black tracking-tighter">Yanci<span class="text-yanci-accent">.</span></h3>
+        <div class="flex items-center gap-3">
+          <img src="/icons/yc-mark-white.svg" alt="Yanci Logo" class="h-10 w-10 object-contain" />
+          <h3 class="font-serif text-4xl font-black tracking-tighter">Yanci<span class="text-yanci-accent">.</span></h3>
+        </div>
         <p class="max-w-md text-sm leading-relaxed text-gray-300">
           Jarida mai zaman kanta da ke ba da labarai a Hausa, bisa gudummawar masu karatu. Muna kare gaskiya da al'adunmu na Arewa.
         </p>
@@ -47,7 +50,7 @@ const socials = [
         <div>
           <h4 class="mb-6 border-b border-white/10 pb-3 text-xs font-bold uppercase tracking-wider text-yanci-accent">Labarun</h4>
           <ul class="space-y-4 text-sm text-gray-400">
-            {[['Najeriya', '/labarai'], ['Siyasa', '/siyasa'], ['Kasuwanci', '/kasuwanci'], ['Wasanni', '/wasanni'], ['Fasaha', '/fasaha'], ['Zabe', '/zabe']].map(([label, href]) => (
+            {[['Najeriya', '/labarai'], ['Siyasa', '/siyasa'], ['Kasuwanci', '/kasuwanci'], ['Wasanni', '/wasanni'], ['Fasaha', '/fasaha'], ['Binciken Gaskiya', '/fact-check']].map(([label, href]) => (
               <li><a href={href} class="block transition-all hover:translate-x-1 hover:text-white">{label}</a></li>
             ))}
           </ul>
