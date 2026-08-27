@@ -1,46 +1,160 @@
 ---
 import '../../styles/global.css';
-import { requireUser } from '@lib/auth';
-import AdminLogin from '../../components/admin/AdminLogin';
+import { requireUser, createAdminSession, adminCookieHeader } from '@lib/auth';
 
 export const prerender = false;
 
-const auth = await requireUser(Astro.request);
 const next = new URL(Astro.request.url).searchParams.get('next') ?? '/admin/dashboard';
+let error = '';
+let emailValue = '';
 
+// Check if already authenticated as admin
+const auth = await requireUser(Astro.request);
 if (auth.ok) {
   return Astro.redirect(next);
+}
+
+const SESSION_TTL = 60 * 60 * 12;
+
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    const email = String(formData.get('email') ?? '').trim();
+    const password = String(formData.get('password') ?? '');
+    emailValue = email;
+
+    if (!email || !password) {
+      error = 'Shigar da imel da kalmar sirri don Allah';
+    } else {
+      const result = await createAdminSession(email, password);
+      if (!('token' in result)) {
+        error = result.message || 'Imel ko kalmar sirri ba daidai ba ne';
+      } else {
+        Astro.response.headers.set('Set-Cookie', adminCookieHeader(result.token, SESSION_TTL));
+        return Astro.redirect(next);
+      }
+    }
+  } catch (err: any) {
+    error = err?.message || 'An sami matsala wajen shiga. Gwada sake.';
+  }
 }
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="ha" class="h-full bg-[#0f3036]">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/icons/yc-mark.svg" />
-    <title>Shiga — Yanci Admin</title>
+    <title>Shiga Tsarin Gudanarwa — Yanci Admin</title>
   </head>
-  <body class="bg-[#0f3036] text-yanci-dark">
-    <div class="flex min-h-screen items-center justify-center p-4">
+  <body class="min-h-full font-sans antialiased" style="background-color: #0f3036 !important; color: #1c1917;">
+    <div class="flex min-h-screen items-center justify-center p-4 sm:p-6 lg:p-8" style="background-color: #0f3036;">
       <div class="w-full max-w-md">
+        <!-- Logo & Header -->
         <div class="mb-8 text-center">
-          <div class="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10">
-            <svg class="h-8 w-8 text-[#c59d5f]" viewBox="0 0 448 512" fill="currentColor" aria-hidden="true"><path d="M144 144v48H304V144c0-44.2-35.8-80-80-80s-80 35.8-80 80zM80 192V144C80 64.5 144.5 0 224 0s144 64.5 144 144v48h16c35.3 0 64 28.7 64 64V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V256c0-35.3 28.7-64 64-64H80z"/></svg>
+          <div class="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 shadow-lg border border-white/10">
+            <svg class="h-8 w-8 text-[#c59d5f]" viewBox="0 0 448 512" fill="currentColor" aria-hidden="true">
+              <path d="M144 144v48H304V144c0-44.2-35.8-80-80-80s-80 35.8-80 80zM80 192V144C80 64.5 144.5 0 224 0s144 64.5 144 144v48h16c35.3 0 64 28.7 64 64V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V256c0-35.3 28.7-64 64-64H80z"/>
+            </svg>
           </div>
-          <h1 class="text-2xl font-black tracking-tight text-white">Yanci Admin</h1>
-          <p class="mt-1 text-sm text-white/50">Shigar da imel da kalmar sirri don shiga</p>
+          <h1 class="text-3xl font-black tracking-tight text-white font-serif" style="color: #ffffff !important;">Yanci Admin</h1>
+          <p class="mt-2 text-sm text-white/80" style="color: rgba(255, 255, 255, 0.8) !important;">Shigar da bayanan ka don shiga tsarin edita</p>
         </div>
 
-        <div class="rounded-2xl bg-white p-8 shadow-2xl">
-          <AdminLogin client:load next={next} />
-          <div class="mt-6 text-center">
-            <a href="/" class="text-xs text-gray-400 transition-colors hover:text-[#0f3036]">
+        <!-- Login Card -->
+        <div class="rounded-2xl bg-white p-6 sm:p-8 shadow-2xl border border-gray-100">
+          <form id="admin-login-form" method="POST" action={`/admin/login?next=${encodeURIComponent(next)}`} class="space-y-5">
+            <div>
+              <label for="email" class="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-gray-700">
+                <svg class="h-3.5 w-3.5 text-[#c59d5f]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                  <polyline points="22,6 12,13 2,6"/>
+                </svg>
+                Imel
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                value={emailValue}
+                placeholder="admin@yanci.ng"
+                required
+                autocomplete="username"
+                class="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 transition focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#c59d5f]"
+              />
+            </div>
+
+            <div>
+              <label for="password" class="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-gray-700">
+                <svg class="h-3.5 w-3.5 text-[#c59d5f]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                Kalmar Sirri
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                placeholder="••••••••"
+                required
+                autocomplete="current-password"
+                class="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 transition focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#c59d5f]"
+              />
+            </div>
+
+            <div class="flex justify-end">
+              <a
+                href="/admin/forgot-password"
+                class="text-xs font-medium text-[#c59d5f] transition-colors hover:text-[#b0884a]"
+              >
+                Manta kalmar sirri?
+              </a>
+            </div>
+
+            {error && (
+              <div id="login-error" class="rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm font-medium text-red-700 flex items-center gap-2">
+                <svg class="h-4 w-4 shrink-0 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                </svg>
+                <span>{error}</span>
+              </div>
+            )}
+
+            <button
+              id="login-submit-btn"
+              type="submit"
+              class="w-full rounded-xl bg-[#0f3036] hover:bg-[#164b54] py-3.5 text-sm font-bold tracking-wide text-white transition-all shadow-md hover:shadow-lg cursor-pointer flex items-center justify-center gap-2"
+            >
+              <span id="btn-text">Shiga Tsarin</span>
+              <svg id="btn-icon" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
+              </svg>
+            </button>
+          </form>
+
+          <div class="mt-6 border-t border-gray-100 pt-4 text-center">
+            <a href="/" class="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 transition-colors hover:text-[#0f3036]">
               &larr; Koma Shafin Jama'a
             </a>
           </div>
         </div>
       </div>
     </div>
+
+    <script is:inline>
+      const form = document.getElementById('admin-login-form');
+      const btn = document.getElementById('login-submit-btn');
+      const btnText = document.getElementById('btn-text');
+
+      if (form && btn && btnText) {
+        form.addEventListener('submit', () => {
+          btn.setAttribute('disabled', 'true');
+          btn.style.opacity = '0.7';
+          btnText.textContent = 'Ana shiga...';
+        });
+      }
+    </script>
   </body>
 </html>
