@@ -1,12 +1,13 @@
 import type { APIRoute } from 'astro';
 import { Client, Account } from 'node-appwrite';
 import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
-import { sessionTokenFrom, adminCookieHeader } from '@lib/auth';
+import { clearSessionCache, sessionTokenFrom, adminCookieHeader } from '@lib/auth';
 
 export const prerender = false;
 
 export const POST: APIRoute = async ({ request }) => {
   const token = await sessionTokenFrom(request);
+  if (token) clearSessionCache(token);
   if (token && PUBLIC_APPWRITE_ENDPOINT && PUBLIC_APPWRITE_PROJECT_ID) {
     try {
       const client = new Client()

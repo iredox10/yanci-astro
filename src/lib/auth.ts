@@ -240,24 +240,32 @@ export async function roleFromLabels(labels: string[] | undefined): Promise<stri
   return null;
 }
 
+const _sessionCache = new Map<string, { user: SessionUser; expires: number }>();
+const SESSION_TTL_MS = 60_000;
+
 export async function requireUser(request: Request): Promise<{ ok: true; user: SessionUser } | { ok: false; status: number }> {
   const token = await sessionTokenFrom(request);
   if (!token) return { ok: false, status: 401 };
+  const cached = _sessionCache.get(token);
+  if (cached && cached.expires > Date.now()) return { ok: true, user: cached.user };
   const session = await verifySession(token);
   if (!session) return { ok: false, status: 401 };
-
-  // Roles come from either the `roles` collection assignment (if it exists for
-  // the user) or, as in the legacy app, from server-side user labels.
   const custom = await roleForUser(session.id);
   const role = custom ?? (await roleFromLabels(session.labels));
   if (!role || ROLE_PRIORITY[role] === undefined) return { ok: false, status: 403 };
-
-  return { ok: true, user: { ...session, role } };
+  const user: SessionUser = { ...session, role };
+  _sessionCache.set(token, { user, expires: Date.now() + SESSION_TTL_MS });
+  return { ok: true, user };
 }
 
 /** True when the authenticated user has at least `minRole` (or is admin). */
 export function hasRole(user: SessionUser, minRole: string): boolean {
   return (ROLE_PRIORITY[user.role] ?? -1) >= (ROLE_PRIORITY[minRole] ?? Infinity);
+}
+
+export function clearSessionCache(token?: string): void {
+  if (token) _sessionCache.delete(token);
+  else _sessionCache.clear();
 }
 
 export const ROLE_LABELS: Record<string, string> = {
