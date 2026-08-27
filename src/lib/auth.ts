@@ -1,5 +1,5 @@
-import { Client, Account, Databases, Query } from 'node-appwrite';
-import { APPWRITE_COLLECTION_ROLES } from 'astro:env/server';
+import { Client, Account, Users, Databases, Query } from 'node-appwrite';
+import { APPWRITE_COLLECTION_ROLES, APPWRITE_API_KEY } from 'astro:env/server';
 import {
   PUBLIC_APPWRITE_ENDPOINT,
   PUBLIC_APPWRITE_PROJECT_ID,
@@ -173,18 +173,70 @@ export async function createSession(
     return { ok: false, status: 503, message: 'Tsarin Appwrite bai kammala ba' };
   }
   try {
-    const client = new Client()
+    const publicClient = new Client()
       .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
       .setProject(PUBLIC_APPWRITE_PROJECT_ID);
 
-    const account = new Account(client);
-    const session = await account.createEmailPasswordSession(email.trim(), password);
+    const account = new Account(publicClient);
+    // 1. Verify user password with Appwrite
+    const clientSession = await account.createEmailPasswordSession(email.trim(), password);
+    const userId = clientSession.userId;
 
-    const token = session.secret;
-    if (!token) return { ok: false, status: 401, message: 'An kasa samun session' };
+    if (!userId) {
+      return { ok: false, status: 401, message: 'Imel ko kalmar sirri ba daidai ba ne' };
+    }
+
+    // 2. Generate secure session token on server
+    let token = clientSession.secret;
+    if (!token && APPWRITE_API_KEY) {
+      const adminClient = new Client()
+        .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
+        .setProject(PUBLIC_APPWRITE_PROJECT_ID)
+        .setKey(APPWRITE_API_KEY);
+      const serverSession = await new Users(adminClient).createSession(userId);
+      token = serverSession.secret;
+    }
+
+    if (!token) {
+      return { ok: false, status: 401, message: 'An kasa samar da session' };
+    }
 
     const verified = await verifySession(token);
-    if (!verified) return { ok: false, status: 401, message: 'An kasa tantance session' };
+    if (!verified) {
+      // Fallback verification using userId
+      const custom = await roleForUser(userId);
+      let userRole = custom;
+      let userName = clientSession.providerUid || email;
+      let userLabels: string[] = [];
+
+      if (APPWRITE_API_KEY) {
+        try {
+          const adminClient = new Client()
+            .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
+            .setProject(PUBLIC_APPWRITE_PROJECT_ID)
+            .setKey(APPWRITE_API_KEY);
+          const u = await new Users(adminClient).get(userId);
+          userName = u.name || userName;
+          userLabels = u.labels || [];
+          if (!userRole) {
+            userRole = (await roleFromLabels(u.labels)) ?? 'reader';
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+
+      const user: SessionUser = {
+        id: userId,
+        name: userName,
+        email: email.trim(),
+        role: userRole ?? 'reader',
+        labels: userLabels,
+      };
+      _sessionCache.set(token, { user, expires: Date.now() + SESSION_TTL_MS });
+      return { token, user };
+    }
+
     const custom = await roleForUser(verified.id);
     const role = custom ?? (await roleFromLabels(verified.labels)) ?? 'reader';
     const user: SessionUser = { ...verified, role };
