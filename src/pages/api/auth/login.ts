@@ -30,7 +30,7 @@ export const POST: APIRoute = async ({ request }) => {
     const message =
       result.status === 503
         ? 'Shiga ba ta nan a yanzu'
-        : 'Imel ko kalmar sirri ba daidai ba ne';
+        : result.message || 'Imel ko kalmar sirri ba daidai ba ne';
     return new Response(JSON.stringify({ ok: false, message }), {
       status: result.status,
       headers: { 'Content-Type': 'application/json' },

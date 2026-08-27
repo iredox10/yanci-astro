@@ -11,9 +11,20 @@ async function tuneAuthFetch(): Promise<void> {
   if (_authFetchTuned) return;
   _authFetchTuned = true;
   try {
+    const dns = await import('node:dns');
+    dns.setDefaultResultOrder('ipv4first');
     const { Agent, setGlobalDispatcher } = await import('undici');
     setGlobalDispatcher(
-      new Agent({ connect: { timeout: 4_000, family: 4 }, keepAliveTimeout: 60_000 }),
+      new Agent({
+        connect: {
+          autoSelectFamily: false,
+          lookup: (hostname, options, callback) => {
+            dns.lookup(hostname, { ...options, family: 4 }, callback);
+          },
+          timeout: 8_000,
+        },
+        keepAliveTimeout: 60_000,
+      }),
     );
   } catch {
     // undici unavailable — keep default fetch timeouts
@@ -74,18 +85,23 @@ function parseCookies(request?: Request): Map<string, string> {
 }
 
 /**
- * Validate a session credential: either a 3-part JWT or Appwrite's base64
+ * Validate a session credential: either a 3-part JWT, raw session secret, or Appwrite's base64
  * JSON session envelope `{"id":...,"secret":...}` (the legacy session token).
  */
 export function isSessionToken(value: string): boolean {
+  if (!value || typeof value !== 'string') return false;
   if (value.split('.').length === 3) return true;
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return false;
-  try {
-    const parsed = JSON.parse(Buffer.from(value, 'base64').toString('utf8'));
-    return typeof parsed?.id === 'string' && typeof parsed?.secret === 'string';
-  } catch {
-    return false;
+  // Raw session secret token (alphanumeric/hex string, e.g. 64-256 chars)
+  if (/^[A-Za-z0-9_\-\.]+$/.test(value) && value.length >= 16) return true;
+  if (/^[A-Za-z0-9+/]+={0,2}$/.test(value)) {
+    try {
+      const parsed = JSON.parse(Buffer.from(value, 'base64').toString('utf8'));
+      return typeof parsed?.id === 'string' && typeof parsed?.secret === 'string';
+    } catch {
+      return false;
+    }
   }
+  return false;
 }
 
 /** Pull a session token out of the request: Authorization header or cookie. */
@@ -151,32 +167,36 @@ export function adminCookieHeader(token: string, maxAgeSeconds: number, reset = 
 export async function createSession(
   email: string,
   password: string,
-): Promise<{ token: string; user: SessionUser } | { ok: false; status: number }> {
+): Promise<{ token: string; user: SessionUser } | { ok: false; status: number; message?: string }> {
   await tuneAuthFetch();
   if (!PUBLIC_APPWRITE_ENDPOINT || !PUBLIC_APPWRITE_PROJECT_ID) {
-    return { ok: false, status: 503 };
+    return { ok: false, status: 503, message: 'Tsarin Appwrite bai kammala ba' };
   }
   try {
-    const base = PUBLIC_APPWRITE_ENDPOINT.replace(/\/$/, '');
-    const headers = { 'X-Appwrite-Project': PUBLIC_APPWRITE_PROJECT_ID, 'Content-Type': 'application/json' };
+    const client = new Client()
+      .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
+      .setProject(PUBLIC_APPWRITE_PROJECT_ID);
 
-    const create = await fetch(`${base}/account/sessions/email`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ email: email.trim(), password }),
-    });
-    if (!create.ok) return { ok: false, status: 401 };
+    const account = new Account(client);
+    const session = await account.createEmailPasswordSession(email.trim(), password);
 
-    const token = parseSetCookie(create.headers, `a_session_${PUBLIC_APPWRITE_PROJECT_ID}`);
-    if (!token) return { ok: false, status: 403 };
+    const token = session.secret;
+    if (!token) return { ok: false, status: 401, message: 'An kasa samun session' };
 
     const verified = await verifySession(token);
-    if (!verified) return { ok: false, status: 403 };
+    if (!verified) return { ok: false, status: 401, message: 'An kasa tantance session' };
     const custom = await roleForUser(verified.id);
     const role = custom ?? (await roleFromLabels(verified.labels)) ?? 'reader';
-    return { token, user: { ...verified, role } };
-  } catch {
-    return { ok: false, status: 401 };
+    const user: SessionUser = { ...verified, role };
+    _sessionCache.set(token, { user, expires: Date.now() + SESSION_TTL_MS });
+    return { token, user };
+  } catch (err: any) {
+    const status = err?.code === 401 || err?.status === 401 ? 401 : 400;
+    return {
+      ok: false,
+      status,
+      message: err?.message || 'Imel ko kalmar sirri ba daidai ba ne',
+    };
   }
 }
 
@@ -187,24 +207,13 @@ export async function createSession(
 export async function createAdminSession(
   email: string,
   password: string,
-): Promise<{ token: string; user: SessionUser } | { ok: false; status: number }> {
+): Promise<{ token: string; user: SessionUser } | { ok: false; status: number; message?: string }> {
   const result = await createSession(email, password);
   if (!('token' in result)) return result;
   if (ROLE_PRIORITY[result.user.role] === undefined) {
-    return { ok: false, status: 403 };
+    return { ok: false, status: 403, message: 'Ba ku da ikon shiga bangaren admin ba' };
   }
   return result;
-}
-
-function parseSetCookie(headers: Headers, name: string): string | null {
-  for (const cookie of headers.getSetCookie?.() ?? []) {
-    const first = cookie.split(';')[0] ?? '';
-    const eq = first.indexOf('=');
-    if (eq === -1) continue;
-    const key = first.slice(0, eq).trim();
-    if (key === name) return decodeURIComponent(first.slice(eq + 1).trim());
-  }
-  return null;
 }
 
 export async function verifySession(
