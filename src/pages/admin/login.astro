@@ -30,8 +30,20 @@ if (Astro.request.method === 'POST') {
       if (!('token' in result)) {
         error = result.message || 'Imel ko kalmar sirri ba daidai ba ne';
       } else {
-        Astro.response.headers.set('Set-Cookie', adminCookieHeader(result.token, SESSION_TTL));
-        return Astro.redirect(next);
+        Astro.cookies.set('yc_session', result.token, {
+          path: '/',
+          httpOnly: true,
+          sameSite: 'lax',
+          maxAge: SESSION_TTL,
+          secure: import.meta.env.PROD,
+        });
+        return new Response(null, {
+          status: 302,
+          headers: {
+            Location: next,
+            'Set-Cookie': adminCookieHeader(result.token, SESSION_TTL),
+          },
+        });
       }
     }
   } catch (err: any) {
@@ -113,14 +125,12 @@ if (Astro.request.method === 'POST') {
               </a>
             </div>
 
-            {error && (
-              <div id="login-error" class="rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm font-medium text-red-700 flex items-center gap-2">
-                <svg class="h-4 w-4 shrink-0 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                </svg>
-                <span>{error}</span>
-              </div>
-            )}
+            <div id="login-error" class:list={['rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm font-medium text-red-700 items-center gap-2', error ? 'flex' : 'hidden']}>
+              <svg class="h-4 w-4 shrink-0 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+              </svg>
+              <span id="login-error-text">{error}</span>
+            </div>
 
             <button
               id="login-submit-btn"
@@ -147,12 +157,50 @@ if (Astro.request.method === 'POST') {
       const form = document.getElementById('admin-login-form');
       const btn = document.getElementById('login-submit-btn');
       const btnText = document.getElementById('btn-text');
+      const errBox = document.getElementById('login-error');
+      const errText = document.getElementById('login-error-text');
 
-      if (form && btn && btnText) {
-        form.addEventListener('submit', () => {
-          btn.setAttribute('disabled', 'true');
-          btn.style.opacity = '0.7';
-          btnText.textContent = 'Ana shiga...';
+      if (form) {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          if (btn) {
+            btn.setAttribute('disabled', 'true');
+            btn.style.opacity = '0.7';
+          }
+          if (btnText) btnText.textContent = 'Ana shiga...';
+          if (errBox) {
+            errBox.classList.add('hidden');
+            errBox.classList.remove('flex');
+          }
+
+          const email = form.email.value;
+          const password = form.password.value;
+
+          try {
+            const res = await fetch('/api/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, password }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.ok) {
+              throw new Error(data.message || 'Imel ko kalmar sirri ba daidai ba ne');
+            }
+            const params = new URLSearchParams(window.location.search);
+            const target = params.get('next') || '/admin/dashboard';
+            window.location.assign(target);
+          } catch (err) {
+            if (errBox && errText) {
+              errText.textContent = err.message || 'An sami matsala wajen shiga. Gwada sake.';
+              errBox.classList.remove('hidden');
+              errBox.classList.add('flex');
+            }
+            if (btn) {
+              btn.removeAttribute('disabled');
+              btn.style.opacity = '1';
+            }
+            if (btnText) btnText.textContent = 'Shiga Tsarin';
+          }
         });
       }
     </script>
