@@ -1,0 +1,308 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+export const prerender = false;
+---
+
+<BaseLayout
+  title="Manufofin Edita da Ka'idojin Aiki — Yanci"
+  description="Manufofin aikin jarida, gaskiya, adalci, 'yancin edita, kariyar majiyoyi, da hanyar tantance gaskiya a jaridar Yanci."
+  path="/manufofi"
+>
+  <div class="mx-auto max-w-[1000px] px-4 py-12 md:px-6 md:py-16">
+    <!-- Broadsheet Masthead Header -->
+    <header class="border-b-4 border-double border-yanci-primary pb-8 text-center md:pb-12">
+      <div class="inline-flex items-center gap-2 border-b border-yanci-accent/60 pb-1 text-xs font-bold uppercase tracking-[0.25em] text-yanci-accent">
+        <span>Manufofin Jarida</span>
+        <span class="text-yanci-primary/30">•</span>
+        <span>Ka'idojin Da'a</span>
+        <span class="text-yanci-primary/30">•</span>
+        <span>Yanci Media</span>
+      </div>
+      <h1 class="mt-4 font-serif text-3xl font-black tracking-tight text-yanci-primary sm:text-5xl md:text-6xl">
+        Manufofin Edita da Ka'idojin Aiki
+      </h1>
+      <p class="mx-auto mt-5 max-w-2xl font-serif text-lg italic leading-relaxed text-gray-700 sm:text-xl">
+        "Tabbatar da gaskiya, kare 'yancin 'yan jarida, kare masu ba da labari, da ciyar da al'umma gaba ta hanyar labarai masu sahihanci ba tare da tsoro ko nuna bangaranci ba."
+      </p>
+      
+      <div class="mt-6 flex flex-wrap items-center justify-center gap-4 text-xs font-medium uppercase tracking-wider text-gray-500">
+        <span>Tawagar Editocin Yanci</span>
+        <span>—</span>
+        <span>An Sabunta: Agusta 2026</span>
+        <span>—</span>
+        <span>Babban Ofishin Labarai</span>
+      </div>
+    </header>
+
+    <!-- Quick Navigation / Core Pillars -->
+    <nav aria-label="Abubuwan Ciki" class="my-10 rounded-sm border border-yanci-primary/15 bg-white p-6 shadow-sm">
+      <h2 class="text-xs font-bold uppercase tracking-widest text-yanci-accent">Manyan Rukunai Hudu (4 Core Pillars)</h2>
+      <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <a href="#gaskiya-da-adalci" class="group block rounded border border-gray-100 bg-yanci-paper/30 p-4 transition-all hover:border-yanci-accent hover:bg-white hover:shadow-md">
+          <span class="font-serif text-2xl font-black text-yanci-accent">01</span>
+          <h3 class="mt-1 font-serif text-base font-bold text-yanci-primary group-hover:text-yanci-teal">Gaskiya da Adalci</h3>
+          <p class="mt-1 text-xs text-gray-600">Sahihanci, daidaito, da bai wa kowane bangare dama.</p>
+        </a>
+
+        <a href="#yancin-edita" class="group block rounded border border-gray-100 bg-yanci-paper/30 p-4 transition-all hover:border-yanci-accent hover:bg-white hover:shadow-md">
+          <span class="font-serif text-2xl font-black text-yanci-accent">02</span>
+          <h3 class="mt-1 font-serif text-base font-bold text-yanci-primary group-hover:text-yanci-teal">'Yancin 'Yan Jarida</h3>
+          <p class="mt-1 text-xs text-gray-600">Yanci daga katsalandan na siyasa ko kasuwanci.</p>
+        </a>
+
+        <a href="#kariyar-masu-labari" class="group block rounded border border-gray-100 bg-yanci-paper/30 p-4 transition-all hover:border-yanci-accent hover:bg-white hover:shadow-md">
+          <span class="font-serif text-2xl font-black text-yanci-accent">03</span>
+          <h3 class="mt-1 font-serif text-base font-bold text-yanci-primary group-hover:text-yanci-teal">Kariyar Masu Labari</h3>
+          <p class="mt-1 text-xs text-gray-600">Sirrin majiyoyi da masu tona asiri (whistleblowers).</p>
+        </a>
+
+        <a href="#tantance-gaskiya" class="group block rounded border border-gray-100 bg-yanci-paper/30 p-4 transition-all hover:border-yanci-accent hover:bg-white hover:shadow-md">
+          <span class="font-serif text-2xl font-black text-yanci-accent">04</span>
+          <h3 class="mt-1 font-serif text-base font-bold text-yanci-primary group-hover:text-yanci-teal">Tantance Gaskiya</h3>
+          <p class="mt-1 text-xs text-gray-600">Tsarin binciken hujjoji da tabbatar da gaskiya.</p>
+        </a>
+      </div>
+    </nav>
+
+    <!-- Main Broadsheet Content -->
+    <article class="prose max-w-none space-y-12 text-gray-800">
+      <!-- Mukaddima -->
+      <section class="rounded-sm border-l-4 border-yanci-accent bg-white p-6 sm:p-8 shadow-sm">
+        <h2 class="font-serif text-2xl font-bold text-yanci-primary sm:text-3xl">Mukaddima: Alkawarinmu ga Masu Karatu</h2>
+        <div class="mt-4 space-y-4 font-serif text-base sm:text-lg leading-relaxed text-gray-700">
+          <p>
+            Jaridar <strong class="text-yanci-primary">Yanci</strong> an kafa ta ne bisa manufar samar wa al'ummar Hausawa da daukacin 'yan Najeriya sahihan labarai, bincike mai zurfi, da sharhi na gaskiya. Mun yi amanna cewa aikin jarida mai kima da daraja shi ne kashin bayan dimokuradiyya da ci gaban al'umma.
+          </p>
+          <p>
+            Wadannan manufofi da ka'idojin aiki su ne jagoran dukkan 'yan jaridarmu, editoci, masu bincike, da duk wanda ke rubuta rahoto a karkashin inuwar Yanci. Suna kunshe da matakan da muke dauka don tabbatar da cewa labaranmu sun cika ka'idojin aikin jarida na kasa da kasa.
+          </p>
+        </div>
+      </section>
+
+      <!-- Section 1: Gaskiya da Adalci -->
+      <section id="gaskiya-da-adalci" class="scroll-mt-12 rounded-sm border border-gray-200 bg-white p-6 sm:p-10 shadow-sm">
+        <div class="flex items-center gap-3 border-b border-gray-100 pb-4">
+          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-yanci-primary font-serif font-black text-yanci-accent">1</span>
+          <div>
+            <span class="text-xs font-bold uppercase tracking-wider text-yanci-accent">Rukuni na Farko</span>
+            <h2 class="font-serif text-2xl font-bold text-yanci-primary sm:text-3xl">Gaskiya da Adalci (Accuracy & Fairness)</h2>
+          </div>
+        </div>
+
+        <div class="mt-6 space-y-6 text-base leading-relaxed text-gray-700">
+          <div>
+            <h3 class="font-serif text-xl font-bold text-yanci-dark">1.1 Tabbatar da Sahihanci Kafin Wallafawa</h3>
+            <p class="mt-2">
+              Kowane bayani, alkaluma, suna, wuri, ko maganar da aka ambata a cikin labarin Yanci dole ne a tabbatar da sahihancinsa daga tabbataccen tushe. Ba ma buga jita-jita ko labaran da ba a tabbatar ba domin neman karin masu karatu (clickbait). Idan ba a tabbatar da labari ba, ba za mu wallafa shi ba.
+            </p>
+          </div>
+
+          <div>
+            <h3 class="font-serif text-xl font-bold text-yanci-dark">1.2 Hakkin Amsa Zargi (Right of Reply)</h3>
+            <p class="mt-2">
+              Duk lokacin da labari ya kunshi zargi a kan wani mutum, ma'aikata, kamfani, ko jami'in gwamnati, wajibi ne dan jaridarmu ya nemi bangaren da ake zarga domin jin ta bakinsa kafin a buga labarin. Idan an nemi jin ta bakinsu amma ba su amsa ba kafin lokacin wallafawa, za mu bayyana hakan a fili a cikin labarin, kuma za mu sabunta labarin da zaran sun bayar da amsa.
+            </p>
+          </div>
+
+          <div>
+            <h3 class="font-serif text-xl font-bold text-yanci-dark">1.3 Bambance Labari da Ra'ayi</h3>
+            <p class="mt-2">
+              A Yanci, muna ware labarai zalla daga ra'ayoyin mutane ko sharhin edita. Shafin <a href="/raayi" class="font-bold text-yanci-teal hover:underline">Ra'ayi</a> an kebe shi ne domin mabambantan ra'ayoyi daga masana da masu sharhi, kuma kowane rubutun ra'ayi yana dauke da sunan marubucinsa a fili.
+            </p>
+          </div>
+
+          <div>
+            <h3 class="font-serif text-xl font-bold text-yanci-dark">1.4 Harshe Mai Ladabi da Kauce wa Nuna Bangaranci</h3>
+            <p class="mt-2">
+              Muna amfani da kyakkyawan harshen Hausa mai tsari, ladabi da girmama kowa. Ba ma amfani da kalmomin kiyayya, cin mutunci, ko nuna kyamar wani jinsi, kabila, addini, ko yanki.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 2: 'Yancin 'Yan Jarida -->
+      <section id="yancin-edita" class="scroll-mt-12 rounded-sm border border-gray-200 bg-white p-6 sm:p-10 shadow-sm">
+        <div class="flex items-center gap-3 border-b border-gray-100 pb-4">
+          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-yanci-primary font-serif font-black text-yanci-accent">2</span>
+          <div>
+            <span class="text-xs font-bold uppercase tracking-wider text-yanci-accent">Rukuni na Biyu</span>
+            <h2 class="font-serif text-2xl font-bold text-yanci-primary sm:text-3xl">'Yancin 'Yan Jarida (Editorial Independence)</h2>
+          </div>
+        </div>
+
+        <div class="mt-6 space-y-6 text-base leading-relaxed text-gray-700">
+          <div>
+            <h3 class="font-serif text-xl font-bold text-yanci-dark">2.1 'Yanci Daga Matsin Lambar Siyasa da Gwamnati</h3>
+            <p class="mt-2">
+              Yanci jarida ce mai zaman kanta. Ba ma karbar umarni ko karfin iko daga wata jam'iyyar siyasa, dan siyasa, jami'in gwamnati, ko attajiri. Editocinmu da 'yan jaridarmu ne kadai ke da alhakin yanke shawarar abin da ya dace a wallafa bisa la'akari da maslahar al'umma.
+            </p>
+          </div>
+
+          <div>
+            <h3 class="font-serif text-xl font-bold text-yanci-dark">2.2 Ware Talla da Daukar Nauyi (Sponsored Content)</h3>
+            <p class="mt-2">
+              Akwai katanga mai kauri tsakanin sashen edita da sashen kasuwanci/tallace-tallace. Babu wani dan kasuwa ko mai talla da zai iya sauya ko hana buga wani labari. Duk wani rubutu ko bidiyo da aka biya kudi domin tallata shi dole ne ya kasance yana dauke da tambarin <em>"Tallan da Aka Biya"</em> ko <em>"Daukar Nauyi"</em> a bayyane.
+            </p>
+          </div>
+
+          <div>
+            <h3 class="font-serif text-xl font-bold text-yanci-dark">2.3 Haramcin Cin Hanci da Rikicin Bukatu (Conflict of Interest)</h3>
+            <p class="mt-2">
+              Ma'aikatan Yanci da 'yan jaridarmu ba a ba su damar karbar kyaututtuka, kudi, kudin aljihu (brown envelope), ko wata tagomashi da za ta iya shafar amincin rahotonsu ba. Wajibi ne duk dan jarida ya bayyana wa babban edita idan yana da wata alaka ta kashin kai ko dangi da labarin da yake bincike a kai.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 3: Kariyar Masu Ba da Bayani -->
+      <section id="kariyar-masu-labari" class="scroll-mt-12 rounded-sm border border-gray-200 bg-white p-6 sm:p-10 shadow-sm">
+        <div class="flex items-center gap-3 border-b border-gray-100 pb-4">
+          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-yanci-primary font-serif font-black text-yanci-accent">3</span>
+          <div>
+            <span class="text-xs font-bold uppercase tracking-wider text-yanci-accent">Rukuni na Uku</span>
+            <h2 class="font-serif text-2xl font-bold text-yanci-primary sm:text-3xl">Kariyar Masu Ba da Bayani (Source Protection)</h2>
+          </div>
+        </div>
+
+        <div class="mt-6 space-y-6 text-base leading-relaxed text-gray-700">
+          <div>
+            <h3 class="font-serif text-xl font-bold text-yanci-dark">3.1 Tsare Sirrin Masu Tona Asiri (Whistleblowers)</h3>
+            <p class="mt-2">
+              Muna ba da kariya ta musamman ga mutanen da suka ba mu bayanan sirri domin maslahar kasa da al'umma, musamman idan bayyana sunansu na iya jefa rayuwarsu, iyalinsu, ko aikinsu a cikin hadari. Jaridar Yanci ba za ta taba bayyana sunan majiyar sirri ba a karkashin kowane irin matsin lamba.
+            </p>
+          </div>
+
+          <div>
+            <h3 class="font-serif text-xl font-bold text-yanci-dark">3.2 Ka'idojin Sakaya Suna (Anonymous Sources)</h3>
+            <p class="mt-2">
+              Muna amfani da majiya ba tare da suna ba ne kawai idan:
+            </p>
+            <ul class="mt-2 list-disc space-y-1 pl-6 text-gray-700">
+              <li>Bayanin yana da matukar muhimmanci ga al'umma kuma babu wata hanyar samunsa a fili.</li>
+              <li>Majiyar tana da tabbataccen masaniya a kan ainihin abin da ya faru.</li>
+              <li>Babban Edita da Editan Sashe sun san ainihin sunan majiyar tare da gamsu da dalilin sakaya sunan.</li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 class="font-serif text-xl font-bold text-yanci-dark">3.3 Tabbatar da Hujjoji Masu Zaman Kansu (Corroboration)</h3>
+            <p class="mt-2">
+              Ba ma dogara a kan majiya guda daya wadda ba a bayyana sunanta ba. Dole ne a samu takardun shaida na zahiri (documents) ko kuma akalla majiyoyi biyu masu zaman kansu da ba su da alaka da juna da suka tabbatar da ainihin maganar.
+            </p>
+          </div>
+
+          <div>
+            <h3 class="font-serif text-xl font-bold text-yanci-dark">3.4 Tsaron Fasaha da Sadarwa</h3>
+            <p class="mt-2">
+              Muna amfani da hanyoyin sadarwa masu kariya ta fasaha (encrypted channels) don tattaunawa da karbar takardu daga masu son tona asiri ba tare da an gano su ba.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 4: Hanyar Tantance Gaskiya -->
+      <section id="tantance-gaskiya" class="scroll-mt-12 rounded-sm border border-gray-200 bg-white p-6 sm:p-10 shadow-sm">
+        <div class="flex items-center gap-3 border-b border-gray-100 pb-4">
+          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-yanci-primary font-serif font-black text-yanci-accent">4</span>
+          <div>
+            <span class="text-xs font-bold uppercase tracking-wider text-yanci-accent">Rukuni na Hudu</span>
+            <h2 class="font-serif text-2xl font-bold text-yanci-primary sm:text-3xl">Hanyar Tantance Gaskiya (Fact-Checking Methodology)</h2>
+          </div>
+        </div>
+
+        <div class="mt-6 space-y-6 text-base leading-relaxed text-gray-700">
+          <p>
+            Sashenmu na binciken gaskiya yana aiki ne bisa matakai biyar na tantancewa domin yaki da labaran karya da bayanan da ke yaudarar al'umma:
+          </p>
+
+          <div class="grid gap-4 sm:grid-cols-1 md:grid-cols-5">
+            <div class="rounded border border-gray-100 bg-yanci-paper/40 p-4">
+              <span class="text-xs font-bold uppercase text-yanci-accent">Mataki 1</span>
+              <h4 class="mt-1 font-serif text-sm font-bold text-yanci-primary">Zabo Magana</h4>
+              <p class="mt-1 text-xs text-gray-600">Zabo maganganun 'yan siyasa ko jami'ai masu tasiri a kan rayuwar jama'a.</p>
+            </div>
+
+            <div class="rounded border border-gray-100 bg-yanci-paper/40 p-4">
+              <span class="text-xs font-bold uppercase text-yanci-accent">Mataki 2</span>
+              <h4 class="mt-1 font-serif text-sm font-bold text-yanci-primary">Binciken Tushe</h4>
+              <p class="mt-1 text-xs text-gray-600">Duba alkaluma na hukuma, dokoki, binciken masana, da takardun gwamnati.</p>
+            </div>
+
+            <div class="rounded border border-gray-100 bg-yanci-paper/40 p-4">
+              <span class="text-xs font-bold uppercase text-yanci-accent">Mataki 3</span>
+              <h4 class="mt-1 font-serif text-sm font-bold text-yanci-primary">Tuntubar Bangarori</h4>
+              <p class="mt-1 text-xs text-gray-600">Tuntubar wanda ya yi maganar da kuma masana masu zaman kansu.</p>
+            </div>
+
+            <div class="rounded border border-gray-100 bg-yanci-paper/40 p-4">
+              <span class="text-xs font-bold uppercase text-yanci-accent">Mataki 4</span>
+              <h4 class="mt-1 font-serif text-sm font-bold text-yanci-primary">Yanke Hukunci</h4>
+              <p class="mt-1 text-xs text-gray-600">Bada sakamako karara: Gaskiya, Kuskure, Karya, ko Mai Yauda.</p>
+            </div>
+
+            <div class="rounded border border-gray-100 bg-yanci-paper/40 p-4">
+              <span class="text-xs font-bold uppercase text-yanci-accent">Mataki 5</span>
+              <h4 class="mt-1 font-serif text-sm font-bold text-yanci-primary">Wallafa Hujja</h4>
+              <p class="mt-1 text-xs text-gray-600">Sanya dukkan hanyoyin duba hujjoji a fili don mai karatu ya duba da kansa.</p>
+            </div>
+          </div>
+
+          <div class="rounded bg-yanci-primary/5 p-4 text-sm text-yanci-primary">
+            <strong>Duba sashenmu na bincike:</strong> Za ku iya bibiyar dukkan binciken da muka yi a shafinmu na <a href="/fact-check" class="font-bold text-yanci-teal underline">Binciken Gaskiya (Fact-Check)</a>.
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 5: Ka'idojin Da'a ga 'Yan Jarida -->
+      <section class="rounded-sm border border-gray-200 bg-white p-6 sm:p-10 shadow-sm">
+        <h2 class="font-serif text-2xl font-bold text-yanci-primary sm:text-3xl">Ka'idojin Da'a ga 'Yan Jaridarmu (Code of Conduct)</h2>
+        <div class="mt-6 grid gap-6 sm:grid-cols-2">
+          <div class="space-y-2">
+            <h3 class="font-serif text-base font-bold text-yanci-dark">Kariyar Yara da Masu Rauni</h3>
+            <p class="text-sm text-gray-600">
+              Ba ma bayyana sunaye ko hotunan yara da ke fuskantar matsala ta shari'a ko cin zarafi ba tare da amincewar iyayensu da ka'idar doka ba.
+            </p>
+          </div>
+
+          <div class="space-y-2">
+            <h3 class="font-serif text-base font-bold text-yanci-dark">Girmama Sirrin Rayuwa</h3>
+            <p class="text-sm text-gray-600">
+              Muna girmama rayuwar sirrin daidaikun mutane, face idan akwai kwararan dalilai da suka shafi maslahar al'umma da suka wajabta bayyanawa.
+            </p>
+          </div>
+
+          <div class="space-y-2">
+            <h3 class="font-serif text-base font-bold text-yanci-dark">Gaskiya a Kan Hotuna da Bidiyo</h3>
+            <p class="text-sm text-gray-600">
+              Ba ma canza ko sauya ma'anar hotuna ko bidiyo ta hanyar fasaha don yaudarar mai kallo. Duk hoton da aka yi amfani da fasahar AI wajen kera shi za a bayyana hakan a fili.
+            </p>
+          </div>
+
+          <div class="space-y-2">
+            <h3 class="font-serif text-base font-bold text-yanci-dark">Gyaran Kuskure Cikin Gaggawa</h3>
+            <p class="text-sm text-gray-600">
+              Idan kuskure ya auku a cikin rahotonmu, muna gaggawar gyara shi tare da bayyana gyaran ga masu karatu ba tare da boyewa ba.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 6: Hakkin Mai Karatu & Hanyar Tuntuba -->
+      <section class="rounded-sm border-2 border-yanci-accent/40 bg-white p-6 sm:p-8 shadow-sm">
+        <h2 class="font-serif text-2xl font-bold text-yanci-primary">Kuna da Tambaya ko Korafi?</h2>
+        <p class="mt-3 text-base text-gray-700">
+          Masu karatunmu sune abokan aikinmu. Idan kun lura da wani labari da ya saba wa wadannan manufofi, ko kuna son aiko da gyara ko korafi, muna maraba da jin ra'ayoyinku:
+        </p>
+        <div class="mt-6 flex flex-wrap gap-4">
+          <a href="/gyara" class="inline-flex items-center justify-center rounded bg-yanci-primary px-6 py-3 text-sm font-bold uppercase tracking-wider text-yanci-paper transition hover:bg-yanci-primary/90">
+            Manufar Gyara da Koke →
+          </a>
+          <a href="/contact" class="inline-flex items-center justify-center rounded border border-yanci-primary px-6 py-3 text-sm font-bold uppercase tracking-wider text-yanci-primary transition hover:bg-yanci-primary hover:text-white">
+            Tuntube Mu
+          </a>
+        </div>
+      </section>
+    </article>
+  </div>
+</BaseLayout>

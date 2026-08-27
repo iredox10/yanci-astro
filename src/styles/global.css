@@ -95,3 +95,425 @@ body {
   outline: 2px solid var(--color-yanci-accent);
   outline-offset: 2px;
 }
+
+/* ─── Reader Font Size & Accessibility Scaling ─────────────────────────────── */
+.yanci-article-body,
+.article-body {
+  transition: font-size 0.2s ease-in-out, line-height 0.2s ease-in-out;
+}
+
+.yanci-article-body p,
+.article-body p {
+  transition: font-size 0.2s ease-in-out, line-height 0.2s ease-in-out;
+}
+
+/* Big (A+) */
+.yanci-article-body[data-font-size="big"] p,
+.article-body[data-font-size="big"] p {
+  font-size: 1.25rem !important;
+  line-height: 1.85 !important;
+}
+@media (min-width: 768px) {
+  .yanci-article-body[data-font-size="big"] p,
+  .article-body[data-font-size="big"] p {
+    font-size: 1.55rem !important;
+    line-height: 1.85 !important;
+  }
+}
+.yanci-article-body[data-font-size="big"] li,
+.article-body[data-font-size="big"] li {
+  font-size: 1.15em !important;
+  line-height: 1.8 !important;
+}
+
+/* Large (A++) */
+.yanci-article-body[data-font-size="large"] p,
+.article-body[data-font-size="large"] p {
+  font-size: 1.4rem !important;
+  line-height: 1.9 !important;
+}
+@media (min-width: 768px) {
+  .yanci-article-body[data-font-size="large"] p,
+  .article-body[data-font-size="large"] p {
+    font-size: 1.75rem !important;
+    line-height: 1.9 !important;
+  }
+}
+.yanci-article-body[data-font-size="large"] li,
+.article-body[data-font-size="large"] li {
+  font-size: 1.3em !important;
+  line-height: 1.85 !important;
+}
+
+/* Extra Large (A+++) */
+.yanci-article-body[data-font-size="xlarge"] p,
+.article-body[data-font-size="xlarge"] p {
+  font-size: 1.6rem !important;
+  line-height: 2 !important;
+}
+@media (min-width: 768px) {
+  .yanci-article-body[data-font-size="xlarge"] p,
+  .article-body[data-font-size="xlarge"] p {
+    font-size: 2rem !important;
+    line-height: 2 !important;
+  }
+}
+.yanci-article-body[data-font-size="xlarge"] li,
+.article-body[data-font-size="xlarge"] li {
+  font-size: 1.45em !important;
+  line-height: 1.9 !important;
+}
+
+/* ─── Newspaper Print & PDF Export Styles ─────────────────────────────────── */
+@media print {
+  @page {
+    margin: 1.5cm 1.5cm 1.8cm 1.5cm;
+    size: A4 portrait;
+  }
+
+  /* Reset backgrounds and enforce high-contrast black/white print palette */
+  *,
+  *::before,
+  *::after {
+    background: transparent !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  html,
+  body {
+    background-color: #ffffff !important;
+    color: #111111 !important;
+    font-size: 10.5pt !important;
+    line-height: 1.5 !important;
+    font-family: var(--font-body), "Merriweather", Georgia, serif !important;
+    min-height: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* 1. HIDE non-editorial elements */
+  /* Header nav, footer, sidebar, audio player, floating buttons, share bars, ads, comments, explainer, modals */
+  header,
+  footer,
+  nav,
+  aside,
+  #nav-menu,
+  #nav-search,
+  #reading-progress-bar,
+  #back-to-top,
+  #sensitive-warning-modal,
+  #comments,
+  .comments-section,
+  .audio-player,
+  [role="region"][aria-label^="Saurara"],
+  .ad-slot,
+  [data-ad-slot],
+  [data-wa-tipline],
+  [data-wa-panel],
+  #wa-tip-panel,
+  [data-article-explainer],
+  .article-explainer,
+  .recommended-articles,
+  #main-content > section,
+  .no-print,
+  .print\:hidden {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Hide interactive share bars, bookmark/print action buttons, and screen-only controls */
+  .no-print,
+  header .no-print,
+  header .border-y.border-gray-100,
+  header .flex.shrink-0.items-center,
+  header a[href*="facebook.com"],
+  header a[href*="twitter.com"],
+  header a[href*="whatsapp.com"],
+  #live-feed [data-live-filter],
+  #live-refresh,
+  button[data-live-filter] {
+    display: none !important;
+  }
+
+  /* Clean full-width main container */
+  #main-content {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+
+  article,
+  .mx-auto.w-full.max-w-\[780px\] {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* 2. NEWSPAPER HEADER: "YANCI — www.yanci.ng" with date */
+  .print-newspaper-header {
+    display: block !important;
+    margin-bottom: 1.5rem !important;
+    padding-bottom: 0.5rem !important;
+    border-bottom: 3px double #000000 !important;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  .print-header-top {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: baseline !important;
+    border-bottom: 1.5px solid #000000 !important;
+    padding-bottom: 0.35rem !important;
+    margin-bottom: 0.35rem !important;
+  }
+
+  .print-brand {
+    font-family: var(--font-serif), "Frank Ruhl Libre", Georgia, serif !important;
+    font-size: 26pt !important;
+    font-weight: 900 !important;
+    letter-spacing: -0.04em !important;
+    color: #000000 !important;
+    text-transform: uppercase !important;
+    line-height: 1 !important;
+  }
+
+  .print-tagline {
+    font-family: var(--font-serif), Georgia, serif !important;
+    font-size: 9pt !important;
+    font-style: italic !important;
+    color: #333333 !important;
+  }
+
+  .print-url {
+    font-family: var(--font-sans), "DM Sans", sans-serif !important;
+    font-size: 9.5pt !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.04em !important;
+    color: #000000 !important;
+  }
+
+  .print-header-sub {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    font-family: var(--font-sans), "DM Sans", sans-serif !important;
+    font-size: 8pt !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.08em !important;
+    color: #222222 !important;
+    padding-top: 0.15rem !important;
+  }
+
+  /* 3. ARTICLE TITLE, LEAD, AND BYLINE */
+  /* Full article title in bold 24pt serif */
+  article header h1 {
+    font-family: var(--font-serif), "Frank Ruhl Libre", Georgia, serif !important;
+    font-size: 24pt !important;
+    font-weight: 900 !important;
+    line-height: 1.15 !important;
+    letter-spacing: -0.02em !important;
+    color: #000000 !important;
+    margin-top: 0.25rem !important;
+    margin-bottom: 0.6rem !important;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  /* Article lead / trail */
+  article header .font-serif.text-lg,
+  article header .font-serif.text-xl {
+    font-family: var(--font-serif), Georgia, serif !important;
+    font-size: 11.5pt !important;
+    line-height: 1.4 !important;
+    font-weight: 500 !important;
+    font-style: italic !important;
+    color: #222222 !important;
+    border-left: 2.5pt solid #000000 !important;
+    padding-left: 0.75rem !important;
+    margin-bottom: 0.85rem !important;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  /* Print Byline and Published Date */
+  .print-byline {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    font-family: var(--font-sans), "DM Sans", sans-serif !important;
+    font-size: 8.5pt !important;
+    font-weight: 600 !important;
+    color: #333333 !important;
+    margin-bottom: 1.25rem !important;
+    padding-bottom: 0.4rem !important;
+    border-bottom: 1px solid #cccccc !important;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  /* 4. BODY TEXT: 2-column or clean 1-column layout for body text */
+  .article-body {
+    font-family: var(--font-body), "Merriweather", Georgia, serif !important;
+    font-size: 9.5pt !important;
+    line-height: 1.55 !important;
+    color: #111111 !important;
+    column-count: 2 !important;
+    column-gap: 1.8rem !important;
+    column-rule: 1px solid #e0e0e0 !important;
+    text-align: justify !important;
+  }
+
+  .article-body p {
+    font-family: var(--font-body), "Merriweather", Georgia, serif !important;
+    font-size: 9.5pt !important;
+    line-height: 1.55 !important;
+    margin-bottom: 0.65rem !important;
+    color: #111111 !important;
+    orphans: 3;
+    widows: 3;
+  }
+
+  .article-body h2,
+  .article-body h3,
+  .article-body h4 {
+    font-family: var(--font-serif), "Frank Ruhl Libre", Georgia, serif !important;
+    font-weight: 800 !important;
+    color: #000000 !important;
+    column-span: all !important;
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    margin-top: 1.1rem !important;
+    margin-bottom: 0.45rem !important;
+  }
+
+  .article-body h2 {
+    font-size: 14pt !important;
+    line-height: 1.25 !important;
+    border-bottom: 1px solid #cccccc !important;
+    padding-bottom: 0.2rem !important;
+  }
+
+  .article-body h3 {
+    font-size: 12pt !important;
+    line-height: 1.3 !important;
+  }
+
+  /* Drop cap for first paragraph */
+  .article-body > p:first-of-type::first-letter,
+  .yanci-article-body > p:first-of-type::first-letter {
+    float: left !important;
+    font-family: var(--font-serif), Georgia, serif !important;
+    font-size: 3rem !important;
+    line-height: 2.4rem !important;
+    padding-top: 0.2rem !important;
+    padding-right: 0.45rem !important;
+    padding-left: 0.05rem !important;
+    font-weight: 900 !important;
+    color: #000000 !important;
+  }
+
+  /* 5. AVOID BREAKING across page boundaries for images, figures, and pull-quotes */
+  figure,
+  img,
+  picture,
+  svg,
+  blockquote,
+  .prose-blockquote,
+  .yanci-article-body blockquote,
+  .article-body blockquote,
+  .article-body figure,
+  .article-body img,
+  table,
+  pre,
+  .print-break-inside-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Newspaper pull-quotes styling */
+  .article-body blockquote,
+  .yanci-article-body blockquote {
+    column-span: all !important;
+    margin: 1rem 0 !important;
+    padding: 0.65rem 1.25rem !important;
+    border-left: 3.5pt solid #000000 !important;
+    border-right: none !important;
+    border-top: 1px solid #e0e0e0 !important;
+    border-bottom: 1px solid #e0e0e0 !important;
+    background: #f9f9f9 !important;
+    font-family: var(--font-serif), Georgia, serif !important;
+    font-style: italic !important;
+    font-size: 11pt !important;
+    line-height: 1.4 !important;
+    color: #222222 !important;
+    text-align: left !important;
+  }
+
+  .article-body blockquote p,
+  .yanci-article-body blockquote p {
+    font-size: 11pt !important;
+    font-weight: 600 !important;
+    margin: 0 !important;
+  }
+
+  .yanci-article-body blockquote::before {
+    display: none !important;
+  }
+
+  /* Figures and Captions */
+  figure {
+    margin: 0.85rem 0 !important;
+  }
+
+  figure img {
+    max-width: 100% !important;
+    height: auto !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  figcaption {
+    font-family: var(--font-sans), "DM Sans", sans-serif !important;
+    font-size: 7.5pt !important;
+    color: #444444 !important;
+    margin-top: 0.3rem !important;
+    font-style: italic !important;
+  }
+
+  /* General print utility classes */
+  .print\:block {
+    display: block !important;
+  }
+
+  /* 6. PRINT FOOTER: Appends printed article URL at bottom */
+  .print-article-footer {
+    display: block !important;
+    margin-top: 1.75rem !important;
+    padding-top: 0.6rem !important;
+    border-top: 1px solid #000000 !important;
+    font-family: var(--font-sans), "DM Sans", sans-serif !important;
+    font-size: 7.5pt !important;
+    color: #444444 !important;
+    text-align: center !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .print-article-footer strong {
+    color: #000000 !important;
+    font-weight: 700 !important;
+  }
+}

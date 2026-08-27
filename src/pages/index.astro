@@ -9,6 +9,7 @@ import AdSlot from '../components/ads/AdSlot.astro';
 import PwaRegister from '../components/PwaRegister.astro';
 import HomeTabs from '../components/home/HomeTabs';
 import StatCounter from '../components/home/StatCounter';
+import ReaderPoll from '../components/ReaderPoll';
 import {
   SEED_TICKER,
   SEED_HIGHLIGHTS,
@@ -17,6 +18,7 @@ import {
   SEED_TRENDING,
 } from '../data/seed';
 import { loadArticles } from '../lib/content';
+import { getActivePoll } from '../lib/polls';
 import {
   getHighlights,
   getHomepageStats,
@@ -25,13 +27,14 @@ import {
   getTrending,
 } from '@lib/appwrite-server';
 
-const [published, dbHighlights, dbStats, dbSports, settings, trending] = await Promise.all([
+const [published, dbHighlights, dbStats, dbSports, settings, trending, poll] = await Promise.all([
   loadArticles(),
   getHighlights(),
   getHomepageStats(),
   getSportsData(),
   getSettings(),
   getTrending(),
+  getActivePoll(),
 ]);
 
 const highlights = dbHighlights.length > 0 ? dbHighlights : SEED_HIGHLIGHTS;
@@ -222,6 +225,13 @@ const sportPattern =
   </section>
 
   <AdSlot variant="banner" slotId="home-mid" />
+
+  <!-- Interactive Reader Poll ("Ra'ayin Jama'a") -->
+  <section class="relative overflow-hidden bg-gradient-to-b from-[#fbfaf8] via-[#f5f2eb] to-[#fbfaf8] py-16">
+    <div class="mx-auto max-w-4xl px-4 md:px-6">
+      <ReaderPoll client:visible initialPoll={poll} />
+    </div>
+  </section>
 
   <!-- Sport -->
   <section class="relative overflow-hidden bg-gradient-to-b from-[#0f3036] via-[#1a454c] to-[#0f3036] py-20">

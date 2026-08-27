@@ -1,0 +1,172 @@
+---
+interface WeatherHub {
+  city: string;
+  state?: string;
+  temp: string;
+  icon: string;
+  condition: string;
+}
+
+interface MarketIndicator {
+  label: string;
+  sublabel?: string;
+  pair: string;
+  rate: string;
+  change?: string;
+  isPositive?: boolean;
+  type: 'currency' | 'commodity';
+}
+
+const weatherHubs: WeatherHub[] = [
+  { city: 'Kano', temp: '34°C', icon: '☀️', condition: 'Hasken rana' },
+  { city: 'Kaduna', temp: '31°C', icon: '⛅', condition: 'Gajimare' },
+  { city: 'Maiduguri', temp: '37°C', icon: '☀️', condition: 'Zafi sosai' },
+  { city: 'Sokoto', temp: '36°C', icon: '☀️', condition: 'Hasken rana' },
+  { city: 'Abuja', temp: '30°C', icon: '🌦️', condition: 'Yatsar ruwa' },
+  { city: 'Katsina', temp: '33°C', icon: '☀️', condition: 'Hasken rana' },
+];
+
+const marketIndicators: MarketIndicator[] = [
+  {
+    label: 'USD / NGN',
+    sublabel: 'Kasuwar Canji',
+    pair: '$1',
+    rate: '₦1,480',
+    change: '+0.3%',
+    isPositive: true,
+    type: 'currency',
+  },
+  {
+    label: 'GBP / NGN',
+    sublabel: 'Fam na Birtaniya',
+    pair: '£1',
+    rate: '₦1,920',
+    change: '+0.2%',
+    isPositive: true,
+    type: 'currency',
+  },
+  {
+    label: 'Zinariya (Gold)',
+    sublabel: 'Kowanne Gram',
+    pair: '1g',
+    rate: '₦118,500',
+    change: '+0.5%',
+    isPositive: true,
+    type: 'commodity',
+  },
+];
+---
+
+<div
+  class="ticker-wrapper relative z-20 flex w-full items-center border-b border-white/10 bg-[#06191d] text-[11px] text-gray-300 font-sans select-none overflow-hidden"
+  role="region"
+  aria-label="Yanayin Arewa da Kasuwar Canji"
+>
+  <!-- Static / Sticky Label Badge -->
+  <div class="ticker-badge flex shrink-0 items-center gap-1.5 border-r border-white/10 bg-[#0a2328] px-3 py-1.5 font-bold uppercase tracking-wider text-yanci-accent shadow-sm z-10">
+    <span class="relative flex h-2 w-2">
+      <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+      <span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+    </span>
+    <span class="hidden sm:inline">Yanayi & Kasuwa</span>
+    <span class="sm:hidden">Arewa</span>
+  </div>
+
+  <!-- Left / Right subtle fade gradients -->
+  <div class="pointer-events-none absolute left-28 top-0 bottom-0 w-6 bg-gradient-to-r from-[#06191d] to-transparent z-10 hidden sm:block"></div>
+  <div class="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[#06191d] to-transparent z-10"></div>
+
+  <!-- Marquee Scroller Container -->
+  <div class="ticker-container group flex-1 overflow-hidden py-1.5">
+    <div class="ticker-track flex items-center gap-6 whitespace-nowrap">
+      <!-- Pass 1 -->
+      <div class="flex items-center gap-6 shrink-0">
+        <!-- Market Indicators -->
+        {marketIndicators.map((item) => (
+          <div class="ticker-item inline-flex items-center gap-1.5 rounded-md bg-white/[0.04] px-2 py-0.5 border border-white/5 hover:border-yanci-accent/40 hover:bg-white/[0.08] transition-colors cursor-default">
+            <span class="font-bold text-gray-200">{item.label}</span>
+            <span class="text-gray-400">({item.pair})</span>
+            <span class="font-semibold text-emerald-400">{item.rate}</span>
+            {item.change && (
+              <span class="text-[10px] text-emerald-400/90 font-medium">▲ {item.change}</span>
+            )}
+          </div>
+        ))}
+
+        <span class="text-white/20">|</span>
+
+        <!-- Weather Hubs -->
+        {weatherHubs.map((hub) => (
+          <div class="ticker-item inline-flex items-center gap-1.5 rounded-md bg-white/[0.03] px-2 py-0.5 border border-white/5 hover:border-yanci-accent/40 hover:bg-white/[0.08] transition-colors cursor-default">
+            <span class="text-sm leading-none" aria-hidden="true">{hub.icon}</span>
+            <span class="font-medium text-gray-200">{hub.city}</span>
+            <span class="font-bold text-amber-300">{hub.temp}</span>
+            <span class="text-[10px] text-gray-400 hidden md:inline">({hub.condition})</span>
+          </div>
+        ))}
+      </div>
+
+      <span class="text-white/20">✦</span>
+
+      <!-- Pass 2 (Duplicate for smooth infinite seamless loop) -->
+      <div class="flex items-center gap-6 shrink-0" aria-hidden="true">
+        <!-- Market Indicators -->
+        {marketIndicators.map((item) => (
+          <div class="ticker-item inline-flex items-center gap-1.5 rounded-md bg-white/[0.04] px-2 py-0.5 border border-white/5 hover:border-yanci-accent/40 hover:bg-white/[0.08] transition-colors cursor-default">
+            <span class="font-bold text-gray-200">{item.label}</span>
+            <span class="text-gray-400">({item.pair})</span>
+            <span class="font-semibold text-emerald-400">{item.rate}</span>
+            {item.change && (
+              <span class="text-[10px] text-emerald-400/90 font-medium">▲ {item.change}</span>
+            )}
+          </div>
+        ))}
+
+        <span class="text-white/20">|</span>
+
+        <!-- Weather Hubs -->
+        {weatherHubs.map((hub) => (
+          <div class="ticker-item inline-flex items-center gap-1.5 rounded-md bg-white/[0.03] px-2 py-0.5 border border-white/5 hover:border-yanci-accent/40 hover:bg-white/[0.08] transition-colors cursor-default">
+            <span class="text-sm leading-none">{hub.icon}</span>
+            <span class="font-medium text-gray-200">{hub.city}</span>
+            <span class="font-bold text-amber-300">{hub.temp}</span>
+            <span class="text-[10px] text-gray-400 hidden md:inline">({hub.condition})</span>
+          </div>
+        ))}
+      </div>
+
+      <span class="text-white/20">✦</span>
+    </div>
+  </div>
+</div>
+
+<style>
+  .ticker-track {
+    display: flex;
+    width: max-content;
+    animation: ticker-marquee 32s linear infinite;
+    will-change: transform;
+  }
+
+  .ticker-wrapper:hover .ticker-track,
+  .ticker-track:hover {
+    animation-play-state: paused;
+  }
+
+  @keyframes ticker-marquee {
+    0% {
+      transform: translate3d(0, 0, 0);
+    }
+    100% {
+      transform: translate3d(-50%, 0, 0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ticker-track {
+      animation: none;
+      overflow-x: auto;
+      scroll-behavior: smooth;
+    }
+  }
+</style>

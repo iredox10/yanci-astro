@@ -21,10 +21,18 @@ const advertiseEmail = settings.advertising_email || 'tallace-tallace@yanci.ng';
       Kuna da labari? Kuna son tallata wa? Ko kuna da tambaya? Tuntuɓi tawagarmu ta hanyar imel ko shafin da ke ƙasa.
     </p>
 
-    <div class="mt-10 grid gap-6 sm:grid-cols-2">
+    <div class="mt-10 grid gap-6 sm:grid-cols-3">
+      <a href="/tipline" class="group rounded-2xl border-2 border-yanci-accent/40 bg-white p-8 shadow-sm transition-all hover:-translate-y-1 hover:border-yanci-accent hover:shadow-xl">
+        <div class="flex items-center gap-2">
+          <span class="inline-block h-2.5 w-2.5 rounded-full bg-[#25D366]"></span>
+          <h2 class="font-serif text-xl font-bold text-yanci-primary">TipLine & Sirri</h2>
+        </div>
+        <p class="mt-2 text-sm text-gray-500">Aiko da bayanan sirri ko fallasa (Whistleblowing) cikin cikakken tsaro.</p>
+        <p class="mt-4 font-medium text-[#25D366] group-hover:underline">Shafin TipLine →</p>
+      </a>
       <a href={`mailto:${contactEmail}`} class="group rounded-2xl border border-gray-100 bg-white p-8 shadow-sm transition-all hover:-translate-y-1 hover:shadow-xl">
         <h2 class="font-serif text-xl font-bold text-yanci-primary">Labarai / Editan</h2>
-        <p class="mt-2 text-sm text-gray-500">Aiko mana labari ko rahoto na bincike.</p>
+        <p class="mt-2 text-sm text-gray-500">Aiko mana labari ko rahoto na yau da kullum.</p>
         <p class="mt-4 break-all font-medium text-yanci-teal group-hover:underline">{contactEmail}</p>
       </a>
       <a href={`mailto:${advertiseEmail}`} class="group rounded-2xl border border-gray-100 bg-white p-8 shadow-sm transition-all hover:-translate-y-1 hover:shadow-xl">

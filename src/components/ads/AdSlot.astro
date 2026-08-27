@@ -1,55 +1,173 @@
 ---
-interface Props {
-  variant: 'banner' | 'sidebar' | 'inline' | 'sponsored';
+export interface Props {
+  variant?:
+    | 'leaderboard'
+    | 'banner'
+    | 'mpu'
+    | 'rectangle'
+    | 'sidebar'
+    | 'billboard'
+    | 'in-article'
+    | 'inline'
+    | 'sticky-footer'
+    | 'sponsored';
   slotId?: string;
   className?: string;
+  fallback?: 'newsletter' | 'app' | 'tipline' | 'placeholder' | 'auto';
+  disclaimerLabel?: 'TALLA' | 'Abin Tallatawa' | 'both';
+  hideDisclaimer?: boolean;
   sponsoredContent?: {
     label: string;
     title: string;
     href: string;
     image?: string;
+    sponsorName?: string;
   };
 }
 
-const { variant, slotId, className = '', sponsoredContent } = Astro.props;
+const {
+  variant = 'leaderboard',
+  slotId,
+  className = '',
+  fallback = 'auto',
+  disclaimerLabel = 'both',
+  hideDisclaimer = false,
+  sponsoredContent,
+} = Astro.props;
 
-type Variant = Props['variant'];
-type Boxed = Exclude<Variant, 'sponsored'>;
+type StandardVariant =
+  | 'leaderboard'
+  | 'mpu'
+  | 'billboard'
+  | 'in-article'
+  | 'sticky-footer'
+  | 'sponsored';
 
-const BOXES: Record<Boxed, { hint: string; box: string }> = {
-  banner: { hint: 'Leaderboard · 728×90 / 320×50', box: 'h-[50px] w-full max-w-[728px] md:h-[90px]' },
-  sidebar: { hint: 'Box · 300×250', box: 'h-[250px] w-full max-w-[300px]' },
-  inline: { hint: 'In-article · 100% × 120', box: 'h-[120px] w-full' },
+function normalizeVariant(v: Props['variant']): StandardVariant {
+  switch (v) {
+    case 'banner':
+    case 'leaderboard':
+      return 'leaderboard';
+    case 'sidebar':
+    case 'rectangle':
+    case 'mpu':
+      return 'mpu';
+    case 'billboard':
+      return 'billboard';
+    case 'inline':
+    case 'in-article':
+      return 'in-article';
+    case 'sticky-footer':
+      return 'sticky-footer';
+    case 'sponsored':
+      return 'sponsored';
+    default:
+      return 'leaderboard';
+  }
+}
+
+const normalizedVariant = normalizeVariant(variant);
+const isSponsored = normalizedVariant === 'sponsored';
+const isSticky = normalizedVariant === 'sticky-footer';
+
+// Deterministic auto fallback selection based on slotId and variant
+function resolveFallback(
+  fb: Props['fallback'],
+  id?: string,
+  v?: StandardVariant,
+): 'newsletter' | 'app' | 'tipline' | 'placeholder' {
+  if (fb && fb !== 'auto') return fb;
+  if (id) {
+    const s = id.toLowerCase();
+    if (s.includes('news') || s.includes('mail') || s.includes('top')) return 'newsletter';
+    if (s.includes('app') || s.includes('pwa') || s.includes('foot') || s.includes('sticky')) return 'app';
+    if (s.includes('tip') || s.includes('wa') || s.includes('leak') || s.includes('inline') || s.includes('mid')) return 'tipline';
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+      hash = (hash << 5) - hash + id.charCodeAt(i);
+      hash |= 0;
+    }
+    const pool: Array<'newsletter' | 'app' | 'tipline'> = ['newsletter', 'app', 'tipline'];
+    return pool[Math.abs(hash) % pool.length];
+  }
+  if (v === 'sticky-footer') return 'app';
+  if (v === 'in-article') return 'tipline';
+  return 'newsletter';
+}
+
+const resolvedFallback = resolveFallback(fallback, slotId, normalizedVariant);
+
+const TIP_NUMBER = String(import.meta.env.PUBLIC_WHATSAPP_TIP_NUMBER ?? '+2348000000000');
+const rawTipNumber = TIP_NUMBER.replace(/[^0-9]/g, '');
+const waLeakUrl = `https://wa.me/${rawTipNumber || '2348000000000'}?text=${encodeURIComponent('Sannu Yanci, ina son tura muku da rahoton labari ko sirri:')}`;
+
+const FORMAT_SPECS: Record<Exclude<StandardVariant, 'sponsored'>, { hint: string; wrapperClass: string }> = {
+  leaderboard: {
+    hint: 'Leaderboard · 728×90 / 320×50',
+    wrapperClass: 'my-6 flex flex-col items-center justify-center',
+  },
+  mpu: {
+    hint: 'MPU / Rectangle · 300×250',
+    wrapperClass: 'my-6 flex flex-col items-center justify-center',
+  },
+  billboard: {
+    hint: 'Billboard · 970×250',
+    wrapperClass: 'my-8 flex flex-col items-center justify-center',
+  },
+  'in-article': {
+    hint: 'In-Article · Fluid Responsive',
+    wrapperClass: 'my-8 w-full',
+  },
+  'sticky-footer': {
+    hint: 'Sticky Footer · 728×90 / 320×50',
+    wrapperClass: 'fixed bottom-0 inset-x-0 z-50 bg-[#0f3036]/95 backdrop-blur-md text-white border-t border-[#c59d5f]/40 shadow-2xl py-2 px-3 sm:px-4 transition-all duration-300',
+  },
 };
 
-const WRAPPERS: Record<Variant, string> = {
-  banner: 'my-6 flex justify-center',
-  sidebar: 'my-4',
-  inline: 'my-8 border-y border-gray-100 py-5',
-  sponsored: 'my-6',
-};
-
-const isSponsored = variant === 'sponsored';
-const boxed: (typeof BOXES)[Boxed] | undefined = isSponsored ? undefined : BOXES[variant];
+const spec = !isSponsored ? FORMAT_SPECS[normalizedVariant] : undefined;
 ---
 
-<div class:list={['w-full', WRAPPERS[variant], className]} data-ad-variant={variant}>
+<div
+  class:list={[
+    'w-full',
+    isSponsored ? 'my-6' : spec?.wrapperClass,
+    className,
+  ]}
+  data-ad-variant={normalizedVariant}
+  data-ad-slot={slotId}
+  {...(isSticky ? { 'data-ad-sticky-root': 'true' } : {})}
+>
+  {/* Disclaimer Badge Header for non-sticky & non-sponsored */}
   {
-    !isSponsored && (
-      <div class="mb-1.5 flex justify-center">
-        <span class="rounded-sm border border-gray-200 px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-gray-400">
-          Tallafi
-        </span>
+    !hideDisclaimer && !isSponsored && !isSticky && (
+      <div class="mb-2 flex items-center justify-center gap-1.5 select-none" aria-label="Tallace-tallace">
+        {disclaimerLabel === 'both' ? (
+          <>
+            <span class="inline-flex items-center gap-1 rounded bg-stone-200/70 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-stone-700 border border-stone-300/80 shadow-xs">
+              <span class="h-1 w-1 rounded-full bg-amber-500" />
+              TALLA
+            </span>
+            <span class="text-[10px] font-medium tracking-wide text-stone-500">
+              Abin Tallatawa
+            </span>
+          </>
+        ) : (
+          <span class="inline-flex items-center gap-1 rounded bg-stone-200/70 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-stone-700 border border-stone-300/80 shadow-xs">
+            <span class="h-1 w-1 rounded-full bg-amber-500" />
+            {disclaimerLabel === 'TALLA' ? 'TALLA' : 'Abin Tallatawa'}
+          </span>
+        )}
       </div>
     )
   }
 
+  {/* SPONSORED CONTENT VARIANT */}
   {
     isSponsored && sponsoredContent ? (
       <a
         href={sponsoredContent.href}
         rel="sponsored"
-        class="group flex items-center gap-4 overflow-hidden rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-all duration-300 hover:border-gray-200 hover:shadow-lg"
+        class="group flex flex-col sm:flex-row items-start sm:items-center gap-4 overflow-hidden rounded-2xl border border-amber-200/70 bg-gradient-to-r from-amber-50/40 via-white to-amber-50/20 p-5 shadow-xs transition-all duration-300 hover:border-amber-300 hover:shadow-md"
       >
         {sponsoredContent.image ? (
           <img
@@ -58,56 +176,757 @@ const boxed: (typeof BOXES)[Boxed] | undefined = isSponsored ? undefined : BOXES
             loading="lazy"
             width="192"
             height="192"
-            class="h-24 w-24 flex-shrink-0 rounded-lg object-cover transition-transform duration-500 group-hover:scale-105"
+            class="h-24 w-24 sm:h-28 sm:w-28 shrink-0 rounded-xl object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
-          <div class="flex h-24 w-24 flex-shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50">
-            <span class="font-serif text-3xl font-bold text-gray-300">Y</span>
+          <div class="flex h-24 w-24 sm:h-28 sm:w-28 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-amber-100/50">
+            <span class="font-serif text-3xl font-bold text-amber-700">Y</span>
           </div>
         )}
         <div class="min-w-0 flex-1">
-          <span class="mb-2 inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-800">
-            <span class="h-1.5 w-1.5 rounded-full bg-amber-500" />
-            Tallafi · Sponsored
-          </span>
-          <p class="line-clamp-2 font-serif text-lg font-bold leading-snug text-[#1c1917] transition-colors group-hover:text-[#0f3036]">
+          <div class="mb-2 flex items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-900 shadow-xs">
+              <span class="h-1.5 w-1.5 rounded-full bg-amber-600" />
+              TALLA · Abin Tallatawa
+            </span>
+            {sponsoredContent.sponsorName && (
+              <span class="text-xs font-semibold text-stone-500">
+                da {sponsoredContent.sponsorName}
+              </span>
+            )}
+          </div>
+          <p class="font-serif text-lg font-bold leading-snug text-[#1c1917] transition-colors group-hover:text-[#0f3036]">
             {sponsoredContent.title}
           </p>
-          <p class="mt-1 truncate text-xs font-medium text-gray-500">{sponsoredContent.label}</p>
+          <p class="mt-1 text-xs text-stone-600 line-clamp-2">{sponsoredContent.label}</p>
         </div>
       </a>
     ) : isSponsored ? (
       <div
-        data-ad-slot={slotId}
-        data-ad-variant={variant}
-        class="flex h-[220px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 bg-gray-50 px-6 text-center select-none"
+        class="flex h-[200px] w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-amber-300 bg-amber-50/40 px-6 text-center select-none"
       >
-        <span class="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-800">
-          <span class="h-1.5 w-1.5 rounded-full bg-amber-500" />
-          Tallafi · Sponsored
+        <span class="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-900">
+          <span class="h-1.5 w-1.5 rounded-full bg-amber-600" />
+          TALLA · Abin Tallatawa
         </span>
-        <p class="text-xs font-medium text-gray-400">Wurin tallan abun ciki</p>
-        {slotId && <p class="text-[10px] tracking-wide text-gray-300">slot: {slotId}</p>}
+        <p class="text-xs font-medium text-stone-600">Wurin tallan abun ciki (Sponsored Slot)</p>
+        {slotId && <p class="text-[10px] tracking-wide text-stone-400 font-mono">slot: {slotId}</p>}
       </div>
-    ) : (
-      boxed && (
-        <div
-          data-ad-slot={slotId}
-          data-ad-variant={variant}
-          class:list={[
-            'flex items-center justify-center rounded-md border border-dashed border-gray-300 bg-gray-50 select-none',
-            boxed.box,
-          ]}
-        >
-          <div class="flex flex-col items-center gap-1 px-4 text-center">
-            <span class="rounded-sm border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-              Tallafi
-            </span>
-            <p class="text-xs font-medium text-gray-400">{boxed.hint}</p>
-            {slotId && <p class="text-[10px] tracking-wide text-gray-300">slot: {slotId}</p>}
-          </div>
+    ) : null
+  }
+
+  {/* PLACEHOLDER / WIREFRAME FALLBACK */}
+  {
+    !isSponsored && resolvedFallback === 'placeholder' && spec && (
+      <div
+        class="flex min-h-[100px] w-full max-w-[728px] items-center justify-center rounded-xl border border-dashed border-stone-300 bg-stone-50 p-4 select-none"
+      >
+        <div class="flex flex-col items-center gap-1 px-4 text-center">
+          <span class="rounded bg-stone-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-stone-700">
+            TALLA · Abin Tallatawa
+          </span>
+          <p class="text-xs font-medium text-stone-600">{spec.hint}</p>
+          {slotId && <p class="text-[10px] tracking-wide text-stone-400 font-mono">slot: {slotId}</p>}
         </div>
-      )
+      </div>
+    )
+  }
+
+  {/* 1. LEADERBOARD (728x90 desktop / 320x50 mobile) */}
+  {
+    !isSponsored && normalizedVariant === 'leaderboard' && resolvedFallback !== 'placeholder' && (
+      <div class="w-full max-w-[728px] mx-auto">
+        {resolvedFallback === 'newsletter' && (
+          <>
+            {/* Desktop Leaderboard 728x90 */}
+            <div class="hidden md:flex h-[90px] w-full items-center justify-between gap-4 rounded-xl bg-gradient-to-r from-[#0f3036] via-[#14424a] to-[#0a2327] px-5 py-2 text-white shadow-md border border-[#c59d5f]/30">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#c59d5f]/20 text-[#c59d5f] border border-[#c59d5f]/40">
+                  <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                </div>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-[#c59d5f]">Wasiƙar Yanci</span>
+                    <span class="rounded bg-white/10 px-1.5 py-0.5 text-[9px] text-stone-300">Kyauta</span>
+                  </div>
+                  <h4 class="truncate font-serif text-base font-bold text-white">Samun Labaran Yanci a Imel</h4>
+                  <p class="truncate text-xs text-stone-300">Muhimman labarai da binciken gaskiya kowace safiya.</p>
+                </div>
+              </div>
+              <form data-ad-newsletter-form class="flex shrink-0 items-center gap-2">
+                <input
+                  type="email"
+                  name="email"
+                  required
+                  placeholder="Adireshin imel..."
+                  class="w-44 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs text-white placeholder:text-stone-400 focus:border-[#c59d5f] focus:outline-none focus:ring-1 focus:ring-[#c59d5f]"
+                />
+                <button
+                  type="submit"
+                  class="rounded-lg bg-[#c59d5f] hover:bg-[#d4a85f] px-3.5 py-2 text-xs font-bold uppercase tracking-wider text-[#0f3036] transition-colors shadow-sm whitespace-nowrap cursor-pointer"
+                >
+                  Yi Rajista
+                </button>
+              </form>
+            </div>
+
+            {/* Mobile Banner 320x50 */}
+            <div class="flex md:hidden h-[50px] w-full items-center justify-between gap-2 rounded-lg bg-gradient-to-r from-[#0f3036] to-[#14424a] px-3 text-white shadow-xs border border-[#c59d5f]/30">
+              <div class="flex items-center gap-2 min-w-0">
+                <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#c59d5f]/20 text-[#c59d5f]">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                </div>
+                <div class="min-w-0">
+                  <p class="truncate text-xs font-bold text-white">Wasiƙar Yanci a Imel</p>
+                  <p class="truncate text-[10px] text-stone-300">Labaran yau kyauta</p>
+                </div>
+              </div>
+              <a
+                href="#newsletter-form"
+                class="shrink-0 rounded bg-[#c59d5f] px-2.5 py-1 text-[11px] font-bold text-[#0f3036] hover:bg-[#d4a85f] transition-colors"
+              >
+                Rajista
+              </a>
+            </div>
+          </>
+        )}
+
+        {resolvedFallback === 'app' && (
+          <>
+            {/* Desktop Leaderboard 728x90 */}
+            <div class="hidden md:flex h-[90px] w-full items-center justify-between gap-4 rounded-xl bg-gradient-to-r from-[#0d2228] via-[#10353d] to-[#0b1c20] px-5 py-2 text-white shadow-md border border-teal-500/30">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#c59d5f] to-[#0f3036] p-1.5 shadow-xs">
+                  <img src="/icons/yc-mark-white.svg" alt="Yanci App" class="h-full w-full object-contain" />
+                </div>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-[#c59d5f]">Manhajar Yanci</span>
+                    <span class="rounded bg-teal-500/20 text-teal-300 px-1.5 py-0.5 text-[9px] font-semibold">PWA · Offline</span>
+                  </div>
+                  <h4 class="truncate font-serif text-base font-bold text-white">Sanya Manhajar Yanci a Wayarka</h4>
+                  <p class="truncate text-xs text-stone-300">Saurin karanta labarai, aiki ba tare da intanet ba, da sanarwa.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                data-ad-pwa-install
+                class="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#c59d5f] hover:bg-[#d4a85f] px-4 py-2 text-xs font-bold uppercase tracking-wider text-[#0f3036] transition-colors shadow-sm cursor-pointer"
+              >
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Sanya Manhaja
+              </button>
+            </div>
+
+            {/* Mobile Banner 320x50 */}
+            <div class="flex md:hidden h-[50px] w-full items-center justify-between gap-2 rounded-lg bg-gradient-to-r from-[#0d2228] to-[#10353d] px-3 text-white shadow-xs border border-teal-500/30">
+              <div class="flex items-center gap-2 min-w-0">
+                <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#c59d5f]/20 p-1">
+                  <img src="/icons/yc-mark-white.svg" alt="Yanci App" class="h-full w-full object-contain" />
+                </div>
+                <div class="min-w-0">
+                  <p class="truncate text-xs font-bold text-white">Manhajar Yanci</p>
+                  <p class="truncate text-[10px] text-teal-300">Karatu a offline</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                data-ad-pwa-install
+                class="shrink-0 rounded bg-[#c59d5f] px-2.5 py-1 text-[11px] font-bold text-[#0f3036] hover:bg-[#d4a85f] transition-colors cursor-pointer"
+              >
+                Sanya
+              </button>
+            </div>
+          </>
+        )}
+
+        {resolvedFallback === 'tipline' && (
+          <>
+            {/* Desktop Leaderboard 728x90 */}
+            <div class="hidden md:flex h-[90px] w-full items-center justify-between gap-4 rounded-xl bg-gradient-to-r from-[#064e3b] via-[#047857] to-[#064e3b] px-5 py-2 text-white shadow-md border border-[#25D366]/40">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-white shadow-xs">
+                  <svg class="h-5 w-5" viewBox="0 0 448 512" fill="currentColor" aria-hidden="true"><path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.2 0-65.7-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-32.6-16.3-54-29.1-75.5-66-5.7-9.8 5.7-9.1 16.3-30.3 1.8-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 35.2 15.2 49 16.5 66.6 13.9 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"/></svg>
+                </div>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-200">WhatsApp Tipline</span>
+                    <span class="rounded bg-emerald-900/60 px-1.5 py-0.5 text-[9px] text-emerald-200">Asiri 100%</span>
+                  </div>
+                  <h4 class="truncate font-serif text-base font-bold text-white">Aiko Mana da Rahoto ko Sirri</h4>
+                  <p class="truncate text-xs text-emerald-100">Ka san wani labari mai muhimmanci? Tuntubi Yanci a WhatsApp.</p>
+                </div>
+              </div>
+              <a
+                href={waLeakUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#25D366] hover:bg-[#1da851] px-4 py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors shadow-sm"
+              >
+                Aiko a WhatsApp
+              </a>
+            </div>
+
+            {/* Mobile Banner 320x50 */}
+            <div class="flex md:hidden h-[50px] w-full items-center justify-between gap-2 rounded-lg bg-gradient-to-r from-[#064e3b] to-[#047857] px-3 text-white shadow-xs border border-[#25D366]/40">
+              <div class="flex items-center gap-2 min-w-0">
+                <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-white">
+                  <svg class="h-4 w-4" viewBox="0 0 448 512" fill="currentColor" aria-hidden="true"><path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.2 0-65.7-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-32.6-16.3-54-29.1-75.5-66-5.7-9.8 5.7-9.1 16.3-30.3 1.8-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 35.2 15.2 49 16.5 66.6 13.9 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"/></svg>
+                </div>
+                <div class="min-w-0">
+                  <p class="truncate text-xs font-bold text-white">WhatsApp Tipline</p>
+                  <p class="truncate text-[10px] text-emerald-200">Aika a asirce</p>
+                </div>
+              </div>
+              <a
+                href={waLeakUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="shrink-0 rounded bg-[#25D366] px-2.5 py-1 text-[11px] font-bold text-white hover:bg-[#1da851] transition-colors"
+              >
+                Aika
+              </a>
+            </div>
+          </>
+        )}
+      </div>
+    )
+  }
+
+  {/* 2. MPU / RECTANGLE (300x250) */}
+  {
+    !isSponsored && normalizedVariant === 'mpu' && resolvedFallback !== 'placeholder' && (
+      <div class="w-[300px] h-[250px] max-w-full">
+        {resolvedFallback === 'newsletter' && (
+          <div class="flex h-full w-full flex-col justify-between rounded-2xl bg-gradient-to-br from-[#0f3036] via-[#14424a] to-[#0a2327] p-4 text-white shadow-md border border-[#c59d5f]/30">
+            <div>
+              <div class="flex items-center justify-between">
+                <span class="inline-flex items-center gap-1 rounded-full bg-[#c59d5f]/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-[#c59d5f] border border-[#c59d5f]/30">
+                  <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                  Wasiƙar Yanci
+                </span>
+                <span class="text-[10px] text-stone-400">Kyauta</span>
+              </div>
+              <h4 class="mt-2 font-serif text-base font-bold leading-tight text-white">Samun Labaran Yanci a Imel</h4>
+              <p class="mt-1 text-xs leading-snug text-stone-300">Muhimman labarai da binciken gaskiya kai tsaye kowace safiya.</p>
+            </div>
+            <form data-ad-newsletter-form class="space-y-1.5">
+              <input
+                type="email"
+                name="email"
+                required
+                placeholder="Adireshin imel dinka..."
+                class="w-full rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-xs text-white placeholder:text-stone-400 focus:border-[#c59d5f] focus:outline-none focus:ring-1 focus:ring-[#c59d5f]"
+              />
+              <button
+                type="submit"
+                class="w-full rounded-lg bg-[#c59d5f] hover:bg-[#d4a85f] py-1.5 text-xs font-bold uppercase tracking-wider text-[#0f3036] transition-colors shadow-xs cursor-pointer"
+              >
+                Yi Rajista Kyauta
+              </button>
+            </form>
+          </div>
+        )}
+
+        {resolvedFallback === 'app' && (
+          <div class="flex h-full w-full flex-col justify-between rounded-2xl bg-gradient-to-br from-[#0d2228] via-[#10353d] to-[#07161b] p-4 text-white shadow-md border border-teal-500/30">
+            <div>
+              <div class="flex items-center justify-between">
+                <span class="inline-flex items-center gap-1 rounded-full bg-teal-500/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-teal-300 border border-teal-500/30">
+                  <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                  Manhajar Waya
+                </span>
+                <span class="text-[10px] text-stone-400">PWA</span>
+              </div>
+              <h4 class="mt-2 font-serif text-base font-bold leading-tight text-white">Sanya Manhajar Yanci a Wayarka</h4>
+              <p class="mt-1 text-xs leading-snug text-stone-300">Karanta labarai cikin sauri, da ajiye labarai a offline.</p>
+            </div>
+            <div class="space-y-1.5">
+              <button
+                type="button"
+                data-ad-pwa-install
+                class="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#c59d5f] hover:bg-[#d4a85f] py-2 text-xs font-bold uppercase tracking-wider text-[#0f3036] transition-colors shadow-xs cursor-pointer"
+              >
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Sanya Manhaja Yanzu
+              </button>
+              <p class="text-center text-[10px] text-stone-400">Android, iOS & Desktop</p>
+            </div>
+          </div>
+        )}
+
+        {resolvedFallback === 'tipline' && (
+          <div class="flex h-full w-full flex-col justify-between rounded-2xl bg-gradient-to-br from-[#064e3b] via-[#065f46] to-[#022c22] p-4 text-white shadow-md border border-emerald-500/40">
+            <div>
+              <div class="flex items-center justify-between">
+                <span class="inline-flex items-center gap-1 rounded-full bg-[#25D366]/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-emerald-200 border border-[#25D366]/40">
+                  <svg class="h-3 w-3" viewBox="0 0 448 512" fill="currentColor" aria-hidden="true"><path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.2 0-65.7-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-32.6-16.3-54-29.1-75.5-66-5.7-9.8 5.7-9.1 16.3-30.3 1.8-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 35.2 15.2 49 16.5 66.6 13.9 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"/></svg>
+                  Tipline
+                </span>
+                <span class="text-[10px] text-emerald-200">Asiri 100%</span>
+              </div>
+              <h4 class="mt-2 font-serif text-base font-bold leading-tight text-white">Aiko Mana da Rahoto ko Sirri</h4>
+              <p class="mt-1 text-xs leading-snug text-emerald-100">Ka san wani labari? Muna kiyaye asirinka dari bisa dari.</p>
+            </div>
+            <div class="space-y-1.5">
+              <a
+                href={waLeakUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#25D366] hover:bg-[#1da851] py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors shadow-xs"
+              >
+                Aiko ta WhatsApp
+              </a>
+              <p class="text-center text-[10px] text-emerald-200/80">Kafar sirri da aminci</p>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  {/* 3. BILLBOARD (970x250) */}
+  {
+    !isSponsored && normalizedVariant === 'billboard' && resolvedFallback !== 'placeholder' && (
+      <div class="w-full max-w-[970px] mx-auto">
+        {resolvedFallback === 'newsletter' && (
+          <div class="w-full rounded-2xl bg-gradient-to-r from-[#0f3036] via-[#14424a] to-[#0a2327] p-6 md:p-8 text-white shadow-lg border border-[#c59d5f]/30 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div class="max-w-xl">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-[#c59d5f]/20 px-3 py-0.5 text-xs font-bold uppercase tracking-widest text-[#c59d5f] border border-[#c59d5f]/30">
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                  Wasiƙar Labarai Ta Musamman
+                </span>
+                <span class="text-xs text-stone-300">· Kyauta</span>
+              </div>
+              <h3 class="font-serif text-2xl md:text-3xl font-bold text-white leading-tight">
+                Dukkan Muhimman Labaran Arewa da Najeriya a Akwatin Imel Ɗinka
+              </h3>
+              <div class="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-stone-300">
+                <span class="inline-flex items-center gap-1.5 text-stone-200">
+                  <svg class="h-4 w-4 text-[#c59d5f]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                  Kowace Safiya
+                </span>
+                <span class="inline-flex items-center gap-1.5 text-stone-200">
+                  <svg class="h-4 w-4 text-[#c59d5f]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                  Binciken Gaskiya
+                </span>
+                <span class="inline-flex items-center gap-1.5 text-stone-200">
+                  <svg class="h-4 w-4 text-[#c59d5f]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                  Babu Tallan Dame
+                </span>
+              </div>
+            </div>
+            <div class="w-full md:w-80 shrink-0 bg-white/5 backdrop-blur-sm p-4 rounded-xl border border-white/15 shadow-inner">
+              <form data-ad-newsletter-form class="space-y-2.5">
+                <label class="block text-xs font-semibold text-stone-200">Shigar da Imel dinka:</label>
+                <input
+                  type="email"
+                  name="email"
+                  required
+                  placeholder="misali@yanci.ng"
+                  class="w-full rounded-lg border border-white/20 bg-white/10 px-3.5 py-2 text-sm text-white placeholder:text-stone-400 focus:border-[#c59d5f] focus:outline-none focus:ring-1 focus:ring-[#c59d5f]"
+                />
+                <button
+                  type="submit"
+                  class="w-full rounded-lg bg-[#c59d5f] hover:bg-[#d4a85f] py-2.5 text-xs font-bold uppercase tracking-wider text-[#0f3036] transition-colors shadow-md cursor-pointer"
+                >
+                  Yi Rajista Yanzu
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {resolvedFallback === 'app' && (
+          <div class="w-full rounded-2xl bg-gradient-to-r from-[#0d2228] via-[#10353d] to-[#07161b] p-6 md:p-8 text-white shadow-lg border border-teal-500/30 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div class="max-w-xl">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-teal-500/20 px-3 py-0.5 text-xs font-bold uppercase tracking-widest text-teal-300 border border-teal-500/30">
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                  Manhajar Yanci PWA
+                </span>
+                <span class="text-xs text-stone-300">· Kyauta</span>
+              </div>
+              <h3 class="font-serif text-2xl md:text-3xl font-bold text-white leading-tight">
+                Sanya Manhajar Yanci Domin Saurin Karanta Labarai Ba Tare da Intanet Ba
+              </h3>
+              <div class="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-stone-300">
+                <span class="inline-flex items-center gap-1.5 text-stone-200">
+                  <svg class="h-4 w-4 text-[#c59d5f]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                  Aiki a Offline
+                </span>
+                <span class="inline-flex items-center gap-1.5 text-stone-200">
+                  <svg class="h-4 w-4 text-[#c59d5f]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                  Sanarwar Gaggawa
+                </span>
+                <span class="inline-flex items-center gap-1.5 text-stone-200">
+                  <svg class="h-4 w-4 text-[#c59d5f]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                  Sauki da Sauri
+                </span>
+              </div>
+            </div>
+            <div class="w-full md:w-72 shrink-0 flex flex-col items-center gap-3 bg-white/5 backdrop-blur-sm p-4 rounded-xl border border-white/15">
+              <div class="h-12 w-12 rounded-2xl bg-gradient-to-br from-[#c59d5f] to-[#0f3036] p-2 shadow-md">
+                <img src="/icons/yc-mark-white.svg" alt="Yanci Logo" class="h-full w-full object-contain" />
+              </div>
+              <button
+                type="button"
+                data-ad-pwa-install
+                class="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#c59d5f] hover:bg-[#d4a85f] py-2.5 text-xs font-bold uppercase tracking-wider text-[#0f3036] transition-colors shadow-md cursor-pointer"
+              >
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Sanya Manhaja Yanzu
+              </button>
+              <span class="text-[10px] text-stone-400">Android · iOS · Kwamfuta</span>
+            </div>
+          </div>
+        )}
+
+        {resolvedFallback === 'tipline' && (
+          <div class="w-full rounded-2xl bg-gradient-to-r from-[#064e3b] via-[#065f46] to-[#022c22] p-6 md:p-8 text-white shadow-lg border border-emerald-500/40 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div class="max-w-xl">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-[#25D366]/20 px-3 py-0.5 text-xs font-bold uppercase tracking-widest text-emerald-200 border border-[#25D366]/40">
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 448 512" fill="currentColor" aria-hidden="true"><path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.2 0-65.7-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-32.6-16.3-54-29.1-75.5-66-5.7-9.8 5.7-9.1 16.3-30.3 1.8-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 35.2 15.2 49 16.5 66.6 13.9 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"/></svg>
+                  Amintacciyar Ƙofar Tipline
+                </span>
+                <span class="text-xs text-emerald-200">· Asiri 100%</span>
+              </div>
+              <h3 class="font-serif text-2xl md:text-3xl font-bold text-white leading-tight">
+                Kana da Labari ko Sirrin da Kake Son Bayyanawa?
+              </h3>
+              <div class="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-emerald-100">
+                <span class="inline-flex items-center gap-1.5 text-white">
+                  <svg class="h-4 w-4 text-[#25D366]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                  Muna Kare Asirinka 100%
+                </span>
+                <span class="inline-flex items-center gap-1.5 text-white">
+                  <svg class="h-4 w-4 text-[#25D366]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                  Binciken 'Yan Jarida
+                </span>
+                <span class="inline-flex items-center gap-1.5 text-white">
+                  <svg class="h-4 w-4 text-[#25D366]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                  Babu Bukatar Sunanka
+                </span>
+              </div>
+            </div>
+            <div class="w-full md:w-80 shrink-0 flex flex-col items-center gap-3 bg-white/5 backdrop-blur-sm p-4 rounded-xl border border-white/15">
+              <div class="flex h-11 w-11 items-center justify-center rounded-full bg-[#25D366] text-white shadow-md">
+                <svg class="h-5 w-5" viewBox="0 0 448 512" fill="currentColor" aria-hidden="true"><path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.2 0-65.7-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-32.6-16.3-54-29.1-75.5-66-5.7-9.8 5.7-9.1 16.3-30.3 1.8-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 35.2 15.2 49 16.5 66.6 13.9 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"/></svg>
+              </div>
+              <a
+                href={waLeakUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#25D366] hover:bg-[#1da851] py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors shadow-md"
+              >
+                Aiko a WhatsApp
+              </a>
+              <span class="text-[10px] text-emerald-200/80">Kafar sirri da aminci</span>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  {/* 4. IN-ARTICLE (Fluid Responsive) */}
+  {
+    !isSponsored && normalizedVariant === 'in-article' && resolvedFallback !== 'placeholder' && (
+      <div class="w-full">
+        {resolvedFallback === 'newsletter' && (
+          <div class="w-full rounded-2xl bg-gradient-to-r from-[#0f3036] via-[#14424a] to-[#0a2327] p-5 md:p-6 text-white shadow-md border border-[#c59d5f]/30 flex flex-col md:flex-row items-center justify-between gap-5">
+            <div class="flex items-center gap-4">
+              <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#c59d5f]/20 text-[#c59d5f] border border-[#c59d5f]/30">
+                <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] font-bold uppercase tracking-wider text-[#c59d5f]">Wasiƙar Yanci</span>
+                  <span class="text-[10px] text-stone-300">· Kyauta</span>
+                </div>
+                <h4 class="font-serif text-base md:text-lg font-bold text-white">Samun Labaran Yanci a Imel</h4>
+                <p class="text-xs text-stone-300">Rike alaka da sahihan labarai da bincike kowace safiya.</p>
+              </div>
+            </div>
+            <form data-ad-newsletter-form class="flex w-full md:w-auto shrink-0 flex-col sm:flex-row gap-2">
+              <input
+                type="email"
+                name="email"
+                required
+                placeholder="Adireshin imel..."
+                class="w-full sm:w-56 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs text-white placeholder:text-stone-300 focus:border-[#c59d5f] focus:outline-none"
+              />
+              <button
+                type="submit"
+                class="rounded-lg bg-[#c59d5f] hover:bg-[#d4a85f] px-4 py-2 text-xs font-bold uppercase tracking-wider text-[#0f3036] transition-colors whitespace-nowrap shadow-xs cursor-pointer"
+              >
+                Yi Rajista
+              </button>
+            </form>
+          </div>
+        )}
+
+        {resolvedFallback === 'app' && (
+          <div class="w-full rounded-2xl bg-gradient-to-r from-[#0d2228] via-[#10353d] to-[#0b1c20] p-5 md:p-6 text-white shadow-md border border-teal-500/30 flex flex-col md:flex-row items-center justify-between gap-5">
+            <div class="flex items-center gap-4">
+              <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#c59d5f] to-[#0f3036] p-1.5 shadow-xs">
+                <img src="/icons/yc-mark-white.svg" alt="Yanci App" class="h-full w-full object-contain" />
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] font-bold uppercase tracking-wider text-[#c59d5f]">Manhajar Yanci</span>
+                  <span class="text-[10px] text-teal-300">· PWA</span>
+                </div>
+                <h4 class="font-serif text-base md:text-lg font-bold text-white">Karanta Labarai Ba Tare da Layin Intanet Ba</h4>
+                <p class="text-xs text-stone-300">Sanya manhajar Yanci a wayarka don samun labaran gaggawa.</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              data-ad-pwa-install
+              class="flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[#c59d5f] hover:bg-[#d4a85f] px-4 py-2 text-xs font-bold uppercase tracking-wider text-[#0f3036] transition-colors shadow-xs whitespace-nowrap cursor-pointer"
+            >
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Sanya Manhaja
+            </button>
+          </div>
+        )}
+
+        {resolvedFallback === 'tipline' && (
+          <div class="w-full rounded-2xl bg-gradient-to-r from-[#064e3b] via-[#065f46] to-[#022c22] p-5 md:p-6 text-white shadow-md border border-emerald-500/40 flex flex-col md:flex-row items-center justify-between gap-5">
+            <div class="flex items-center gap-4">
+              <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-white shadow-xs">
+                <svg class="h-6 w-6" viewBox="0 0 448 512" fill="currentColor" aria-hidden="true"><path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.2 0-65.7-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-32.6-16.3-54-29.1-75.5-66-5.7-9.8 5.7-9.1 16.3-30.3 1.8-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 35.2 15.2 49 16.5 66.6 13.9 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"/></svg>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-200">WhatsApp Tipline</span>
+                  <span class="text-[10px] text-emerald-300">· Asiri 100%</span>
+                </div>
+                <h4 class="font-serif text-base md:text-lg font-bold text-white">Aiko da Labari ko Bayanan Sirri</h4>
+                <p class="text-xs text-emerald-100">Ka san wani labari da ya dace a bincika? Tuntubi Yanci a asirce.</p>
+              </div>
+            </div>
+            <a
+              href={waLeakUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[#25D366] hover:bg-[#1da851] px-4 py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors shadow-xs whitespace-nowrap"
+            >
+              Aiko ta WhatsApp
+            </a>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  {/* 5. STICKY-FOOTER (320x50 mobile / 728x90 desktop) */}
+  {
+    !isSponsored && normalizedVariant === 'sticky-footer' && (
+      <div class="mx-auto flex w-full max-w-[728px] items-center justify-between gap-3">
+        {/* Disclaimer Tag */}
+        <div class="hidden lg:flex shrink-0 items-center">
+          <span class="rounded bg-black/40 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[#c59d5f] border border-[#c59d5f]/30">
+            TALLA
+          </span>
+        </div>
+
+        {/* Content depending on fallback */}
+        <div class="flex-1 min-w-0">
+          {resolvedFallback === 'newsletter' && (
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-2 min-w-0">
+                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#c59d5f]/20 text-[#c59d5f]">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                </div>
+                <div class="min-w-0">
+                  <p class="truncate text-xs font-bold text-white">Wasiƙar Yanci a Imel</p>
+                  <p class="hidden sm:block truncate text-[11px] text-stone-300">Labaran yau da bincike kowace safiya kyauta.</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <form data-ad-newsletter-form class="hidden sm:flex items-center gap-2">
+                  <input
+                    type="email"
+                    name="email"
+                    required
+                    placeholder="Imel dinka..."
+                    class="w-40 rounded-md border border-white/20 bg-white/10 px-2.5 py-1 text-xs text-white placeholder:text-stone-400 focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    class="rounded-md bg-[#c59d5f] hover:bg-[#d4a85f] px-3 py-1 text-xs font-bold text-[#0f3036] transition-colors whitespace-nowrap cursor-pointer"
+                  >
+                    Rajista
+                  </button>
+                </form>
+                <a
+                  href="#newsletter-form"
+                  class="sm:hidden rounded bg-[#c59d5f] px-3 py-1 text-xs font-bold text-[#0f3036]"
+                >
+                  Rajista
+                </a>
+              </div>
+            </div>
+          )}
+
+          {resolvedFallback === 'app' && (
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-2 min-w-0">
+                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/20 p-1">
+                  <img src="/icons/yc-mark-white.svg" alt="Yanci" class="h-full w-full object-contain" />
+                </div>
+                <div class="min-w-0">
+                  <p class="truncate text-xs font-bold text-white">Manhajar Yanci a Waya</p>
+                  <p class="hidden sm:block truncate text-[11px] text-teal-300">Karanta labarai ba tare da intanet ba (Offline).</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                data-ad-pwa-install
+                class="shrink-0 flex items-center gap-1.5 rounded-md bg-[#c59d5f] hover:bg-[#d4a85f] px-3 py-1 text-xs font-bold text-[#0f3036] transition-colors cursor-pointer"
+              >
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Sanya Manhaja
+              </button>
+            </div>
+          )}
+
+          {resolvedFallback === 'tipline' && (
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-2 min-w-0">
+                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-white">
+                  <svg class="h-4 w-4" viewBox="0 0 448 512" fill="currentColor" aria-hidden="true"><path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.2 0-65.7-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-32.6-16.3-54-29.1-75.5-66-5.7-9.8 5.7-9.1 16.3-30.3 1.8-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 35.2 15.2 49 16.5 66.6 13.9 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"/></svg>
+                </div>
+                <div class="min-w-0">
+                  <p class="truncate text-xs font-bold text-white">WhatsApp Tipline</p>
+                  <p class="hidden sm:block truncate text-[11px] text-emerald-200">Aiko mana da rahoto a asirce.</p>
+                </div>
+              </div>
+              <a
+                href={waLeakUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="shrink-0 flex items-center gap-1 rounded-md bg-[#25D366] hover:bg-[#1da851] px-3 py-1 text-xs font-bold text-white transition-colors"
+              >
+                Aika
+              </a>
+            </div>
+          )}
+        </div>
+
+        {/* Close Button */}
+        <button
+          type="button"
+          data-ad-sticky-close
+          aria-label="Rufe tallar kasa"
+          class="shrink-0 rounded-full p-1 text-stone-400 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
     )
   }
 </div>
+
+<script>
+  // Global PWA install prompt handler
+  let deferredPrompt: any = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    (window as any).__yanciInstallPrompt = e;
+  });
+
+  // Handle all newsletter forms inside ad units
+  document.querySelectorAll<HTMLFormElement>('[data-ad-newsletter-form]').forEach((form) => {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const input = form.querySelector<HTMLInputElement>('input[name="email"]');
+      const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+      const email = input?.value?.trim();
+      if (!email) return;
+
+      const originalBtnText = button ? button.textContent : '';
+      if (button) {
+        button.disabled = true;
+        button.textContent = '...';
+      }
+
+      try {
+        const res = await fetch('/api/newsletter', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+
+        if (res.ok) {
+          form.innerHTML = `
+            <div class="flex items-center gap-1.5 rounded-lg bg-emerald-500/20 px-3 py-1.5 text-xs font-bold text-emerald-200 border border-emerald-500/30">
+              <svg class="h-4 w-4 shrink-0 text-[#25D366]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>An yi rajista! Barka da zuwa Yanci.</span>
+            </div>
+          `;
+        } else {
+          if (button) {
+            button.disabled = false;
+            button.textContent = originalBtnText;
+          }
+          alert('An samu matsala wajen rajista. Da fatan a sake gwadawa.');
+        }
+      } catch {
+        if (button) {
+          button.disabled = false;
+          button.textContent = originalBtnText;
+        }
+        alert('An samu matsala. Da fatan a duba intanet dinka.');
+      }
+    });
+  });
+
+  // Handle PWA install buttons inside ad units
+  document.querySelectorAll<HTMLButtonElement>('[data-ad-pwa-install]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const promptEvent = deferredPrompt || (window as any).__yanciInstallPrompt;
+      if (promptEvent) {
+        promptEvent.prompt();
+        const { outcome } = await promptEvent.userChoice;
+        if (outcome === 'accepted') {
+          deferredPrompt = null;
+          (window as any).__yanciInstallPrompt = null;
+        }
+      } else {
+        alert('Don sanya manhajar Yanci a wayarka:\n\n1. Android / Chrome: Danna ɗigon-uku (⋮) a sama sannan ka zaɓi "Install app" ko "Add to Home Screen".\n2. iPhone / Safari: Danna alamar raba (Share ⎋) a ƙasa sannan ka zaɓi "Add to Home Screen" (Ƙara zuwa Allon Waya).');
+      }
+    });
+  });
+
+  // Handle sticky footer dismiss button
+  document.querySelectorAll<HTMLElement>('[data-ad-sticky-root]').forEach((stickyRoot) => {
+    const slotId = stickyRoot.dataset.adSlot || 'default';
+    const storageKey = `yanci-sticky-ad-dismissed-${slotId}`;
+
+    try {
+      if (sessionStorage.getItem(storageKey) === '1') {
+        stickyRoot.style.display = 'none';
+        return;
+      }
+    } catch {}
+
+    const closeBtn = stickyRoot.querySelector<HTMLButtonElement>('[data-ad-sticky-close]');
+    closeBtn?.addEventListener('click', () => {
+      stickyRoot.style.opacity = '0';
+      stickyRoot.style.transform = 'translateY(100%)';
+      setTimeout(() => {
+        stickyRoot.style.display = 'none';
+      }, 300);
+      try {
+        sessionStorage.setItem(storageKey, '1');
+      } catch {}
+    });
+  });
+</script>
+

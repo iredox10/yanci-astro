@@ -1,0 +1,408 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getSettings } from '@lib/appwrite-server';
+
+export const prerender = false;
+
+const settings = await getSettings();
+const rawTipNumber = String(
+  import.meta.env.PUBLIC_WHATSAPP_TIP_NUMBER ||
+    settings.whatsapp_tip_number ||
+    settings.whatsapp_number ||
+    '2348000000000'
+);
+// Clean number for wa.me URL (digits only)
+const tipNumber = rawTipNumber.replace(/\D/g, '') || '2348000000000';
+const formattedNumber = rawTipNumber.startsWith('+') ? rawTipNumber : `+${rawTipNumber}`;
+const prefilledWaMessage = 'Ina son aiko da bayani na sirri ga Yanci: ';
+const waUrl = `https://wa.me/${tipNumber}?text=${encodeURIComponent(prefilledWaMessage)}`;
+const tiplineEmail = settings.tipline_email || settings.contact_email || 'labulabari@yanci.ng';
+---
+
+<BaseLayout
+  title="Aiko mana da Bayani — Yanci TipLine"
+  description="Shafin aiko da bayanan sirri da fallasa (Whistleblower TipLine) ga jaridar Yanci. Muna ba da cikakkiyar kariya ga majiyar labarai da rufin asiri."
+  path="/tipline"
+>
+  <div class="bg-gradient-to-b from-[#0a2125] to-[#0f3036] text-white">
+    <div class="mx-auto max-w-[1100px] px-4 py-16 sm:px-6 md:py-24">
+      <div class="max-w-3xl">
+        <div class="inline-flex items-center gap-2 rounded-full border border-yanci-accent/30 bg-yanci-accent/10 px-3.5 py-1 text-xs font-bold uppercase tracking-wider text-yanci-accent">
+          <span class="h-2 w-2 rounded-full bg-yanci-accent animate-pulse"></span>
+          Yanci TipLine • Tashar Sirri & Fallasa
+        </div>
+        <h1 class="mt-4 font-serif text-4xl font-black tracking-tight sm:text-5xl md:text-6xl text-white">
+          Aiko mana da Bayani <span class="text-yanci-accent">—</span> Yanci TipLine
+        </h1>
+        <p class="mt-6 text-lg leading-relaxed text-gray-300 md:text-xl">
+          Kuna da bayanan sirri, takardun shaida, ko labari na bincike da ya kamata al’umma su sani? 
+          Yanci ta tsaya tsayin daka wajen kare majiyar labarai, tabbatar da gaskiya, da bayar da cikakken rufin asiri.
+        </p>
+      </div>
+
+      <!-- Quick Action: Direct WhatsApp Trigger -->
+      <div class="mt-10 rounded-2xl border border-white/15 bg-white/10 p-6 backdrop-blur-md sm:p-8">
+        <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div class="space-y-2">
+            <div class="flex items-center gap-3">
+              <div class="flex h-10 w-10 items-center justify-center rounded-full bg-[#25D366] text-white shadow-md">
+                <svg class="h-5 w-5 fill-current" viewBox="0 0 448 512" aria-hidden="true">
+                  <path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.2 0-65.7-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-32.6-16.3-54-29.1-75.5-66-5.7-9.8 5.7-9.1 16.3-30.3 1.8-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 35.2 15.2 49 16.5 66.6 13.9 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"/>
+                </svg>
+              </div>
+              <h2 class="font-serif text-2xl font-bold text-white">Tuntube Mu Kai Tsaye ta WhatsApp</h2>
+            </div>
+            <p class="text-sm text-gray-300 max-w-xl">
+              Yi amfani da WhatsApp domin tura labari ko fallasa kai tsaye ga editan bincike. 
+              Sadarwar tana da rufin asiri na <em>End-to-End Encryption</em>.
+            </p>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-3">
+            <a
+              href={waUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center justify-center gap-2.5 rounded-full bg-[#25D366] px-6 py-3.5 text-base font-bold text-white shadow-lg transition-all hover:bg-[#1da851] hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              <svg class="h-5 w-5 fill-current" viewBox="0 0 448 512" aria-hidden="true">
+                <path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.2 0-65.7-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-32.6-16.3-54-29.1-75.5-66-5.7-9.8 5.7-9.1 16.3-30.3 1.8-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 35.2 15.2 49 16.5 66.6 13.9 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"/>
+              </svg>
+              <span>Aika Saƙo a WhatsApp</span>
+            </a>
+            <a
+              href="#secure-form"
+              class="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-white/5 px-5 py-3.5 text-base font-bold text-white transition-colors hover:bg-white/15"
+            >
+              Form na Yanar Gizo ↓
+            </a>
+          </div>
+        </div>
+        <div class="mt-4 flex flex-wrap items-center gap-2 border-t border-white/10 pt-4 text-xs text-gray-400">
+          <span class="font-semibold text-yanci-accent">Lambar WhatsApp:</span>
+          <span class="font-mono text-gray-200">{formattedNumber}</span>
+          <span class="text-gray-500">•</span>
+          <span>Saƙon farko: <em class="text-gray-300">"{prefilledWaMessage}..."</em></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content Area -->
+  <div class="mx-auto max-w-[1100px] px-4 py-12 sm:px-6 md:py-16">
+    <div class="grid gap-12 lg:grid-cols-12">
+      
+      <!-- Left Column: Source Protection Details & Security Tips -->
+      <div class="space-y-12 lg:col-span-7">
+        
+        <!-- Section: How We Protect Sources -->
+        <section>
+          <span class="text-xs font-bold uppercase tracking-widest text-yanci-teal">Aminci & Dokokin Aikin Jarida</span>
+          <h2 class="mt-2 font-serif text-3xl font-black text-yanci-primary">
+            Yadda Muke Kare Majiyoyin Labarai
+          </h2>
+          <p class="mt-4 leading-relaxed text-gray-700">
+            Aikin jarida na bincike ya ta’allaka ne a kan amincewar da ke tsakanin 'yan jarida da majiyoyin da ke da ƙarfin halin bayyana gaskiya. A Yanci, muna girmama wannan amana tare da ɗaukar matakan kariya na musamman:
+          </p>
+
+          <div class="mt-8 grid gap-6 sm:grid-cols-2">
+            <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-xs">
+              <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-800 font-bold">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+              </div>
+              <h3 class="mt-4 font-serif text-lg font-bold text-yanci-dark">Rufin Asiri (End-to-End Encryption)</h3>
+              <p class="mt-2 text-sm leading-relaxed text-gray-600">
+                Sadarwar da aka yi ta hanyoyin sirri kamar WhatsApp da Signal tana da rufin asiri inda babu wani na uku da zai iya leƙa saƙonnin.
+              </p>
+            </div>
+
+            <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-xs">
+              <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-800 font-bold">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                </svg>
+              </div>
+              <h3 class="mt-4 font-serif text-lg font-bold text-yanci-dark">Kariyar Majiya ta Doka</h3>
+              <p class="mt-2 text-sm leading-relaxed text-gray-600">
+                Bisa ƙa'idar aikin jarida ta duniya, ba ma bayyana sunan majiyar sirri ga gwamnati, kotu, ko kamfani a kowane yanayi.
+              </p>
+            </div>
+
+            <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-xs">
+              <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-800 font-bold">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                  <line x1="1" y1="1" x2="23" y2="23"></line>
+                </svg>
+              </div>
+              <h3 class="mt-4 font-serif text-lg font-bold text-yanci-dark">Cikakken Ɓoye Suna (100% Anonymous)</h3>
+              <p class="mt-2 text-sm leading-relaxed text-gray-600">
+                Ba ma tilasta ka bayyana sunanka ko adireshinka ba. Aikinmu shi ne tantance gaskiyar bayanin da aka kawo.
+              </p>
+            </div>
+
+            <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-xs">
+              <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100 text-purple-800 font-bold">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                </svg>
+              </div>
+              <h3 class="mt-4 font-serif text-lg font-bold text-yanci-dark">Tsaftace Fayiloli (Metadata Stripping)</h3>
+              <p class="mt-2 text-sm leading-relaxed text-gray-600">
+                Muna goge dukkan bayanan sirri (EXIF metadata kamar lokaci, na'ura, ko GPS) daga hotuna da takardun da aka aiko kafin amfani da su.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Section: Whistleblower Safety Tips -->
+        <section class="rounded-2xl border border-amber-200/80 bg-amber-50/60 p-6 sm:p-8">
+          <div class="flex items-center gap-3">
+            <span class="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500 text-white font-bold text-sm">!</span>
+            <h2 class="font-serif text-2xl font-bold text-amber-950">Shawarwarin Tsaro ga Masu Aiko da Bayanin Sirri</h2>
+          </div>
+          <p class="mt-3 text-sm leading-relaxed text-amber-900">
+            Domin kare kanka daga gano asali ko binciken na'urori a wurin aiki ko gwamnati, bi waɗannan matakan:
+          </p>
+
+          <ul class="mt-6 space-y-4 text-sm text-amber-950">
+            <li class="flex items-start gap-3">
+              <span class="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-amber-600"></span>
+              <span><strong>Kada ka yi amfani da na'urar aiki:</strong> Kar ka yi amfani da waya, kwamfuta, ko intanet (Wi-Fi) na ofishin gwamnati ko na kamfanin da kake aiki.</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-amber-600"></span>
+              <span><strong>Yi amfani da intanet na daban:</strong> Zai fi kyau ka yi amfani da intanet na jama'a ko VPN mai inganci, ko kuma bincike ta manhajar <em>Tor Browser</em> ko <em>Brave</em>.</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-amber-600"></span>
+              <span><strong>Kunna saƙonni masu ɓacewa (Disappearing Messages):</strong> Idan kana amfani da WhatsApp ko Signal, saita saƙon ya ɓace bayan mintuna kaɗan.</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-amber-600"></span>
+              <span><strong>Kiyaye sirrin magana:</strong> Kada ka tattauna da abokan aiki ko a kafafen sada zumunta cewa ka aiko da labari ga Yanci.</span>
+            </li>
+          </ul>
+        </section>
+
+        <!-- FAQ Section -->
+        <section class="space-y-6">
+          <h2 class="font-serif text-2xl font-bold text-yanci-primary">Tambayoyi da Ake Yawan Yi (FAQ)</h2>
+          
+          <div class="space-y-4">
+            <details class="group rounded-xl border border-gray-200 bg-white p-5">
+              <summary class="flex cursor-pointer list-none items-center justify-between font-serif text-base font-bold text-yanci-dark">
+                <span>Me zai faru bayan na aiko da bayani?</span>
+                <span class="transition-transform group-open:rotate-180 text-yanci-accent">▼</span>
+              </summary>
+              <p class="mt-3 text-sm leading-relaxed text-gray-600">
+                Editan bincikenmu zai duba bayanin da kuka aiko cikin tsanaki. Za mu tantance gaskiyar bayanan, bincika hujjoji da takardu, kuma idan ya cancanta, za mu rubuta cikakken rahoto ba tare da fallasa sunan ko asalin wanda ya aiko da bayanin ba.
+              </p>
+            </details>
+
+            <details class="group rounded-xl border border-gray-200 bg-white p-5">
+              <summary class="flex cursor-pointer list-none items-center justify-between font-serif text-base font-bold text-yanci-dark">
+                <span>Shin Yanci tana biyan kuɗi domin sayen labarai ko fallasa?</span>
+                <span class="transition-transform group-open:rotate-180 text-yanci-accent">▼</span>
+              </summary>
+              <p class="mt-3 text-sm leading-relaxed text-gray-600">
+                A'a. Domin kare mutunci da 'yancin aikin jarida mai zaman kanta, Yanci ba ta biyan kuɗi domin samun labari. Muna aiki ne domin maslahar al'umma da kare gaskiya.
+              </p>
+            </details>
+
+            <details class="group rounded-xl border border-gray-200 bg-white p-5">
+              <summary class="flex cursor-pointer list-none items-center justify-between font-serif text-base font-bold text-yanci-dark">
+                <span>Ta yaya zan iya aiko da manyan fayiloli ko takardu masu yawa?</span>
+                <span class="transition-transform group-open:rotate-180 text-yanci-accent">▼</span>
+              </summary>
+              <p class="mt-3 text-sm leading-relaxed text-gray-600">
+                Za ka iya loda fayilolin a shafukan ajiya na sirri (kamar Google Drive, Proton Drive, Dropbox, ko Mega) sannan ka sanya hanyar haɗin (link) a fom ɗin da ke ƙasa, ko kuma ka aiko mana da su kai tsaye ta lambar WhatsApp ko Signal.
+              </p>
+            </details>
+          </div>
+        </section>
+      </div>
+
+      <!-- Right Column: Secure Tip Submission Web Form -->
+      <div class="lg:col-span-5">
+        <div id="secure-form" class="sticky top-20 rounded-2xl border border-gray-200 bg-white p-6 shadow-lg sm:p-8">
+          <div class="border-b border-gray-100 pb-5">
+            <span class="text-xs font-bold uppercase tracking-wider text-yanci-teal">Form na Sirri</span>
+            <h2 class="mt-1 font-serif text-2xl font-bold text-yanci-primary">Aiko da Bayani ta Shafin Nan</h2>
+            <p class="mt-2 text-xs leading-relaxed text-gray-500">
+              Cika wannan fom domin aiko da labari kai tsaye zuwa ga editan bincikenmu. Ba a buƙatar sunanka.
+            </p>
+          </div>
+
+          <form id="tipline-form" class="mt-6 space-y-5" method="post" action="/api/tipline">
+            
+            <!-- Topic -->
+            <div>
+              <label for="tip-topic" class="block text-xs font-bold uppercase tracking-wide text-gray-700">
+                Jigon Labari / Topic <span class="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                id="tip-topic"
+                name="topic"
+                required
+                placeholder="Misali: Cin hanci, Aikin gwamnati, Tsaro..."
+                class="mt-1.5 w-full rounded-lg border border-gray-300 bg-gray-50/50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-yanci-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-yanci-accent/30"
+              />
+            </div>
+
+            <!-- Message Body -->
+            <div>
+              <label for="tip-message" class="block text-xs font-bold uppercase tracking-wide text-gray-700">
+                Bayanin Labari / Message <span class="text-red-500">*</span>
+              </label>
+              <textarea
+                id="tip-message"
+                name="message"
+                required
+                rows="6"
+                placeholder="Bayyana abin da ya faru, wanda abin ya shafa, inda ya faru, da lokacin da ya auku..."
+                class="mt-1.5 w-full resize-y rounded-lg border border-gray-300 bg-gray-50/50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-yanci-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-yanci-accent/30"
+              ></textarea>
+            </div>
+
+            <!-- Optional File Link -->
+            <div>
+              <label for="tip-file" class="block text-xs font-bold uppercase tracking-wide text-gray-700">
+                Hanyar Haɗin Fayil / File Link <span class="text-xs font-normal text-gray-400">(Na zaɓi)</span>
+              </label>
+              <input
+                type="url"
+                id="tip-file"
+                name="fileLink"
+                placeholder="https://drive.google.com/... ko Dropbox link"
+                class="mt-1.5 w-full rounded-lg border border-gray-300 bg-gray-50/50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-yanci-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-yanci-accent/30"
+              />
+              <p class="mt-1 text-[11px] text-gray-500">
+                Za ka iya saka link ɗin takardu, hotuna, ko bidiyo daga Google Drive, Dropbox, Mega, da sauransu.
+              </p>
+            </div>
+
+            <!-- Optional Contact Info -->
+            <div>
+              <label for="tip-contact" class="block text-xs font-bold uppercase tracking-wide text-gray-700">
+                Hanyar Tuntuɓa / Contact Method <span class="text-xs font-normal text-gray-400">(Na zaɓi)</span>
+              </label>
+              <input
+                type="text"
+                id="tip-contact"
+                name="contactMethod"
+                placeholder="Signal, Telegram, Imel, ko bar shi fanko"
+                class="mt-1.5 w-full rounded-lg border border-gray-300 bg-gray-50/50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-yanci-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-yanci-accent/30"
+              />
+              <p class="mt-1 text-[11px] text-gray-500">
+                Idan kana son mu tuntube ka domin ƙarin bayani. Bar shi fanko domin kasancewa a ɓoye (Anonymous).
+              </p>
+            </div>
+
+            <!-- Privacy Guarantee Note -->
+            <div class="rounded-lg bg-gray-50 p-3 text-xs text-gray-600 flex items-start gap-2.5">
+              <svg class="h-4 w-4 flex-shrink-0 text-emerald-600 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              </svg>
+              <span>Ba ma adana adireshin IP ko bayanan na'urarka a wannan fom.</span>
+            </div>
+
+            <!-- Submit Button -->
+            <button
+              type="submit"
+              id="tipline-submit-btn"
+              class="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-yanci-primary px-6 py-3.5 text-sm font-bold uppercase tracking-wider text-yanci-paper shadow-md transition-all hover:bg-yanci-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yanci-primary disabled:opacity-50"
+            >
+              <svg id="tipline-spinner" class="hidden h-4 w-4 animate-spin text-white" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+              </svg>
+              <span id="tipline-btn-text">Aika Bayani Cikin Sirri</span>
+            </button>
+
+            <!-- Feedback Alert -->
+            <div id="tipline-feedback" class="hidden rounded-lg p-4 text-sm" role="alert"></div>
+          </form>
+
+          <!-- Alternative Channel Box -->
+          <div class="mt-8 border-t border-gray-100 pt-6">
+            <h3 class="text-xs font-bold uppercase tracking-wide text-gray-700">Sauran Hanyoyin Sadarwa:</h3>
+            <div class="mt-3 space-y-2 text-xs text-gray-600">
+              <div class="flex items-center justify-between">
+                <span>Imel na Bincike:</span>
+                <a href={`mailto:${tiplineEmail}`} class="font-medium text-yanci-teal hover:underline">{tiplineEmail}</a>
+              </div>
+              <div class="flex items-center justify-between">
+                <span>WhatsApp:</span>
+                <a href={waUrl} target="_blank" rel="noopener noreferrer" class="font-medium text-[#25D366] hover:underline">{formattedNumber}</a>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  const form = document.getElementById('tipline-form') as HTMLFormElement | null;
+  const feedback = document.getElementById('tipline-feedback');
+  const submitBtn = document.getElementById('tipline-submit-btn') as HTMLButtonElement | null;
+  const spinner = document.getElementById('tipline-spinner');
+  const btnText = document.getElementById('tipline-btn-text');
+
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!feedback || !submitBtn || !spinner || !btnText) return;
+
+      feedback.className = 'hidden';
+      feedback.textContent = '';
+      submitBtn.disabled = true;
+      spinner.classList.remove('hidden');
+      btnText.textContent = 'Ana aikawa...';
+
+      const formData = new FormData(form);
+      const payload = {
+        topic: String(formData.get('topic') ?? '').trim(),
+        message: String(formData.get('message') ?? '').trim(),
+        fileLink: String(formData.get('fileLink') ?? '').trim(),
+        contactMethod: String(formData.get('contactMethod') ?? '').trim(),
+      };
+
+      try {
+        const response = await fetch('/api/tipline', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (response.ok) {
+          form.reset();
+          feedback.textContent = data.message || 'Mun samu bayanan da kuka aiko cikin nasara. Muna godiya da amincewarku da Yanci.';
+          feedback.className = 'rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 text-sm font-medium';
+        } else {
+          feedback.textContent = data.message || 'An samu matsala wajen aika bayanin. Don Allah sake gwadawa.';
+          feedback.className = 'rounded-lg bg-red-50 border border-red-200 text-red-800 p-4 text-sm font-medium';
+        }
+      } catch {
+        feedback.textContent = 'An samu matsalar sadarwa. Don Allah sake gwadawa ko amfani da WhatsApp.';
+        feedback.className = 'rounded-lg bg-red-50 border border-red-200 text-red-800 p-4 text-sm font-medium';
+      } finally {
+        submitBtn.disabled = false;
+        spinner.classList.add('hidden');
+        btnText.textContent = 'Aika Bayani Cikin Sirri';
+      }
+    });
+  }
+</script>

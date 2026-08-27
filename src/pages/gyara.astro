@@ -1,0 +1,278 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getSettings } from '@lib/appwrite-server';
+
+export const prerender = false;
+
+const settings = await getSettings();
+const contactEmail = settings.contact_email || 'labulabari@yanci.ng';
+---
+
+<BaseLayout
+  title="Manufar Gyara da Koke — Yanci"
+  description="Manufar Yanci game da gyaran kuskuren gaskiya da hanyar aiko da korafi ko gyara daga masu karatu."
+  path="/gyara"
+>
+  <div class="mx-auto max-w-[1000px] px-4 py-12 md:px-6 md:py-16">
+    <!-- Broadsheet Header -->
+    <header class="border-b-4 border-double border-yanci-primary pb-8 text-center md:pb-12">
+      <div class="inline-flex items-center gap-2 border-b border-yanci-accent/60 pb-1 text-xs font-bold uppercase tracking-[0.25em] text-yanci-accent">
+        <span>Gaskiya & Bayyana Hujja</span>
+        <span class="text-yanci-primary/30">•</span>
+        <span>Amanar Aikin Jarida</span>
+      </div>
+      <h1 class="mt-4 font-serif text-3xl font-black tracking-tight text-yanci-primary sm:text-5xl md:text-6xl">
+        Manufar Gyara da Koke
+      </h1>
+      <p class="mx-auto mt-5 max-w-2xl font-serif text-lg italic leading-relaxed text-gray-700 sm:text-xl">
+        "Idan mun yi kuskure, muna amincewa da shi a fili, muna gaggawar gyara shi, kuma muna sanar da masu karatu abin da aka gyara."
+      </p>
+      
+      <div class="mt-6 flex flex-wrap items-center justify-center gap-4 text-xs font-medium uppercase tracking-wider text-gray-500">
+        <span>Sashen Kula da Sahihancin Labarai</span>
+        <span>—</span>
+        <span>Yanci Media</span>
+      </div>
+    </header>
+
+    <div class="mt-12 grid gap-12 lg:grid-cols-12">
+      <!-- Left Column: Policy Explanation (7 cols) -->
+      <div class="space-y-10 lg:col-span-7">
+        <!-- Mukaddimar Gyara -->
+        <section class="rounded-sm border-l-4 border-yanci-accent bg-white p-6 shadow-sm">
+          <h2 class="font-serif text-2xl font-bold text-yanci-primary">Tsayawa a Kan Gaskiya</h2>
+          <p class="mt-3 font-serif text-base leading-relaxed text-gray-700">
+            A jaridar <strong>Yanci</strong>, muna yin dukkan mai yiwuwa don tabbatar da cewa kowane bayani a cikin labaranmu sahihi ne. Sai dai aikin jarida aiki ne na mutum, kuma wani lokaci kuskure na iya aukuwa.
+          </p>
+          <p class="mt-2 text-sm leading-relaxed text-gray-600">
+            Manufarmu ita ce gyara kowane kuskuren gaskiya cikin gaggawa, a fili, kuma ba tare da boye-boye ba.
+          </p>
+        </section>
+
+        <!-- Yadda Muke Nuna Gyara -->
+        <section class="space-y-4 rounded-sm border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
+          <h2 class="font-serif text-2xl font-bold text-yanci-primary">Yadda Muke Nuna Gyara (How We Correct)</h2>
+          <p class="text-sm leading-relaxed text-gray-700">
+            Idan an samu kuskure na gaskiya a wani labari da aka riga aka wallafa, muna bin wadannan ka'idoji:
+          </p>
+
+          <div class="space-y-4 pt-2">
+            <div class="border-l-2 border-yanci-teal pl-4">
+              <h3 class="font-serif text-base font-bold text-yanci-dark">1. Bayanin Gyara a Kasan Labari (Correction Note)</h3>
+              <p class="mt-1 text-xs leading-relaxed text-gray-600">
+                Idan kuskuren ya shafi sunan mutum, alkaluma, kwanan wata, ko wani muhimmin bayani, za mu gyara ainihin rubutun, sannan mu sanya akwatin bayanin gyara a kasan labarin mai kwanan wata da cikakken bayanin abin da aka gyara da dalilin gyaran.
+              </p>
+            </div>
+
+            <div class="border-l-2 border-yanci-teal pl-4">
+              <h3 class="font-serif text-base font-bold text-yanci-dark">2. Kananan Kurakurai na Rubutu (Typo / Clarifications)</h3>
+              <p class="mt-1 text-xs leading-relaxed text-gray-600">
+                Kananan kurakuran haruffa ko nahawu da ba su sauya ma'anar labari ba ana gyara su kai tsaye ba tare da bayanin gyara a kasa ba. Idan kuma bayanin ya shafi kara fayyace ma'ana ne ba kuskure ba, muna sanya bayanin <em>"Karin Haske" (Clarification)</em>.
+              </p>
+            </div>
+
+            <div class="border-l-2 border-yanci-teal pl-4">
+              <h3 class="font-serif text-base font-bold text-yanci-dark">3. Janyewa da Bada Hakuri (Retractions)</h3>
+              <p class="mt-1 text-xs leading-relaxed text-gray-600">
+                Idan labari ya zama gaba daya ba gaskiya ba ne ko ya saba wa ka'idojin da'ar aikin jarida, za a janye shi daga shafi tare da bayar da cikakken bayani da neman afuwar masu karatu a shafin farko da shafukan sada zumunta.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Matakan Bibiyar Koke -->
+        <section class="space-y-4 rounded-sm border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
+          <h2 class="font-serif text-2xl font-bold text-yanci-primary">Matakan da Muke Bi Idan An Aiko da Gyara</h2>
+          <div class="grid gap-3 sm:grid-cols-3">
+            <div class="rounded border border-gray-100 bg-yanci-paper/30 p-3 text-center">
+              <span class="font-serif text-xl font-bold text-yanci-accent">01</span>
+              <h4 class="mt-1 text-xs font-bold uppercase text-yanci-primary">Dubawa</h4>
+              <p class="mt-1 text-[11px] text-gray-600">Editocinmu za su duba koken a cikin sa'o'i 24 zuwa 48.</p>
+            </div>
+            <div class="rounded border border-gray-100 bg-yanci-paper/30 p-3 text-center">
+              <span class="font-serif text-xl font-bold text-yanci-accent">02</span>
+              <h4 class="mt-1 text-xs font-bold uppercase text-yanci-primary">Tantancewa</h4>
+              <p class="mt-1 text-[11px] text-gray-600">Bincika sabbin hujjoji tare da dan jaridar da ya rubuta labarin.</p>
+            </div>
+            <div class="rounded border border-gray-100 bg-yanci-paper/30 p-3 text-center">
+              <span class="font-serif text-xl font-bold text-yanci-accent">03</span>
+              <h4 class="mt-1 text-xs font-bold uppercase text-yanci-primary">Aiwatarwa</h4>
+              <p class="mt-1 text-[11px] text-gray-600">Sabunta labarin, sanya bayanin gyara, da aiko da amsa ta imel.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Karin Bayani & Tuntubar kai tsaye -->
+        <section class="rounded-sm bg-yanci-primary/5 p-6 text-sm text-gray-700">
+          <h3 class="font-serif text-base font-bold text-yanci-primary">Imel Kai Tsaye na Sashen Gyara</h3>
+          <p class="mt-1 text-xs leading-relaxed text-gray-600">
+            Kuna kuma iya aiko mana da sakon gyara ko korafi kai tsaye ta adireshin imel:
+          </p>
+          <p class="mt-2 font-mono text-sm font-bold text-yanci-teal">
+            <a href={`mailto:${contactEmail}`} class="hover:underline">{contactEmail}</a>
+          </p>
+          <p class="mt-3 text-xs text-gray-500">
+            Kuna iya karanta cikakkun <a href="/manufofi" class="font-bold text-yanci-primary underline">Manufofin Edita da Ka'idojin Aiki</a> na Yanci.
+          </p>
+        </section>
+      </div>
+
+      <!-- Right Column: Submission Form (5 cols) -->
+      <div class="lg:col-span-5">
+        <div class="sticky top-24 rounded-sm border-2 border-yanci-primary/20 bg-white p-6 shadow-md sm:p-8">
+          <div class="border-b border-gray-200 pb-4">
+            <span class="text-xs font-bold uppercase tracking-wider text-yanci-accent">Fom Din Masu Karatu</span>
+            <h2 class="mt-1 font-serif text-2xl font-bold text-yanci-primary">Aiko da Koken Gyara</h2>
+            <p class="mt-1 text-xs text-gray-500">
+              Cika wannan fom din domin sanar da editocinmu kuskuren da kuka lura da shi a cikin wani labari.
+            </p>
+          </div>
+
+          <form id="correction-form" class="mt-6 space-y-4" method="post" action="/api/corrections">
+            <div>
+              <label for="article" class="block text-xs font-bold uppercase tracking-wide text-yanci-primary">
+                Taken Labari ko Adireshin Yanar Gizo (URL) <span class="text-yanci-red">*</span>
+              </label>
+              <input
+                type="text"
+                id="article"
+                name="article"
+                required
+                placeholder="Misali: https://yanci.ng/labarai/... ko taken labarin"
+                class="mt-1 w-full border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-yanci-accent focus:outline-none focus:ring-1 focus:ring-yanci-accent"
+              />
+            </div>
+
+            <div>
+              <label for="error_details" class="block text-xs font-bold uppercase tracking-wide text-yanci-primary">
+                Bayanin Kuskuren da aka Samu <span class="text-yanci-red">*</span>
+              </label>
+              <textarea
+                id="error_details"
+                name="error_details"
+                required
+                rows={3}
+                placeholder="Ina kuskuren yake? Menene aka rubuta ba daidai ba a cikin labarin?"
+                class="mt-1 w-full border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-yanci-accent focus:outline-none focus:ring-1 focus:ring-yanci-accent"
+              ></textarea>
+            </div>
+
+            <div>
+              <label for="correct_info" class="block text-xs font-bold uppercase tracking-wide text-yanci-primary">
+                Cikakken Bayanin Gaskiya da Hujja <span class="text-yanci-red">*</span>
+              </label>
+              <textarea
+                id="correct_info"
+                name="correct_info"
+                required
+                rows={3}
+                placeholder="Menene ainihin gaskiyar bayanin? Saka links ko bayanan hujjojin da kake da su."
+                class="mt-1 w-full border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-yanci-accent focus:outline-none focus:ring-1 focus:ring-yanci-accent"
+              ></textarea>
+            </div>
+
+            <div>
+              <label for="name" class="block text-xs font-bold uppercase tracking-wide text-yanci-primary">
+                Sunanka
+              </label>
+              <input
+                type="text"
+                id="name"
+                name="name"
+                placeholder="Sunanka (ba wajibi ba)"
+                class="mt-1 w-full border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-yanci-accent focus:outline-none focus:ring-1 focus:ring-yanci-accent"
+              />
+            </div>
+
+            <div>
+              <label for="email" class="block text-xs font-bold uppercase tracking-wide text-yanci-primary">
+                Adireshin Imel Naka <span class="text-yanci-red">*</span>
+              </label>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                required
+                placeholder="you@example.com"
+                class="mt-1 w-full border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-yanci-accent focus:outline-none focus:ring-1 focus:ring-yanci-accent"
+              />
+              <p class="mt-1 text-[11px] text-gray-500">Za mu yi amfani da imel din ne kawai domin aiko muku da sakamakon bincikenmu.</p>
+            </div>
+
+            <div class="pt-2">
+              <button
+                type="submit"
+                id="submit-btn"
+                class="w-full bg-yanci-primary py-3 text-center text-xs font-bold uppercase tracking-widest text-yanci-paper transition hover:bg-yanci-primary/90 focus:outline-none focus:ring-2 focus:ring-yanci-accent"
+              >
+                Aika Koken Gyara
+              </button>
+            </div>
+
+            <p id="form-status" class="hidden text-center text-xs font-bold"></p>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  const form = document.getElementById('correction-form') as HTMLFormElement | null;
+  const statusEl = document.getElementById('form-status');
+  const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement | null;
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!form || !statusEl || !submitBtn) return;
+
+    statusEl.hidden = true;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Ana aikawa...';
+
+    const formData = new FormData(form);
+    const payload = {
+      article: formData.get('article'),
+      error_details: formData.get('error_details'),
+      correct_info: formData.get('correct_info'),
+      name: formData.get('name'),
+      email: formData.get('email'),
+    };
+
+    try {
+      const res = await fetch('/api/corrections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.ok) {
+        form.innerHTML = `
+          <div class="rounded-sm bg-emerald-50 p-6 text-center text-emerald-800 border border-emerald-200">
+            <svg class="mx-auto h-12 w-12 text-emerald-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            <h3 class="font-serif text-lg font-bold text-emerald-900">Mun Gode da Kokenka!</h3>
+            <p class="mt-2 text-xs leading-relaxed text-emerald-700">
+              Mun karbi bayanin gyaran da kuka aiko. Tawagar editocinmu za su bincika labarin tare da daukar matakin da ya dace.
+            </p>
+          </div>
+        `;
+      } else {
+        statusEl.textContent = data.message || 'An samu matsala wajen aikawa. Da fatan a sake gwadawa.';
+        statusEl.className = 'mt-3 text-center text-xs font-bold text-yanci-red';
+        statusEl.hidden = false;
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Aika Koken Gyara';
+      }
+    } catch {
+      statusEl.textContent = 'An samu matsala wajen aikawa. Da fatan a sake gwadawa.';
+      statusEl.className = 'mt-3 text-center text-xs font-bold text-yanci-red';
+      statusEl.hidden = false;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Aika Koken Gyara';
+    }
+  });
+</script>

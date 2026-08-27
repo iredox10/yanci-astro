@@ -11,6 +11,8 @@ import Corrections from '../../components/Corrections.astro';
 import WhatsAppTipLine from '../../components/WhatsAppTipLine.astro';
 import BreakingNewsBanner from '../../components/BreakingNewsBanner.astro';
 import BookmarkButton from '../../components/BookmarkButton';
+import FontSizeController from '../../components/FontSizeController';
+import PrintButton from '../../components/PrintButton';
 import { pillarAccent } from '../../data/schema';
 import { loadArticles, loadArticle, toCards } from '../../lib/content';
 
@@ -101,6 +103,40 @@ const enc = (s: string) => encodeURIComponent(s);
 const facebookShare = `https://www.facebook.com/sharer/sharer.php?u=${enc(currentUrl)}`;
 const twitterShare = `https://twitter.com/intent/tweet?url=${enc(currentUrl)}&text=${enc(article.headline)}`;
 const whatsappShare = `https://api.whatsapp.com/send?text=${enc(`${article.headline} - ${currentUrl}`)}`;
+
+const audioPlaylist = [
+  {
+    id: idStr,
+    title: article.headline,
+    text: plainBody,
+    section: sectionLabel,
+    author: article.author,
+    image: article.image,
+    url: `/article/${idStr}`,
+  },
+  ...others.slice(0, 6).map((o) => {
+    const oBody = (o.body ?? o.trail ?? '')
+      .replace(/<(style|script)[\s\S]*?<\/\1>/gi, ' ')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, '\'')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return {
+      id: String(o.$id ?? o.id),
+      title: o.headline,
+      text: oBody,
+      section: String(o.section ?? o.pillar ?? 'Labarai'),
+      author: o.author,
+      image: o.image,
+      url: `/article/${String(o.$id ?? o.id)}`,
+    };
+  }),
+];
 ---
 
 <BaseLayout
@@ -165,9 +201,23 @@ const whatsappShare = `https://api.whatsapp.com/send?text=${enc(`${article.headl
 
   <main id="main-content" class="overflow-hidden pb-32 pt-10 md:pt-16" role="main" aria-label="Babban ciki" data-article-id={idStr} data-article-section={sectionLabel}>
     <article class="mx-auto w-full max-w-[780px] px-4 sm:px-5 md:px-0">
+      <!-- Print Newspaper Header (Visible only when printing) -->
+      <div class="print-newspaper-header hidden" aria-hidden="true">
+        <div class="print-header-top">
+          <span class="print-brand">YANCI</span>
+          <span class="print-tagline">Jaridar Hausa Mai Zaman Kanta</span>
+          <span class="print-url">www.yanci.ng</span>
+        </div>
+        <div class="print-header-sub">
+          <span class="print-date">{formatDate(article.$createdAt)}</span>
+          <span class="print-section">{sectionLabel}</span>
+          <span class="print-edition">Bugun Yanar Gizo</span>
+        </div>
+      </div>
+
       <!-- Header -->
       <header class="mb-8 md:mb-10">
-        <div class="mb-6 flex flex-wrap items-center gap-3">
+        <div class="mb-6 flex flex-wrap items-center gap-3 no-print">
           <a href={`/tag/${encodeURIComponent(sectionLabel)}`} class="font-sans text-sm font-extrabold uppercase tracking-widest hover:underline" style={`color: ${accent}`}>
             {sectionLabel}
           </a>
@@ -199,8 +249,17 @@ const whatsappShare = `https://api.whatsapp.com/send?text=${enc(`${article.headl
           </div>
         )}
 
+        <!-- Print-only Byline -->
+        <div class="print-byline hidden font-sans text-xs text-gray-700" aria-hidden="true">
+          <span>Daga <strong>{article.author ?? 'Yanci Staff'}</strong>{article.coAuthor ? ` tare da ${article.coAuthor}` : ''}</span>
+          <span class="mx-2">•</span>
+          <span>An buga: {formatDate(article.$createdAt)}</span>
+          <span class="mx-2">•</span>
+          <span>Rukuni: {sectionLabel}</span>
+        </div>
+
         {/* Meta */}
-        <div class="mb-8 flex flex-col justify-between gap-4 py-4 sm:flex-row sm:items-center sm:gap-6 sm:py-6 md:mb-10 border-y border-gray-100">
+        <div class="mb-8 flex flex-col justify-between gap-4 py-4 sm:flex-row sm:items-center sm:gap-6 sm:py-6 md:mb-10 border-y border-gray-100 no-print">
           <div class="flex items-center gap-3 sm:gap-4">
             <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg font-bold text-[#121212] sm:h-12 sm:w-12 sm:text-xl">
               {(article.author ?? 'Y')[0]}
@@ -223,7 +282,8 @@ const whatsappShare = `https://api.whatsapp.com/send?text=${enc(`${article.headl
             <span>{formatDate(article.$createdAt)}</span>
           </div>
 
-          <div class="flex shrink-0 items-center gap-2 sm:gap-3">
+          <div class="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
+            <FontSizeController client:load />
             <BookmarkButton
               client:load
               article={{
@@ -237,6 +297,7 @@ const whatsappShare = `https://api.whatsapp.com/send?text=${enc(`${article.headl
               }}
               showLabel={true}
             />
+            <PrintButton client:load />
             <div class="hidden h-5 w-px bg-gray-200 sm:block" />
             <span class="mr-1 hidden font-sans text-[10px] font-bold uppercase tracking-widest text-gray-400 sm:block">Share</span>
             <a href={facebookShare} target="_blank" rel="noopener noreferrer" class="flex h-9 w-9 items-center justify-center rounded-full border border-gray-100 text-gray-400 transition-all duration-300 hover:border-[#1877F2] hover:bg-[#1877F2] hover:text-white sm:h-10 sm:w-10" title="Facebook" aria-label="Share on Facebook">
@@ -286,8 +347,11 @@ const whatsappShare = `https://api.whatsapp.com/send?text=${enc(`${article.headl
         </figure>
       )}
 
+      <!-- Audio Player (Inline + Persistent Floating Mini-Player) -->
+      <AudioPlayer client:load title={article.headline} text={plainBody} playlist={audioPlaylist} />
+
       <!-- Body -->
-      <div class="article-body prose prose-lg md:prose-xl max-w-none text-[#121212] prose-headings:font-bold prose-headings:font-serif prose-headings:tracking-tight prose-p:font-serif prose-p:text-[1.125rem] md:prose-p:text-[1.35rem] prose-p:leading-[1.8] prose-p:mb-8 prose-img:rounded-lg prose-img:shadow-lg prose-img:my-10 prose-a:text-[#c70000] prose-a:no-underline hover:prose-a:underline hover:prose-a:decoration-2 hover:prose-a:underline-offset-2 prose-blockquote:border-l-[6px] prose-blockquote:border-[#c70000] prose-blockquote:bg-gray-50 prose-blockquote:py-4 prose-blockquote:px-8 prose-blockquote:not-italic prose-blockquote:font-bold prose-blockquote:text-xl md:prose-blockquote:text-2xl prose-blockquote:text-gray-900 prose-blockquote:rounded-r-lg">
+      <div class="article-body yanci-article-body prose prose-lg md:prose-xl max-w-none text-[#121212] prose-headings:font-bold prose-headings:font-serif prose-headings:tracking-tight prose-p:font-serif prose-p:text-[1.125rem] md:prose-p:text-[1.35rem] prose-p:leading-[1.8] prose-p:mb-8 prose-img:rounded-lg prose-img:shadow-lg prose-img:my-10 prose-a:text-[#c70000] prose-a:no-underline hover:prose-a:underline hover:prose-a:decoration-2 hover:prose-a:underline-offset-2 prose-blockquote:border-l-[6px] prose-blockquote:border-[#c70000] prose-blockquote:bg-gray-50 prose-blockquote:py-4 prose-blockquote:px-8 prose-blockquote:not-italic prose-blockquote:font-bold prose-blockquote:text-xl md:prose-blockquote:text-2xl prose-blockquote:text-gray-900 prose-blockquote:rounded-r-lg">
         {body ? (
           <Fragment set:html={body} />
         ) : (
@@ -295,9 +359,22 @@ const whatsappShare = `https://api.whatsapp.com/send?text=${enc(`${article.headl
         )}
       </div>
 
-      <Corrections corrections={corrections} className="mt-10" />
+      <script is:inline>
+        (function() {
+          try {
+            var s = localStorage.getItem('yanci_reader_fontsize');
+            if (s && ['normal', 'big', 'large', 'xlarge'].indexOf(s) !== -1) {
+              document.documentElement.setAttribute('data-reader-font-size', s);
+              var targets = document.querySelectorAll('.yanci-article-body, .article-body');
+              for (var i = 0; i < targets.length; i++) {
+                targets[i].setAttribute('data-font-size', s);
+              }
+            }
+          } catch(e) {}
+        })();
+      </script>
 
-      <AudioPlayer client:load title={article.headline} text={plainBody} />
+      <Corrections corrections={corrections} className="mt-10" />
 
       <AdSlot variant="inline" slotId="article-inline" className="mt-10" />
 
@@ -327,6 +404,13 @@ const whatsappShare = `https://api.whatsapp.com/send?text=${enc(`${article.headl
 
       <!-- Comments -->
       <CommentsSection articleId={idStr} />
+
+      <!-- Print Article Footer URL -->
+      <div class="print-article-footer hidden" aria-hidden="true">
+        <p class="font-bold text-[#121212]">YANCI — www.yanci.ng</p>
+        <p class="mt-1">An ɗauko wannan labari daga: <span class="underline">{currentUrl}</span></p>
+        <p class="text-[10px] text-gray-500 mt-1">© {new Date().getFullYear()} Yanci Media Ltd. An kiyaye haƙƙin mallaka.</p>
+      </div>
     </article>
 
     <!-- Recommended Articles -->

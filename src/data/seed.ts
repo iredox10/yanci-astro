@@ -1,4 +1,4 @@
-import type { ArticleCard } from './schema';
+import type { ArticleCard, Poll } from './schema';
 
 export const SEED_ARTICLES: ArticleCard[] = [
   {
@@ -171,3 +171,18 @@ export const SEED_SPORTS = {
 };
 
 export const SEED_TRENDING = ['#Nollywood', '#Afrobeats', '#NigerianFood', '#Fashion', '#Tech', '#Startups'];
+export const SEED_POLL: Poll = {
+  id: 'poll-haraji-2025',
+  question: 'Kuna goyon bayan sabon tsarin harajin da gwamnati ta gabatar?',
+  description: "Bayanin ra'ayin al'umma game da sabbin sauye-sauyen haraji da manufofin tattalin arziki a Najeriya.",
+  category: "Ra'ayin Jama'a",
+  options: [
+    { id: 'opt-1', text: 'E, ina goyon baya sosai', votes: 142 },
+    { id: 'opt-2', text: "A'a, ban goyi baya ba", votes: 218 },
+    { id: 'opt-3', text: 'Ina bukatar karin bayani', votes: 65 },
+    { id: 'opt-4', text: "Ba ni da tabbataccen ra'ayi", votes: 23 },
+  ],
+  totalVotes: 448,
+  active: true,
+  createdAt: '2025-01-15T00:00:00.000Z',
+};

@@ -80,6 +80,26 @@ export interface Comment {
   $createdAt?: string;
 }
 
+/** Reader poll option and poll model. */
+export interface PollOption {
+  id: string;
+  text: string;
+  votes: number;
+  percentage?: number;
+}
+
+export interface Poll {
+  $id?: string;
+  id: string;
+  question: string;
+  description?: string;
+  category?: string;
+  options: PollOption[];
+  totalVotes: number;
+  active?: boolean;
+  createdAt?: string;
+}
+
 /** Article card data passed to NewsCard/etc. */
 export type ArticleCard = Pick<
   Article,
