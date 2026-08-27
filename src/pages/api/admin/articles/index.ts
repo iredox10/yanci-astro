@@ -27,6 +27,22 @@ function sanitizeInput(body: Record<string, unknown>) {
     isSensitive: Boolean(body.isSensitive),
     metaTitle: sanitizePlainText(String(body.metaTitle ?? ''), 200),
     metaDescription: sanitizePlainText(String(body.metaDescription ?? ''), 300),
+    imageFocalX: typeof body.imageFocalX === 'number' ? Math.round(body.imageFocalX) : undefined,
+    imageFocalY: typeof body.imageFocalY === 'number' ? Math.round(body.imageFocalY) : undefined,
+    imageAlt: typeof body.imageAlt === 'string' ? sanitizePlainText(body.imageAlt, 300) : undefined,
+    tags: Array.isArray(body.tags)
+      ? body.tags.map((t) => sanitizePlainText(String(t), 50)).filter(Boolean).slice(0, 40)
+      : undefined,
+    is_breaking: Boolean(body.is_breaking),
+    breaking_until: typeof body.breaking_until === 'string' && body.breaking_until ? body.breaking_until : undefined,
+    review_status: ['pending', 'approved', 'rejected'].includes(String(body.review_status))
+      ? String(body.review_status)
+      : 'pending',
+    focal_point: body.focal_point
+      ? typeof body.focal_point === 'object'
+        ? JSON.stringify(body.focal_point)
+        : sanitizePlainText(String(body.focal_point), 100)
+      : undefined,
   };
 }
 

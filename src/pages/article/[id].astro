@@ -4,9 +4,13 @@ import NewsCard from '../../components/NewsCard.astro';
 import LiveTimeline from '../../components/LiveTimeline.astro';
 import CommentsSection from '../../components/CommentsSection.astro';
 import AudioPlayer from '../../components/AudioPlayer';
+import ArticleExplainer from '../../components/ArticleExplainer';
+import RecommendedArticles from '../../components/RecommendedArticles.astro';
 import AdSlot from '../../components/ads/AdSlot.astro';
 import Corrections from '../../components/Corrections.astro';
 import WhatsAppTipLine from '../../components/WhatsAppTipLine.astro';
+import BreakingNewsBanner from '../../components/BreakingNewsBanner.astro';
+import BookmarkButton from '../../components/BookmarkButton';
 import { pillarAccent } from '../../data/schema';
 import { loadArticles, loadArticle, toCards } from '../../lib/content';
 
@@ -23,6 +27,17 @@ const idStr = String(article.$id ?? article.id);
 const body = article.body;
 const isLive = Boolean(article.isLive);
 const liveUpdates = Array.isArray(article.liveUpdates) ? article.liveUpdates : [];
+
+const isBreaking = Boolean(
+  article.is_breaking || (article as unknown as Record<string, unknown>).isBreaking,
+);
+const isBreakingActive =
+  isBreaking &&
+  (!article.breaking_until || new Date(article.breaking_until).getTime() > Date.now());
+
+const isSensitive = Boolean(
+  article.isSensitive || (article as unknown as Record<string, unknown>).is_sensitive,
+);
 
 const words = (body ?? '').replace(/<[^>]*>/g, ' ').trim().split(/\s+/).filter(Boolean).length;
 const readTime = Math.max(1, Math.ceil(words / 200));
@@ -44,6 +59,29 @@ const corrections = Array.isArray((article as { corrections?: unknown }).correct
   ? ((article as { corrections?: Array<{ date: string | Date; text: string }> }).corrections ?? [])
   : undefined;
 
+const focalPosition = (() => {
+  if (article.focal_point) {
+    if (typeof article.focal_point === 'object' && article.focal_point !== null) {
+      return `${article.focal_point.x}% ${article.focal_point.y}%`;
+    }
+    if (typeof article.focal_point === 'string') {
+      try {
+        const parsed = JSON.parse(article.focal_point);
+        if (parsed && typeof parsed.x === 'number' && typeof parsed.y === 'number') {
+          return `${parsed.x}% ${parsed.y}%`;
+        }
+      } catch {}
+      return article.focal_point;
+    }
+  }
+  if (article.imageFocalX != null && article.imageFocalY != null) {
+    return `${article.imageFocalX}% ${article.imageFocalY}%`;
+  }
+  return undefined;
+})();
+
+const sectionLabel = String(article.section ?? article.pillar ?? 'Labarai');
+
 const others = (await loadArticles()).filter((a) => String(a.$id ?? a.id) !== idStr);
 const relevance = (a: (typeof others)[number]) => {
   const otherTags = Array.isArray(a.tags) ? a.tags : [];
@@ -63,7 +101,6 @@ const enc = (s: string) => encodeURIComponent(s);
 const facebookShare = `https://www.facebook.com/sharer/sharer.php?u=${enc(currentUrl)}`;
 const twitterShare = `https://twitter.com/intent/tweet?url=${enc(currentUrl)}&text=${enc(article.headline)}`;
 const whatsappShare = `https://api.whatsapp.com/send?text=${enc(`${article.headline} - ${currentUrl}`)}`;
-const sectionLabel = String(article.section ?? article.pillar ?? 'Labarai');
 ---
 
 <BaseLayout
@@ -78,6 +115,49 @@ const sectionLabel = String(article.section ?? article.pillar ?? 'Labarai');
   tags={tagList}
   section={sectionLabel}
 >
+  <!-- Breaking news banner (if active sitewide or for breaking article) -->
+  <BreakingNewsBanner />
+
+  <!-- Sensitive Content Warning Modal -->
+  {isSensitive && (
+    <div
+      id="sensitive-warning-modal"
+      class="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="sensitive-title"
+    >
+      <div class="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-2xl sm:p-8">
+        <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+          <svg class="h-8 w-8" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
+            <path d="M256 32c14.2 0 27.3 7.5 34.5 19.8l216 368c7.3 12.4 7.3 27.7 .2 40.1S486.3 480 472 480H40c-14.3 0-27.4-7.7-34.7-20.1s-7.1-27.7 .2-40.1l216-368C228.7 39.5 241.8 32 256 32zm0 128c-13.3 0-24 10.7-24 24V280c0 13.3 10.7 24 24 24s24-10.7 24-24V184c0-13.3-10.7-24-24-24zm32 224a32 32 0 1 0 -64 0 32 32 0 1 0 64 0z" />
+          </svg>
+        </div>
+        <h2 id="sensitive-title" class="mb-3 font-serif text-2xl font-black text-[#121212]">
+          Abun Ciki Mai Kula
+        </h2>
+        <p class="mb-6 text-sm leading-relaxed text-gray-600">
+          Wannan labari ya ƙunshi bayanan da zasu iya damun wasu masu karatu. Don Allah ka tabbata kana son ci gaba da karantawa.
+        </p>
+        <div class="flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            id="accept-sensitive-btn"
+            class="flex-1 rounded-xl bg-[#121212] py-3 text-sm font-bold text-white transition-colors hover:bg-gray-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#121212]"
+          >
+            Na Fahimta, Ci Gaba
+          </button>
+          <a
+            href="/"
+            class="flex-1 rounded-xl bg-gray-100 py-3 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-200"
+          >
+            Komawa Gida
+          </a>
+        </div>
+      </div>
+    </div>
+  )}
+
   <!-- Reading progress -->
   <div class="fixed left-0 top-0 z-50 h-1.5 w-full bg-gray-100">
     <div id="reading-progress-bar" class="h-full transition-all duration-300 ease-out" style={`width:0%; background-color: ${accent}`} />
@@ -87,7 +167,7 @@ const sectionLabel = String(article.section ?? article.pillar ?? 'Labarai');
     <article class="mx-auto w-full max-w-[780px] px-4 sm:px-5 md:px-0">
       <!-- Header -->
       <header class="mb-8 md:mb-10">
-        <div class="mb-6 flex items-center gap-3">
+        <div class="mb-6 flex flex-wrap items-center gap-3">
           <a href={`/tag/${encodeURIComponent(sectionLabel)}`} class="font-sans text-sm font-extrabold uppercase tracking-widest hover:underline" style={`color: ${accent}`}>
             {sectionLabel}
           </a>
@@ -95,6 +175,12 @@ const sectionLabel = String(article.section ?? article.pillar ?? 'Labarai');
           {isLive && (
             <span class="flex items-center gap-1.5 rounded-full bg-[#c70000] px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white">
               <span class="h-2 w-2 animate-pulse rounded-full bg-white"></span> Kai Tsaye
+            </span>
+          )}
+          {isBreakingActive && !isLive && (
+            <span class="flex items-center gap-1.5 rounded-full bg-[#c70000] px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white animate-pulse">
+              <svg class="h-3 w-3 text-yellow-300" viewBox="0 0 384 512" fill="currentColor" aria-hidden="true"><path d="M349.4 44.6c5.9-13.7 1.5-29.7-10.6-38.5s-28.6-8-39.9 1.8l-256 224c-10 8.8-13.6 22.9-8.9 35.3S50.7 288 64 288h111.5L98.6 467.4c-5.9 13.7-1.5 29.7 10.6 38.5s28.6 8 39.9-1.8l256-224c10-8.8 13.6-22.9 8.9-35.3s-16.6-20.7-29.9-20.7H272.5L349.4 44.6z"/></svg>
+              Breaking News
             </span>
           )}
           <span class="flex items-center gap-1 font-sans text-xs font-bold uppercase tracking-widest text-gray-500">
@@ -124,6 +210,11 @@ const sectionLabel = String(article.section ?? article.pillar ?? 'Labarai');
               <a href={`/author/${encodeURIComponent(article.author ?? 'Yanci Staff')}`} class="truncate font-sans text-sm font-bold transition-colors hover:underline sm:text-base" style={`color: ${accent}`}>
                 {article.author ?? 'Yanci Staff'}
               </a>
+              {article.coAuthor && (
+                <a href={`/author/${encodeURIComponent(article.coAuthor)}`} class="truncate font-sans text-xs text-gray-500 transition-colors hover:underline mt-0.5">
+                  Tare da {article.coAuthor}
+                </a>
+              )}
             </div>
           </div>
 
@@ -133,6 +224,20 @@ const sectionLabel = String(article.section ?? article.pillar ?? 'Labarai');
           </div>
 
           <div class="flex shrink-0 items-center gap-2 sm:gap-3">
+            <BookmarkButton
+              client:load
+              article={{
+                id: idStr,
+                headline: article.headline,
+                section: sectionLabel,
+                pillar: String(article.pillar ?? ''),
+                image: article.image,
+                slug: article.slug,
+                publishDate: article.$createdAt,
+              }}
+              showLabel={true}
+            />
+            <div class="hidden h-5 w-px bg-gray-200 sm:block" />
             <span class="mr-1 hidden font-sans text-[10px] font-bold uppercase tracking-widest text-gray-400 sm:block">Share</span>
             <a href={facebookShare} target="_blank" rel="noopener noreferrer" class="flex h-9 w-9 items-center justify-center rounded-full border border-gray-100 text-gray-400 transition-all duration-300 hover:border-[#1877F2] hover:bg-[#1877F2] hover:text-white sm:h-10 sm:w-10" title="Facebook" aria-label="Share on Facebook">
               <svg class="h-[14px] w-[14px]" viewBox="0 0 320 512" fill="currentColor" aria-hidden="true"><path d="M279.14 288l14.22-92.66h-88.9v-60.13c0-25.35 12.42-50.06 52.24-50.06h40.42V6.26S260.43 0 225.36 0c-73.22 0-121.08 44.38-121.08 124.72v70.62H22.89V288h81.39v224h100.17V288z"/></svg>
@@ -147,17 +252,42 @@ const sectionLabel = String(article.section ?? article.pillar ?? 'Labarai');
         </div>
       </header>
 
+      <!-- Article Explainer -->
+      <ArticleExplainer
+        client:visible
+        headline={article.headline}
+        body={plainBody || body || ''}
+        initialSummary={article.trail}
+      />
+
       <!-- Main image -->
       {article.image && (
         <figure class="mb-8 w-full md:mb-12">
           <div class="relative overflow-hidden rounded-sm bg-gray-100 shadow-sm">
-            <img src={article.image} alt={article.headline} loading="eager" decoding="async" class="block h-auto w-full object-cover" />
+            <img
+              src={article.image}
+              alt={article.imageAlt || article.headline}
+              loading="eager"
+              decoding="async"
+              class="block h-auto w-full object-cover"
+              style={focalPosition ? `object-position: ${focalPosition};` : undefined}
+            />
           </div>
+          {(article.imageCaption || article.imageCredit) && (
+            <figcaption class="mt-3 flex items-start gap-1.5 font-sans text-xs sm:text-sm text-gray-500 leading-tight">
+              <svg class="mt-0.5 h-3 w-3 shrink-0 text-[#121212]" viewBox="0 0 320 512" fill="currentColor" aria-hidden="true"><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg>
+              <span>
+                {article.imageCaption}
+                {article.imageCaption && article.imageCredit && <span class="mx-1 text-gray-300">|</span>}
+                {article.imageCredit && <span class="font-bold uppercase tracking-widest text-[10px]">Hoto: {article.imageCredit}</span>}
+              </span>
+            </figcaption>
+          )}
         </figure>
       )}
 
       <!-- Body -->
-      <div>
+      <div class="article-body prose prose-lg md:prose-xl max-w-none text-[#121212] prose-headings:font-bold prose-headings:font-serif prose-headings:tracking-tight prose-p:font-serif prose-p:text-[1.125rem] md:prose-p:text-[1.35rem] prose-p:leading-[1.8] prose-p:mb-8 prose-img:rounded-lg prose-img:shadow-lg prose-img:my-10 prose-a:text-[#c70000] prose-a:no-underline hover:prose-a:underline hover:prose-a:decoration-2 hover:prose-a:underline-offset-2 prose-blockquote:border-l-[6px] prose-blockquote:border-[#c70000] prose-blockquote:bg-gray-50 prose-blockquote:py-4 prose-blockquote:px-8 prose-blockquote:not-italic prose-blockquote:font-bold prose-blockquote:text-xl md:prose-blockquote:text-2xl prose-blockquote:text-gray-900 prose-blockquote:rounded-r-lg">
         {body ? (
           <Fragment set:html={body} />
         ) : (
@@ -199,7 +329,10 @@ const sectionLabel = String(article.section ?? article.pillar ?? 'Labarai');
       <CommentsSection articleId={idStr} />
     </article>
 
-    <!-- Related -->
+    <!-- Recommended Articles -->
+    <RecommendedArticles currentArticle={article} />
+
+    <!-- Related Articles -->
     <section class="mt-12 border-t border-gray-200 bg-gray-50 py-12 md:mt-24 md:py-20">
       <div class="mx-auto max-w-[1400px] px-4 sm:px-5 md:px-6">
         <div class="mb-8">

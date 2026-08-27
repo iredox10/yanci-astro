@@ -1,0 +1,168 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+export const prerender = false;
+---
+
+<BaseLayout
+  title="Labaran da na ajiye — Yanci"
+  description="Duba dukkan labaran da ka ajiye don karantawa a shafin Yanci."
+  path="/saved/"
+>
+  <div class="bg-gray-50/50 py-10 md:py-16">
+    <div class="mx-auto max-w-4xl px-4 md:px-6">
+      <!-- Breadcrumb & Header -->
+      <nav class="mb-6 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-yanci-primary/60">
+        <a href="/" class="hover:text-yanci-accent">Gida</a>
+        <span>/</span>
+        <a href="/account" class="hover:text-yanci-accent">Asusu</a>
+        <span>/</span>
+        <span class="text-yanci-primary">Labaran da aka ajiye</span>
+      </nav>
+
+      <div class="mb-8 flex flex-col justify-between gap-4 border-b border-yanci-primary/10 pb-6 sm:flex-row sm:items-center">
+        <div>
+          <span class="text-xs font-bold uppercase tracking-widest text-yanci-accent">Asusu</span>
+          <h1 class="mt-1 font-serif text-3xl font-black text-yanci-primary md:text-4xl">
+            Labaran da na ajiye
+          </h1>
+          <p class="mt-1 text-sm text-yanci-primary/60">
+            Labaran da ka yi alama domin karantawa nan gaba.
+          </p>
+        </div>
+        <div id="saved-actions" class="hidden">
+          <button
+            type="button"
+            id="clear-all-saved"
+            class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-bold text-yanci-red transition hover:border-yanci-red hover:bg-yanci-red/5"
+          >
+            Goge duka
+          </button>
+        </div>
+      </div>
+
+      <!-- Saved Articles Container -->
+      <div id="saved-list" class="space-y-4">
+        <!-- Rendered client-side -->
+      </div>
+
+      <!-- Empty State -->
+      <div id="saved-empty" class="hidden rounded-2xl border border-dashed border-yanci-primary/20 bg-white py-16 text-center">
+        <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-yanci-accent/15 text-[#8a6b32]">
+          <svg class="h-8 w-8" viewBox="0 0 384 512" fill="currentColor" aria-hidden="true">
+            <path d="M0 48V487.7C0 501.1 10.9 512 24.3 512c5 0 9.9-1.5 14-4.4L192 400 345.7 507.6c4.1 2.9 9 4.4 14 4.4c13.4 0 24.3-10.9 24.3-24.3V48c0-26.5-21.5-48-48-48H48C21.5 0 0 21.5 0 48z"/>
+          </svg>
+        </div>
+        <h2 class="font-serif text-xl font-bold text-yanci-primary">Babu labaran da ka ajiye tukuna</h2>
+        <p class="mx-auto mt-2 max-w-sm text-sm text-yanci-primary/60">
+          Danna alamar adanawa a kowane labari domin ajiye shi a nan don saukin karantawa.
+        </p>
+        <a
+          href="/"
+          class="mt-6 inline-flex items-center gap-2 rounded-lg bg-yanci-primary px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-yanci-paper transition hover:bg-yanci-primary/90"
+        >
+          Bincika Sabbin Labarai &rarr;
+        </a>
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  import { getSavedArticles, removeSavedArticle, clearAllSavedArticles, type SavedArticleItem } from '../lib/bookmarks';
+
+  const listEl = document.getElementById('saved-list');
+  const emptyEl = document.getElementById('saved-empty');
+  const actionsEl = document.getElementById('saved-actions');
+  const clearBtn = document.getElementById('clear-all-saved');
+
+  function renderList() {
+    if (!listEl || !emptyEl || !actionsEl) return;
+    const items = getSavedArticles();
+
+    if (items.length === 0) {
+      listEl.innerHTML = '';
+      emptyEl.classList.remove('hidden');
+      actionsEl.classList.add('hidden');
+      return;
+    }
+
+    emptyEl.classList.add('hidden');
+    actionsEl.classList.remove('hidden');
+
+    listEl.innerHTML = items
+      .map((item: SavedArticleItem) => {
+        const articleHref = item.slug ? `/article/${item.slug}` : `/article/${item.id}`;
+        const formattedDate = item.publishDate
+          ? new Date(item.publishDate).toLocaleDateString('ha-NG', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+            })
+          : '';
+
+        return `
+          <div class="group flex flex-col gap-4 rounded-xl border border-yanci-primary/10 bg-white p-5 shadow-xs transition hover:border-yanci-accent/50 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between" data-article-id="${item.id}">
+            <div class="flex items-start gap-4 min-w-0 flex-1">
+              ${
+                item.image
+                  ? `<img src="${item.image}" alt="" class="h-20 w-24 shrink-0 rounded-lg object-cover bg-gray-100" />`
+                  : ''
+              }
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-yanci-accent">
+                  <span>${item.section || 'Labarai'}</span>
+                  ${formattedDate ? `<span class="text-gray-400">&bull;</span><span class="text-gray-500 font-normal">${formattedDate}</span>` : ''}
+                </div>
+                <h3 class="mt-1 font-serif text-lg font-bold leading-snug text-yanci-primary">
+                  <a href="${articleHref}" class="transition group-hover:text-yanci-accent">
+                    ${item.headline}
+                  </a>
+                </h3>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 shrink-0 self-end sm:self-center">
+              <a
+                href="${articleHref}"
+                class="rounded-lg bg-gray-100 px-3.5 py-1.5 text-xs font-bold text-yanci-primary transition hover:bg-yanci-primary hover:text-white"
+              >
+                Karanta
+              </a>
+              <button
+                type="button"
+                data-remove-id="${item.id}"
+                class="rounded-lg p-2 text-gray-400 transition hover:bg-red-50 hover:text-yanci-red"
+                title="Cire daga labaran da aka ajiye"
+                aria-label="Cire labari"
+              >
+                <svg class="h-4 w-4" viewBox="0 0 448 512" fill="currentColor" aria-hidden="true">
+                  <path d="M135.2 17.7L128 32H32C14.3 32 0 46.3 0 64S14.3 96 32 96H416c17.7 0 32-14.3 32-32s-14.3-32-32-32H320l-7.2-14.3C307.4 6.8 296.3 0 284.2 0H163.8c-12.1 0-23.2 6.8-28.6 17.7zM416 128H32L53.2 467c1.6 25.3 22.6 45 47.9 45H346.9c25.3 0 46.3-19.7 47.9-45L416 128z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        `;
+      })
+      .join('');
+  }
+
+  listEl?.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-remove-id]');
+    if (btn) {
+      const id = btn.dataset.removeId;
+      if (id) {
+        removeSavedArticle(id);
+        renderList();
+      }
+    }
+  });
+
+  clearBtn?.addEventListener('click', () => {
+    if (window.confirm('Ka tabbatar kana son goge dukkan labaran da ka ajiye?')) {
+      clearAllSavedArticles();
+      renderList();
+    }
+  });
+
+  renderList();
+</script>

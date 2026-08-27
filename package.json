@@ -10,6 +10,8 @@
     "build": "astro build",
     "preview": "astro preview",
     "start": "node ./scripts/start.mjs",
+    "cron:publish": "node ./scripts/publish-scheduled.mjs",
+    "cron:social": "node ./scripts/social-auto-post.mjs --check-recent",
     "astro": "astro"
   },
   "dependencies": {

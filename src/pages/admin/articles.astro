@@ -17,24 +17,40 @@ const filter = url.searchParams.get('filter') ?? 'all';
 const statusOf = (a: { status?: string; isLive?: boolean }) =>
   String(a.status ?? (a.isLive ? 'published' : 'draft'));
 
-const filtered = articles
-  .filter((a) => {
-    const status = statusOf(a);
-    if (filter !== 'all' && status !== filter) return false;
-    if (!query) return true;
-    const haystack = [a.headline, a.kicker, a.author, a.pillar, a.section, a.slug].join(' ').toLowerCase();
-    return haystack.includes(query);
-  })
-  .sort((a, b) => String(b.$createdAt ?? '').localeCompare(String(a.$createdAt ?? '')));
+const reviewStatusOf = (a: { review_status?: string }) =>
+  String(a.review_status ?? 'pending');
 
 const countBy = (pred: (a: (typeof articles)[number]) => boolean) => articles.filter(pred).length;
 
 const statuses = [
   { id: 'all', label: `All (${articles.length})` },
-  { id: 'published', label: `Published (${countBy((a) => statusOf(a) === 'published')})` },
+  { id: 'pending', label: `Pending Review (${countBy((a) => reviewStatusOf(a) === 'pending')})` },
+  { id: 'approved', label: `Approved (${countBy((a) => reviewStatusOf(a) === 'approved')})` },
   { id: 'draft', label: `Drafts (${countBy((a) => statusOf(a) === 'draft')})` },
   { id: 'scheduled', label: `Scheduled (${countBy((a) => statusOf(a) === 'scheduled')})` },
+  { id: 'published', label: `Published (${countBy((a) => statusOf(a) === 'published')})` },
 ];
+
+const filtered = articles
+  .filter((a) => {
+    const status = statusOf(a);
+    const revStatus = reviewStatusOf(a);
+    if (filter === 'pending') {
+      if (revStatus !== 'pending') return false;
+    } else if (filter === 'approved') {
+      if (revStatus !== 'approved') return false;
+    } else if (filter === 'rejected') {
+      if (revStatus !== 'rejected') return false;
+    } else if (filter !== 'all') {
+      if (status !== filter) return false;
+    }
+    if (!query) return true;
+    const haystack = [a.headline, a.kicker, a.author, a.pillar, a.section, a.slug, revStatus, status]
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(query);
+  })
+  .sort((a, b) => String(b.$createdAt ?? '').localeCompare(String(a.$createdAt ?? '')));
 
 const titleFor = (a: { headline?: string; ogTitle?: string }) => String(a.headline ?? a.ogTitle ?? 'Untitled');
 ---
@@ -68,8 +84,10 @@ const titleFor = (a: { headline?: string; ogTitle?: string }) => String(a.headli
       <a
         href={`?filter=${s.id}`}
         class:list={[
-          'px-3 py-1.5 text-sm font-medium',
-          (filter === s.id || (s.id === 'all' && filter === 'all')) && 'bg-yanci-primary text-yanci-paper',
+          'px-3 py-1.5 text-sm font-medium transition-colors',
+          (filter === s.id || (s.id === 'all' && filter === 'all'))
+            ? 'bg-yanci-primary text-yanci-paper'
+            : 'bg-white/70 text-yanci-primary/80 hover:bg-white hover:text-yanci-primary',
         ]}
       >
         {s.label}
@@ -84,7 +102,7 @@ const titleFor = (a: { headline?: string; ogTitle?: string }) => String(a.headli
           <th class="px-4 py-2.5 font-semibold">Headline</th>
           <th class="hidden px-4 py-2.5 font-semibold md:table-cell">Pillar</th>
           <th class="hidden px-4 py-2.5 font-semibold lg:table-cell">Author</th>
-          <th class="px-4 py-2.5 font-semibold">Status</th>
+          <th class="px-4 py-2.5 font-semibold">Status & Review</th>
           <th class="hidden px-4 py-2.5 font-semibold sm:table-cell">Updated</th>
           <th class="px-4 py-2.5 text-right font-semibold">Actions</th>
         </tr>
@@ -113,7 +131,24 @@ const titleFor = (a: { headline?: string; ogTitle?: string }) => String(a.headli
             </td>
             <td class="hidden px-4 py-3 text-yanci-dark/70 lg:table-cell">{String(a.author ?? '—')}</td>
             <td class="px-4 py-3">
-              <StatusBadge status={statusOf(a)} />
+              <div class="flex flex-wrap items-center gap-1.5">
+                <StatusBadge status={statusOf(a)} />
+                <span
+                  class:list={[
+                    'rounded-xs px-2 py-0.5 text-xs font-semibold uppercase tracking-wider',
+                    reviewStatusOf(a) === 'approved' && 'bg-emerald-500/15 text-emerald-700',
+                    reviewStatusOf(a) === 'rejected' && 'bg-rose-500/15 text-rose-700',
+                    reviewStatusOf(a) === 'pending' && 'bg-amber-500/20 text-amber-800',
+                  ]}
+                >
+                  {reviewStatusOf(a) === 'pending' ? 'Pending' : reviewStatusOf(a)}
+                </span>
+                {a.is_breaking && (
+                  <span class="rounded-xs bg-red-600 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest text-white">
+                    Breaking
+                  </span>
+                )}
+              </div>
             </td>
             <td class="hidden px-4 py-3 text-yanci-dark/50 sm:table-cell">
               {day.format(new Date(String(a.$updatedAt ?? '')))}

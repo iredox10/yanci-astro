@@ -1,0 +1,110 @@
+---
+import type { Article } from '../data/schema';
+import { pillarColors, pillarAccent } from '../data/schema';
+import { getRecommendedArticles } from '@lib/appwrite-server';
+
+interface Props {
+  currentArticle: Article;
+  limit?: number;
+}
+
+const { currentArticle, limit = 4 } = Astro.props;
+
+const recommended = await getRecommendedArticles(currentArticle, limit);
+
+const formatTime = (iso?: string) =>
+  iso
+    ? new Date(iso).toLocaleDateString('ha-NG', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })
+    : '';
+
+const accent = pillarAccent(currentArticle.pillar);
+---
+
+{
+  recommended.length > 0 && (
+    <section class="mt-14 border-t border-gray-200 bg-gray-50/70 py-12 md:mt-20 md:py-16">
+      <div class="mx-auto max-w-[1400px] px-4 sm:px-5 md:px-6">
+        <div class="mb-8 md:mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div>
+            <span
+              class="mb-2 inline-block text-xs font-bold uppercase tracking-widest"
+              style={`color: ${accent}`}
+            >
+              Shawarwari
+            </span>
+            <h2 class="font-serif text-2xl font-black tracking-tight text-[#121212] sm:text-3xl md:text-4xl">
+              Labaran Da Ka Iya Sha'awa
+            </h2>
+          </div>
+          <div class="hidden md:block h-px flex-1 max-w-xs bg-gray-200 mb-3" />
+        </div>
+
+        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {recommended.map((article) => {
+            const colors = pillarColors(article.pillar);
+            const href = `/article/${article.$id ?? article.id}`;
+            const kicker = article.kicker || article.section || 'Labarai';
+
+            return (
+              <article class="group relative flex flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 hover:shadow-xl">
+                {article.image && (
+                  <a href={href} class="relative aspect-[16/10] overflow-hidden bg-gray-100 block">
+                    <img
+                      src={article.image}
+                      alt={article.headline}
+                      loading="lazy"
+                      class="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+                    />
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                    <span
+                      class="absolute left-3 top-3 rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white shadow-sm"
+                      style={`background-color: ${colors.main}`}
+                    >
+                      {kicker}
+                    </span>
+                  </a>
+                )}
+
+                <div class="flex flex-1 flex-col p-5">
+                  {!article.image && (
+                    <span
+                      class="mb-2.5 inline-block text-[11px] font-bold uppercase tracking-widest"
+                      style={`color: ${colors.main}`}
+                    >
+                      {kicker}
+                    </span>
+                  )}
+
+                  <h3 class="mb-3 flex-1 font-serif text-lg font-bold leading-snug text-[#1c1917] transition-colors duration-200 group-hover:text-[#0f3036]">
+                    <a href={href} class="focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0f3036]">
+                      {article.headline}
+                    </a>
+                  </h3>
+
+                  {article.trail && (
+                    <p class="mb-4 line-clamp-2 text-xs leading-relaxed text-gray-600">
+                      {article.trail}
+                    </p>
+                  )}
+
+                  <div class="mt-auto flex items-center justify-between border-t border-gray-100 pt-4 text-xs text-gray-500">
+                    <span class="font-medium text-gray-700 truncate max-w-[140px]">
+                      {article.author ?? 'Yanci Staff'}
+                    </span>
+                    <time class="shrink-0 text-gray-400">
+                      {formatTime(article.$createdAt)}
+                    </time>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  )
+}

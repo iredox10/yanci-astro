@@ -49,9 +49,15 @@ const ROLE_PRIORITY: Record<string, number> = {
 
 const PREFERRED_ROLES = ['super_admin', 'managing_editor', 'editor', 'author', 'contributor'];
 
-function parseCookies(request: Request): Map<string, string> {
+function parseCookies(request?: Request): Map<string, string> {
   const map = new Map<string, string>();
-  const header = request.headers.get('cookie') ?? '';
+  if (!request) return map;
+  let header = '';
+  try {
+    header = request.headers?.get('cookie') ?? '';
+  } catch {
+    return map;
+  }
   for (const part of header.split(';')) {
     const eq = part.indexOf('=');
     if (eq === -1) continue;
@@ -83,8 +89,14 @@ export function isSessionToken(value: string): boolean {
 }
 
 /** Pull a session token out of the request: Authorization header or cookie. */
-export async function sessionTokenFrom(request: Request): Promise<string | null> {
-  const auth = request.headers.get('authorization') ?? '';
+export async function sessionTokenFrom(request?: Request): Promise<string | null> {
+  if (!request) return null;
+  let auth = '';
+  try {
+    auth = request.headers?.get('authorization') ?? '';
+  } catch {
+    return null;
+  }
   const [scheme, ...rest] = auth.split(' ');
   if (scheme?.toLowerCase() === 'bearer' && rest.length) {
     const token = rest.join(' ').trim();
@@ -134,12 +146,9 @@ export function adminCookieHeader(token: string, maxAgeSeconds: number, reset = 
 
 /**
  * Create an Appwrite email/password session server-side and return its
- * session token. Appwrite 1.9 returns the token only inside the session
- * cookie (`a_session_<project>`), not in the SDK response's `secret` field,
- * so we capture the Set-Cookie header. The token is a base64 JSON envelope
- * that Appwrite accepts via `X-Appwrite-Session` (what `setSession` sends).
+ * session token. Used for reader and staff authentication.
  */
-export async function createAdminSession(
+export async function createSession(
   email: string,
   password: string,
 ): Promise<{ token: string; user: SessionUser } | { ok: false; status: number }> {
@@ -163,12 +172,28 @@ export async function createAdminSession(
 
     const verified = await verifySession(token);
     if (!verified) return { ok: false, status: 403 };
-    const role = (await roleForUser(verified.id)) ?? (await roleFromLabels(verified.labels));
-    if (!role || ROLE_PRIORITY[role] === undefined) return { ok: false, status: 403 };
+    const custom = await roleForUser(verified.id);
+    const role = custom ?? (await roleFromLabels(verified.labels)) ?? 'reader';
     return { token, user: { ...verified, role } };
   } catch {
     return { ok: false, status: 401 };
   }
+}
+
+/**
+ * Create an Appwrite email/password session server-side and ensure the user
+ * has an editorial role.
+ */
+export async function createAdminSession(
+  email: string,
+  password: string,
+): Promise<{ token: string; user: SessionUser } | { ok: false; status: number }> {
+  const result = await createSession(email, password);
+  if (!('token' in result)) return result;
+  if (ROLE_PRIORITY[result.user.role] === undefined) {
+    return { ok: false, status: 403 };
+  }
+  return result;
 }
 
 function parseSetCookie(headers: Headers, name: string): string | null {
@@ -243,6 +268,21 @@ export async function roleFromLabels(labels: string[] | undefined): Promise<stri
 const _sessionCache = new Map<string, { user: SessionUser; expires: number }>();
 const SESSION_TTL_MS = 60_000;
 
+/** Retrieve authenticated user without requiring an editorial role (readers or staff). */
+export async function getSessionUser(request: Request): Promise<SessionUser | null> {
+  const token = await sessionTokenFrom(request);
+  if (!token) return null;
+  const cached = _sessionCache.get(token);
+  if (cached && cached.expires > Date.now()) return cached.user;
+  const session = await verifySession(token);
+  if (!session) return null;
+  const custom = await roleForUser(session.id);
+  const role = custom ?? (await roleFromLabels(session.labels)) ?? 'reader';
+  const user: SessionUser = { ...session, role };
+  _sessionCache.set(token, { user, expires: Date.now() + SESSION_TTL_MS });
+  return user;
+}
+
 export async function requireUser(request: Request): Promise<{ ok: true; user: SessionUser } | { ok: false; status: number }> {
   const token = await sessionTokenFrom(request);
   if (!token) return { ok: false, status: 401 };
@@ -269,6 +309,7 @@ export function clearSessionCache(token?: string): void {
 }
 
 export const ROLE_LABELS: Record<string, string> = {
+  reader: 'Mai Karatu',
   contributor: 'Contributor',
   author: 'Author',
   editor: 'Editor',

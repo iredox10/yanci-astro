@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { createAdminSession, adminCookieHeader } from '@lib/auth';
+import { createSession, adminCookieHeader } from '@lib/auth';
 
 export const prerender = false;
 
@@ -19,20 +19,18 @@ export const POST: APIRoute = async ({ request }) => {
   const email = String(body.email ?? '').trim();
   const password = String(body.password ?? '');
   if (!email || !password) {
-    return new Response(JSON.stringify({ ok: false, message: 'Email and password required' }), {
+    return new Response(JSON.stringify({ ok: false, message: 'Email da kalmar sirri na da muhimmanci' }), {
       status: 422,
       headers: { 'Content-Type': 'application/json' },
     });
   }
 
-  const result = await createAdminSession(email, password);
+  const result = await createSession(email, password);
   if (!('token' in result)) {
     const message =
-      result.status === 403
-        ? 'Account has no editorial role'
-        : result.status === 503
-          ? 'Login unavailable'
-          : 'Invalid credentials';
+      result.status === 503
+        ? 'Shiga ba ta nan a yanzu'
+        : 'Imel ko kalmar sirri ba daidai ba ne';
     return new Response(JSON.stringify({ ok: false, message }), {
       status: result.status,
       headers: { 'Content-Type': 'application/json' },

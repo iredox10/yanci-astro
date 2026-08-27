@@ -1,0 +1,253 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getSessionUser, roleName, hasRole } from '@lib/auth';
+
+export const prerender = false;
+
+const user = await getSessionUser(Astro.request);
+if (!user) {
+  return Astro.redirect('/login?redirect=/account');
+}
+
+const roleLabel = roleName(user.role);
+const isStaff = hasRole(user, 'contributor');
+const initials = (user.name || user.email || 'M')
+  .trim()
+  .split(/\s+/)
+  .map((p) => p[0])
+  .filter(Boolean)
+  .join('')
+  .toUpperCase()
+  .slice(0, 2) || 'Y';
+---
+
+<BaseLayout
+  title={`Asusu — ${user.name || 'Mai Karatu'} | Yanci`}
+  description="Dandalin asusun mai karatu a jaridar Yanci. Duba labaran da ka ajiye, sharhinka, da saitin asusu."
+  path="/account/"
+>
+  <div class="bg-gray-50/50 py-10 md:py-16">
+    <div class="mx-auto max-w-5xl px-4 md:px-6">
+      <!-- Breadcrumb -->
+      <nav class="mb-6 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-yanci-primary/60">
+        <a href="/" class="hover:text-yanci-accent">Gida</a>
+        <span>/</span>
+        <span class="text-yanci-primary">Asusunka</span>
+      </nav>
+
+      <!-- Profile Header Card -->
+      <div class="mb-8 rounded-xl border border-yanci-primary/10 bg-white p-6 shadow-sm md:p-8">
+        <div class="flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
+          <div class="flex items-center gap-4 md:gap-6">
+            <div class="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-[#0f3036] font-serif text-2xl font-black text-yanci-accent shadow-inner md:h-20 md:w-20 md:text-3xl">
+              {initials}
+            </div>
+            <div>
+              <div class="flex flex-wrap items-center gap-2.5">
+                <h1 class="font-serif text-2xl font-black text-yanci-primary md:text-3xl">
+                  {user.name || 'Mai Karatu'}
+                </h1>
+                <span class="inline-flex items-center gap-1 rounded-full border border-yanci-accent/30 bg-yanci-accent/10 px-2.5 py-0.5 text-xs font-bold text-[#8a6b32]">
+                  <svg class="h-2.5 w-2.5 fill-current" viewBox="0 0 512 512" aria-hidden="true">
+                    <path d="M256 0c14.1 0 27.2 7.5 34.3 19.8l54.8 95.8 110.1 23.3c14.2 3 25.5 13.5 29.4 27.2s.5 28.5-8.8 39.3l-75.1 86.8 11.8 111.4c1.5 14.3-4.4 28.4-15.5 36.8s-25.7 9.4-38.9 2.7L256 390.8 153.9 443.2c-13.2 6.7-27.8 5.7-38.9-2.7s-17-22.5-15.5-36.8l11.8-111.4-75.1-86.8c-9.3-10.8-12.7-25.6-8.8-39.3s15.2-24.2 29.4-27.2l110.1-23.3L221.7 19.8C228.8 7.5 241.9 0 256 0z"/>
+                  </svg>
+                  {roleLabel}
+                </span>
+              </div>
+              <p class="mt-1 text-sm text-yanci-primary/60">{user.email}</p>
+            </div>
+          </div>
+
+          <div class="flex w-full flex-wrap items-center gap-3 md:w-auto">
+            {isStaff && (
+              <a
+                href="/admin/dashboard"
+                class="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#0f3036] bg-[#0f3036] px-4 py-2 text-xs font-bold uppercase tracking-wider text-white transition hover:bg-[#1a4e56] md:flex-none"
+              >
+                <svg class="h-3.5 w-3.5 text-yanci-accent" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
+                  <path d="M64 480H448c35.3 0 64-28.7 64-64V96c0-35.3-28.7-64-64-64H64C28.7 32 0 60.7 0 96V416c0 35.3 28.7 64 64 64zM376 176c13.3 0 24 10.7 24 24v48c0 13.3-10.7 24-24 24H328c-13.3 0-24-10.7-24-24V200c0-13.3 10.7-24 24-24h48zM184 176c13.3 0 24 10.7 24 24v176c0 13.3-10.7 24-24 24H136c-13.3 0-24-10.7-24-24V200c0-13.3 10.7-24 24-24h48zm144 96h48c13.3 0 24 10.7 24 24v80c0 13.3-10.7 24-24 24H328c-13.3 0-24-10.7-24-24V296c0-13.3 10.7-24 24-24z"/>
+                </svg>
+                Dakin Gudanarwa (Admin)
+              </a>
+            )}
+
+            <form method="POST" action="/api/auth/logout?redirect=/login" class="flex-1 md:flex-none">
+              <button
+                type="submit"
+                id="logout-btn"
+                class="flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 py-2 text-xs font-bold uppercase tracking-wider text-yanci-primary transition hover:border-yanci-red hover:bg-yanci-red/5 hover:text-yanci-red"
+              >
+                <svg class="h-3.5 w-3.5" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
+                  <path d="M377.9 105.9L500.7 228.7c7.2 7.2 11.3 17.1 11.3 27.3s-4.1 20.1-11.3 27.3L377.9 406.1c-6.4 6.4-15 9.9-24 9.9c-18.7 0-33.9-15.2-33.9-33.9l0-62.1-128 0c-17.7 0-32-14.3-32-32l0-64c0-17.7 14.3-32 32-32l128 0 0-62.1c0-18.7 15.2-33.9 33.9-33.9c9 0 17.6 3.6 24 9.9zM160 96L96 96c-17.7 0-32 14.3-32 32l0 256c0 17.7 14.3 32 32 32l64 0c17.7 0 32 14.3 32 32s-14.3 32-32 32l-64 0c-53 0-96-43-96-96L0 128C0 75 43 32 96 32l64 0c17.7 0 32 14.3 32 32s-14.3 32-32 32z"/>
+                </svg>
+                Fita daga asusu
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Dashboard Grid -->
+      <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <!-- Card 1: Saved Articles -->
+        <a
+          href="/saved"
+          class="group flex flex-col justify-between rounded-xl border border-yanci-primary/10 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-yanci-accent hover:shadow-md"
+        >
+          <div>
+            <div class="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-yanci-accent/15 text-[#8a6b32] transition group-hover:bg-yanci-accent group-hover:text-[#0f3036]">
+              <svg class="h-6 w-6" viewBox="0 0 384 512" fill="currentColor" aria-hidden="true">
+                <path d="M0 48V487.7C0 501.1 10.9 512 24.3 512c5 0 9.9-1.5 14-4.4L192 400 345.7 507.6c4.1 2.9 9 4.4 14 4.4c13.4 0 24.3-10.9 24.3-24.3V48c0-26.5-21.5-48-48-48H48C21.5 0 0 21.5 0 48z"/>
+              </svg>
+            </div>
+            <h2 class="font-serif text-xl font-bold text-yanci-primary transition group-hover:text-yanci-accent">
+              Labaran da na ajiye
+            </h2>
+            <p class="mt-2 text-sm leading-relaxed text-yanci-primary/70">
+              Duba labaran da ka yi alama ko ka ajiye domin karantawa a hankali.
+            </p>
+          </div>
+          <div class="mt-6 flex items-center justify-between border-t border-gray-100 pt-4 text-xs font-bold uppercase tracking-wider text-yanci-accent">
+            <span id="saved-count-badge">Duba labarai</span>
+            <span>&rarr;</span>
+          </div>
+        </a>
+
+        <!-- Card 2: Comments -->
+        <a
+          href="#sharhina"
+          class="group flex flex-col justify-between rounded-xl border border-yanci-primary/10 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-yanci-accent hover:shadow-md"
+        >
+          <div>
+            <div class="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-[#0f3036]/10 text-yanci-primary transition group-hover:bg-[#0f3036] group-hover:text-white">
+              <svg class="h-6 w-6" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
+                <path d="M512 240c0 114.9-114.6 208-256 208c-37.1 0-72.3-6.4-104.1-17.9c-11.9 8.7-31.3 20.6-54.3 30.6C73.6 471.1 47.9 480 24 480c-6.1 0-11.7-3.6-14.3-9.2s-1.6-12.2 2.5-16.8c12.2-13.6 24.3-29.8 33.6-47.9C18.1 364.5 0 305.4 0 240C0 125.1 114.6 32 256 32s256 93.1 256 208z"/>
+              </svg>
+            </div>
+            <h2 class="font-serif text-xl font-bold text-yanci-primary transition group-hover:text-yanci-accent">
+              Sharhina
+            </h2>
+            <p class="mt-2 text-sm leading-relaxed text-yanci-primary/70">
+              Duba ra'ayoyinka da dukkan tattaunawar da ka bayyana a kan labarai.
+            </p>
+          </div>
+          <div class="mt-6 flex items-center justify-between border-t border-gray-100 pt-4 text-xs font-bold uppercase tracking-wider text-yanci-primary/80">
+            <span id="comments-count-badge">Duba sharhi</span>
+            <span>&rarr;</span>
+          </div>
+        </a>
+
+        <!-- Card 3: Security & Profile -->
+        <a
+          href="/admin/forgot-password"
+          class="group flex flex-col justify-between rounded-xl border border-yanci-primary/10 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-yanci-accent hover:shadow-md"
+        >
+          <div>
+            <div class="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-700 transition group-hover:bg-emerald-700 group-hover:text-white">
+              <svg class="h-6 w-6" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
+                <path d="M256 0c4.6 0 9.2 1 13.4 2.9L457.7 82.8c22 9.3 38.4 31 38.3 57.2c-.5 99.2-41.3 280.7-213.6 363.2c-16.7 8-36.1 8-52.8 0C57.3 420.7 16.5 239.2 16 140c-.1-26.2 16.3-47.9 38.3-57.2L242.7 2.9C246.8 1 251.4 0 256 0z"/>
+              </svg>
+            </div>
+            <h2 class="font-serif text-xl font-bold text-yanci-primary transition group-hover:text-yanci-accent">
+              Saitin Kalmar Sirri
+            </h2>
+            <p class="mt-2 text-sm leading-relaxed text-yanci-primary/70">
+              Sake saita ko sabunta kalmar sirrinka domin karfafa tsaron asusunka.
+            </p>
+          </div>
+          <div class="mt-6 flex items-center justify-between border-t border-gray-100 pt-4 text-xs font-bold uppercase tracking-wider text-yanci-primary/80">
+            <span>Sake saita</span>
+            <span>&rarr;</span>
+          </div>
+        </a>
+      </div>
+
+      <!-- Account Info & Comments Panel -->
+      <div id="sharhina" class="mt-10 rounded-xl border border-yanci-primary/10 bg-white p-6 shadow-sm md:p-8">
+        <div class="border-b border-gray-100 pb-4">
+          <span class="text-xs font-bold uppercase tracking-widest text-yanci-accent">Ayyukan Mai Karatu</span>
+          <h2 class="mt-1 font-serif text-2xl font-black text-yanci-primary">Tattaunawa da Ayyukanka</h2>
+        </div>
+
+        <div class="mt-6 grid gap-6 md:grid-cols-2">
+          <!-- Reader Profile Details -->
+          <div class="rounded-lg border border-gray-100 bg-gray-50/50 p-5">
+            <h3 class="font-serif text-base font-bold text-yanci-primary">Bayanan Asusu</h3>
+            <dl class="mt-4 space-y-3 text-sm">
+              <div class="flex justify-between border-b border-gray-200/60 pb-2">
+                <dt class="text-yanci-primary/60">Suna:</dt>
+                <dd class="font-bold text-yanci-primary">{user.name || 'Ba a bayyana ba'}</dd>
+              </div>
+              <div class="flex justify-between border-b border-gray-200/60 pb-2">
+                <dt class="text-yanci-primary/60">Imel:</dt>
+                <dd class="font-medium text-yanci-primary">{user.email}</dd>
+              </div>
+              <div class="flex justify-between border-b border-gray-200/60 pb-2">
+                <dt class="text-yanci-primary/60">Matsayi:</dt>
+                <dd class="font-bold text-[#8a6b32]">{roleLabel}</dd>
+              </div>
+              <div class="flex justify-between pt-1">
+                <dt class="text-yanci-primary/60">Yanayin Asusu:</dt>
+                <dd class="inline-flex items-center gap-1 font-bold text-emerald-700">
+                  <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+                  Yana Aiki
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <!-- Activity Summary & Saved Articles Preview -->
+          <div class="rounded-lg border border-gray-100 bg-gray-50/50 p-5">
+            <h3 class="font-serif text-base font-bold text-yanci-primary">Takaitaccen Bayani</h3>
+            <p class="mt-2 text-xs text-yanci-primary/60">
+              Kayan aiki da labaran da ka adana a wannan na'urar:
+            </p>
+            <div class="mt-4 space-y-3">
+              <div class="flex items-center justify-between rounded-lg border border-white bg-white p-3 shadow-xs">
+                <span class="text-sm font-medium text-yanci-primary">Labaran da aka ajiye:</span>
+                <span id="saved-stat" class="rounded-md bg-yanci-accent/20 px-2 py-0.5 text-xs font-bold text-[#8a6b32]">
+                  0
+                </span>
+              </div>
+              <div class="flex items-center justify-between rounded-lg border border-white bg-white p-3 shadow-xs">
+                <span class="text-sm font-medium text-yanci-primary">Sharhin da ka rubuta:</span>
+                <span id="comments-stat" class="rounded-md bg-[#0f3036]/10 px-2 py-0.5 text-xs font-bold text-[#0f3036]">
+                  0
+                </span>
+              </div>
+            </div>
+            <div class="mt-4">
+              <a
+                href="/saved"
+                class="block w-full rounded-lg bg-yanci-primary py-2 text-center text-xs font-bold uppercase tracking-wider text-yanci-paper transition hover:bg-yanci-primary/90"
+              >
+                Duba Labaran da na Ajiye &rarr;
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  // Client stats updater for local bookmarks & comments
+  try {
+    const savedArticles = JSON.parse(localStorage.getItem('yanci_saved_articles') ?? '[]');
+    const count = Array.isArray(savedArticles) ? savedArticles.length : 0;
+    const countBadge = document.getElementById('saved-count-badge');
+    const statBadge = document.getElementById('saved-stat');
+    if (countBadge) countBadge.textContent = `${count} ${count === 1 ? 'labari' : 'labarai'}`;
+    if (statBadge) statBadge.textContent = String(count);
+
+    const myComments = JSON.parse(localStorage.getItem('yc_my_comments') ?? '[]');
+    const commentsCount = Array.isArray(myComments) ? myComments.length : 0;
+    const commentsBadge = document.getElementById('comments-count-badge');
+    const commentsStat = document.getElementById('comments-stat');
+    if (commentsBadge) commentsBadge.textContent = `${commentsCount} ${commentsCount === 1 ? 'sharhi' : 'sharhi'}`;
+    if (commentsStat) commentsStat.textContent = String(commentsCount);
+  } catch {
+    // Ignore storage issues
+  }
+</script>

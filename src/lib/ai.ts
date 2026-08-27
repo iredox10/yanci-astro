@@ -29,6 +29,10 @@ export interface CallGeminiOptions {
   temperature?: number;
   /** Ask the model for strict JSON output. */
   json?: boolean;
+  /** System instruction to guide the model's persona/behavior. */
+  systemInstruction?: string;
+  /** Maximum number of output tokens to generate. */
+  maxTokens?: number;
 }
 
 interface GenerateContentResponse {
@@ -61,16 +65,26 @@ async function postGenerate(
   const generationConfig: Record<string, unknown> = {};
   if (opts.temperature !== undefined) generationConfig.temperature = opts.temperature;
   if (opts.json) generationConfig.responseMimeType = 'application/json';
+  if (opts.maxTokens !== undefined) generationConfig.maxOutputTokens = opts.maxTokens;
+
+  const payload: Record<string, unknown> = {
+    contents: [{ parts: [{ text: prompt }] }],
+    ...(Object.keys(generationConfig).length ? { generationConfig } : {}),
+  };
+
+  if (opts.systemInstruction) {
+    payload.systemInstruction = {
+      role: 'system',
+      parts: [{ text: opts.systemInstruction }],
+    };
+  }
 
   return fetch(
     `${GEMINI_ENDPOINT}/${encodeURIComponent(geminiModel())}:generateContent`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        ...(Object.keys(generationConfig).length ? { generationConfig } : {}),
-      }),
+      body: JSON.stringify(payload),
       signal,
     },
   );
@@ -126,18 +140,32 @@ export function extractJsonArray(input: string): string[] {
   }
 }
 
+/** Pull a JSON object out of a model reply, tolerating fences/prose. */
+export function extractJsonObject<T = Record<string, unknown>>(input: string): T | null {
+  const stripped = input.replace(/```(?:json)?/gi, '').trim();
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+  if (start === -1 || end <= start) return null;
+  try {
+    const parsed = JSON.parse(stripped.slice(start, end + 1)) as T;
+    return typeof parsed === 'object' && parsed !== null ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Shared route plumbing ────────────────────────────────────────────────
 
 export const MAX_AI_INPUT_CHARS = 8000;
 
-const json = (data: unknown, status = 200) =>
+export const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 
-/** Auth gate matching the admin newsletter API: logged-in staff, editor+. */
-export async function guardStaff(request: Request): Promise<Response | null> {
+/** Auth gate matching the admin API: logged-in staff, editor+ by default. */
+export async function guardStaff(request: Request, minRole = 'editor'): Promise<Response | null> {
   const auth = await requireUser(request);
   if (!auth.ok) return json({ ok: false, message: 'Unauthorized' }, auth.status);
-  if (!hasRole(auth.user, 'editor')) return json({ ok: false, message: 'Forbidden' }, 403);
+  if (!hasRole(auth.user, minRole)) return json({ ok: false, message: 'Forbidden' }, 403);
   return null;
 }
 
@@ -193,6 +221,22 @@ export async function readAiText(
     return { ok: false, response: json({ ok: false, message: 'Text is required' }, 422) };
   }
   return { ok: true, text };
+}
+
+/** Parse and validate a generic JSON body from an AI request. */
+export async function readAiJson<T = object>(
+  request: Request,
+): Promise<{ ok: true; data: T } | { ok: false; response: Response }> {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return { ok: false, response: json({ ok: false, message: 'Bad JSON' }, 400) };
+  }
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    return { ok: false, response: json({ ok: false, message: 'Invalid JSON payload' }, 422) };
+  }
+  return { ok: true, data: body as T };
 }
 
 export function aiUnavailable(): Response {

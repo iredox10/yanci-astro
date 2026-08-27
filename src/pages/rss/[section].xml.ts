@@ -5,10 +5,6 @@ import { buildFeed } from '../../lib/rss';
 
 export const prerender = false;
 
-export function getStaticPaths() {
-  return SECTIONS.map((s) => ({ params: { section: s.slug } }));
-}
-
 export const GET: APIRoute = async ({ params }) => {
   const section = params.section;
   if (!section) return new Response('Missing section', { status: 404 });

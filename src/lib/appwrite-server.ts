@@ -145,13 +145,105 @@ function parseLiveUpdates(raw: unknown): LiveUpdate[] | undefined {
   return undefined;
 }
 
+function parseFocalPoint(raw: unknown): { x: number; y: number } | string | undefined {
+  if (!raw) return undefined;
+  if (typeof raw === 'object' && raw !== null && 'x' in raw && 'y' in raw) {
+    const obj = raw as { x: unknown; y: unknown };
+    const x = Number(obj.x);
+    const y = Number(obj.y);
+    if (!isNaN(x) && !isNaN(y)) {
+      return { x, y };
+    }
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === 'object' && 'x' in parsed && 'y' in parsed) {
+          const x = Number(parsed.x);
+          const y = Number(parsed.y);
+          if (!isNaN(x) && !isNaN(y)) {
+            return { x, y };
+          }
+        }
+      } catch {
+        // fallback to raw string
+      }
+    }
+    return raw;
+  }
+  return undefined;
+}
+
 /** Map an Appwrite document to the shared Article type. */
 export function toArticle(doc: Record<string, unknown>): Article {
+  const isBreaking =
+    typeof doc.is_breaking === 'boolean'
+      ? doc.is_breaking
+      : doc.is_breaking !== undefined && doc.is_breaking !== null
+        ? Boolean(doc.is_breaking)
+        : undefined;
+
+  const breakingUntil =
+    typeof doc.breaking_until === 'string'
+      ? doc.breaking_until
+      : undefined;
+
+  const reviewStatus =
+    typeof doc.review_status === 'string' &&
+    ['pending', 'approved', 'rejected'].includes(doc.review_status)
+      ? (doc.review_status as 'pending' | 'approved' | 'rejected')
+      : undefined;
+
+  const focalPoint = parseFocalPoint(doc.focal_point);
+
+  const savedCount =
+    typeof doc.saved_count === 'number'
+      ? doc.saved_count
+      : typeof doc.saved_count === 'string' && !isNaN(Number(doc.saved_count))
+        ? Number(doc.saved_count)
+        : undefined;
+
   return {
     $id: doc.$id as string,
     ...doc,
     liveUpdates: parseLiveUpdates(doc.liveUpdates),
+    ...(isBreaking !== undefined ? { is_breaking: isBreaking } : {}),
+    ...(breakingUntil !== undefined ? { breaking_until: breakingUntil } : {}),
+    ...(reviewStatus !== undefined ? { review_status: reviewStatus } : {}),
+    ...(focalPoint !== undefined ? { focal_point: focalPoint } : {}),
+    ...(savedCount !== undefined ? { saved_count: savedCount } : {}),
   } as unknown as Article;
+}
+
+/** Serialize article fields for storage in Appwrite. */
+export function serializeArticle(article: Partial<Article>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...article };
+  if (article.liveUpdates !== undefined) {
+    out.liveUpdates = Array.isArray(article.liveUpdates)
+      ? article.liveUpdates.map((u) => (typeof u === 'string' ? u : JSON.stringify(u)))
+      : undefined;
+  }
+  if (article.focal_point !== undefined) {
+    out.focal_point =
+      typeof article.focal_point === 'object' && article.focal_point !== null
+        ? JSON.stringify(article.focal_point)
+        : article.focal_point;
+  }
+  if (article.is_breaking !== undefined) {
+    out.is_breaking = Boolean(article.is_breaking);
+  }
+  if (article.breaking_until !== undefined) {
+    out.breaking_until = article.breaking_until;
+  }
+  if (article.review_status !== undefined) {
+    out.review_status = article.review_status;
+  }
+  if (article.saved_count !== undefined) {
+    out.saved_count = Number(article.saved_count);
+  }
+  return out;
 }
 
 // ─── Read actions ────────────────────────────────────────────────────────────
@@ -202,6 +294,30 @@ export async function getArticleBySlug(slug: string): Promise<Article | null> {
   } catch {
     return null;
   }
+}
+
+export async function getBreakingArticles(limit = 10): Promise<Article[]> {
+  const articles = await getArticles(Math.max(limit, 100));
+  const now = new Date();
+  return articles
+    .filter((a) => {
+      if (a.is_breaking !== true) return false;
+      if (a.status && a.status !== 'published') return false;
+      if (!a.breaking_until) return true;
+      const until = new Date(a.breaking_until);
+      return !isNaN(until.getTime()) && until > now;
+    })
+    .slice(0, limit);
+}
+
+function extractTags(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.map((t) => String(t).trim().toLowerCase().replace(/^#/, '')).filter(Boolean);
+  }
+  if (typeof raw === 'string') {
+    return raw.split(',').map((t) => t.trim().toLowerCase().replace(/^#/, '')).filter(Boolean);
+  }
+  return [];
 }
 
 // ─── Comments ────────────────────────────────────────────────────────────────
@@ -769,4 +885,135 @@ export async function getStaff(limit = 100): Promise<StaffDoc[]> {
     console.error('[appwrite] getStaff failed', error);
     return [];
   }
+}
+
+// ─── Recommended articles ───────────────────────────────────────────────────
+/**
+ * Recommendation engine for articles.
+ * Algorithm:
+ * - Fetch recent published articles (excluding the current one).
+ * - Calculate relevance score:
+ *   * Same tags: 3 points per matching tag
+ *   * Same section/category: 2 points
+ *   * Same pillar: 1 point
+ *   * Recency bonus (published within last 7 days): +1 point
+ * - Sort by score descending and return top `limit` articles.
+ */
+export async function getRecommendedArticles(
+  currentArticle: Article | Record<string, unknown>,
+  limit = 4,
+): Promise<Article[]> {
+  const currentId = String(
+    (currentArticle as Article).$id ??
+      (currentArticle as Article).id ??
+      (currentArticle as Record<string, unknown>).$id ??
+      (currentArticle as Record<string, unknown>).id ??
+      '',
+  );
+  const currentSlug = String(
+    (currentArticle as Article).slug ??
+      (currentArticle as Record<string, unknown>).slug ??
+      '',
+  ).trim().toLowerCase();
+
+  const currentTags = new Set(
+    extractTags(
+      (currentArticle as Article).tags ??
+        (currentArticle as Record<string, unknown>).tags,
+    ),
+  );
+  const currentSection = String(
+    (currentArticle as Article).section ??
+      (currentArticle as Record<string, unknown>).category ??
+      (currentArticle as Record<string, unknown>).section ??
+      '',
+  ).trim().toLowerCase();
+  const currentPillar = String(
+    (currentArticle as Article).pillar ??
+      (currentArticle as Record<string, unknown>).pillar ??
+      '',
+  ).trim().toLowerCase();
+
+  let pool: Article[] = [];
+  try {
+    pool = await getArticles(Math.max(50, limit * 10, 200));
+  } catch {
+    pool = [];
+  }
+
+  if (pool.length === 0) {
+    const { SEED_ARTICLES } = await import('../data/seed');
+    pool = (SEED_ARTICLES as unknown as Article[]).map((doc) =>
+      toArticle(doc as unknown as Record<string, unknown>),
+    );
+  }
+
+  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+  const nowTime = Date.now();
+
+  const isPublished = (a: Article) => (a.status ?? 'published') === 'published';
+
+  const candidates = pool.filter((a) => {
+    const candidateId = String(a.$id ?? a.id ?? '');
+    const candidateSlug = String(a.slug ?? '').trim().toLowerCase();
+    const isSame =
+      (currentId && candidateId === currentId) ||
+      (currentSlug && candidateSlug === currentSlug);
+    return !isSame && isPublished(a);
+  });
+
+  const scored = candidates.map((article) => {
+    let score = 0;
+
+    // 1. Same tags: 3 points per matching tag
+    const candidateTags = new Set(extractTags(article.tags));
+    let matchingTagHits = 0;
+    for (const tag of candidateTags) {
+      if (currentTags.has(tag)) {
+        matchingTagHits++;
+      }
+    }
+    score += matchingTagHits * 3;
+
+    // 2. Same section/category: 2 points
+    const candidateSection = String(
+      article.section ?? (article as unknown as Record<string, unknown>).category ?? '',
+    ).trim().toLowerCase();
+    if (currentSection && candidateSection && currentSection === candidateSection) {
+      score += 2;
+    }
+
+    // 3. Same pillar: 1 point
+    const candidatePillar = String(article.pillar ?? '').trim().toLowerCase();
+    if (currentPillar && candidatePillar && currentPillar === candidatePillar) {
+      score += 1;
+    }
+
+    // 4. Recency bonus (published within last 7 days): +1 point
+    const dateVal =
+      article.publishAt ||
+      article.$createdAt ||
+      (article as unknown as Record<string, unknown>).published_at ||
+      (article as unknown as Record<string, unknown>).created_at;
+    if (dateVal) {
+      const pubTime = new Date(String(dateVal)).getTime();
+      const diff = nowTime - pubTime;
+      if (!isNaN(pubTime) && diff <= SEVEN_DAYS_MS && diff >= -60_000) {
+        score += 1;
+      }
+    }
+
+    return { article, score };
+  });
+
+  scored.sort((a, b) => {
+    if (b.score !== a.score) {
+      return b.score - a.score;
+    }
+    const timeB = new Date(b.article.publishAt ?? b.article.$createdAt ?? 0).getTime() || 0;
+    const timeA = new Date(a.article.publishAt ?? a.article.$createdAt ?? 0).getTime() || 0;
+    return timeB - timeA;
+  });
+
+  return scored.slice(0, limit).map((s) => s.article);
 }

@@ -107,7 +107,7 @@ export default function RegisterForm() {
       </button>
       <p className="pt-2 text-center text-sm text-yanci-primary/60">
         Kana da asusu?{' '}
-        <a href="/admin/login" className="font-semibold text-yanci-primary hover:text-yanci-accent">
+        <a href="/login" className="font-semibold text-yanci-primary hover:text-yanci-accent">
           Shiga
         </a>
       </p>

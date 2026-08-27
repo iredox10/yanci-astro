@@ -24,10 +24,14 @@ export const POST: APIRoute = async ({ request }) => {
   const isDocumentPost = request.headers.get('sec-fetch-dest') === 'document';
 
   if (acceptsHtml || isDocumentPost) {
+    const url = new URL(request.url);
+    const redirectParam = url.searchParams.get('redirect');
+    const referer = request.headers.get('referer') ?? '';
+    const location = redirectParam || (referer.includes('/admin') ? '/admin/login' : '/login');
     return new Response(null, {
       status: 302,
       headers: {
-        Location: '/admin/login',
+        Location: location,
         'Cache-Control': 'no-store',
         'Set-Cookie': cookie,
       },

@@ -28,7 +28,13 @@ const initial: ArticleDraft = {
   isSensitive: Boolean(article.isSensitive),
   tags: Array.isArray(article.tags) ? article.tags.map(String) : [],
   metaTitle: article.metaTitle ? String(article.metaTitle) : undefined,
-  metaDescription: article.metaDescription ? String(article.metaDescription) : undefined,
+  imageFocalX: typeof article.imageFocalX === 'number' ? article.imageFocalX : undefined,
+  imageFocalY: typeof article.imageFocalY === 'number' ? article.imageFocalY : undefined,
+  imageAlt: article.imageAlt ? String(article.imageAlt) : undefined,
+  is_breaking: Boolean(article.is_breaking),
+  breaking_until: article.breaking_until ? String(article.breaking_until) : undefined,
+  review_status: (article.review_status as ArticleDraft['review_status']) ?? 'pending',
+  focal_point: article.focal_point ?? (typeof article.imageFocalX === 'number' && typeof article.imageFocalY === 'number' ? { x: article.imageFocalX, y: article.imageFocalY } : undefined),
 };
 ---
 

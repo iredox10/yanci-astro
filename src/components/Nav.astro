@@ -1,5 +1,6 @@
 ---
 import { SECTION_ROUTES } from '../data/schema';
+import { getSessionUser } from '@lib/auth';
 
 const today = new Date().toLocaleDateString('ha-NG', {
   weekday: 'long',
@@ -7,6 +8,8 @@ const today = new Date().toLocaleDateString('ha-NG', {
   month: 'long',
   day: 'numeric',
 });
+
+const user = await getSessionUser(Astro.request);
 ---
 
 <header class="relative z-50 font-sans">
@@ -17,12 +20,22 @@ const today = new Date().toLocaleDateString('ha-NG', {
       <span class="hidden items-center gap-1 hover:text-white md:flex">🌍 International</span>
     </div>
     <div class="flex items-center gap-4">
-      <span class="cursor-not-allowed text-gray-400" title="Coming soon">Ayyuka</span>
-      <a href="/contact" class="hover:text-white transition-colors">Tuntube Mu</a>
-      <a href="/admin/login" class="flex items-center gap-1 font-bold text-white hover:text-yanci-accent transition-colors">
-        <svg class="h-3 w-3" viewBox="0 0 448 512" fill="currentColor" aria-hidden="true"><path d="M224 256a128 128 0 1 0-128-128 128 128 0 0 0 128 128zm96 64H128A128 128 0 0 0 0 448v32a32 32 0 0 0 32 32h384a32 32 0 0 0 32-32v-32a128 128 0 0 0-128-128z"/></svg>
-        Shiga
+      <a href="/saved" class="flex items-center gap-1.5 text-gray-300 hover:text-white transition-colors font-medium" title="Duba labaran da ka ajiye">
+        <svg class="h-3.5 w-3.5 text-yanci-accent" viewBox="0 0 24 24" fill="currentColor"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+        <span>Labaran da aka ajiye</span>
       </a>
+      <a href="/contact" class="hover:text-white transition-colors">Tuntube Mu</a>
+      {user ? (
+        <a href="/account" class="flex items-center gap-1 font-bold text-white hover:text-yanci-accent transition-colors" title={`Asusun ${user.name || user.email}`}>
+          <svg class="h-3 w-3 text-yanci-accent" viewBox="0 0 448 512" fill="currentColor" aria-hidden="true"><path d="M224 256a128 128 0 1 0-128-128 128 128 0 0 0 128 128zm96 64H128A128 128 0 0 0 0 448v32a32 32 0 0 0 32 32h384a32 32 0 0 0 32-32v-32a128 128 0 0 0-128-128z"/></svg>
+          Asusu
+        </a>
+      ) : (
+        <a href="/login" class="flex items-center gap-1 font-bold text-white hover:text-yanci-accent transition-colors">
+          <svg class="h-3 w-3" viewBox="0 0 448 512" fill="currentColor" aria-hidden="true"><path d="M224 256a128 128 0 1 0-128-128 128 128 0 0 0 128 128zm96 64H128A128 128 0 0 0 0 448v32a32 32 0 0 0 32 32h384a32 32 0 0 0 32-32v-32a128 128 0 0 0-128-128z"/></svg>
+          Shiga
+        </a>
+      )}
     </div>
   </div>
 
@@ -95,10 +108,20 @@ const today = new Date().toLocaleDateString('ha-NG', {
             </ul>
           </div>
         ))}
-        <div class="rounded-lg border border-white/5 bg-[#0a2125] p-6">
-          <h3 class="mb-4 font-bold text-white">Biyan Kuɗi</h3>
-          <p class="mb-6 text-sm text-gray-400">Samun labarai masu inganci yana bukatar tallafi. Taimaka mana mu ci gaba da aiki.</p>
-          <a href="/contact" class="block w-full rounded bg-yanci-accent py-3 text-center font-bold text-[#0f3036] transition-colors hover:bg-white">Bada Tallafi</a>
+        <div class="space-y-6">
+          <div class="rounded-lg border border-white/5 bg-[#0a2125] p-6">
+            <h3 class="mb-2 font-bold text-white flex items-center gap-2">
+              <svg class="h-4 w-4 text-yanci-accent" viewBox="0 0 24 24" fill="currentColor"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+              <span>Labaran da aka ajiye</span>
+            </h3>
+            <p class="mb-4 text-sm text-gray-400">Duba duka labaran da ka adana domin karantawa a natse.</p>
+            <a href="/saved" class="block w-full rounded border border-yanci-accent/40 bg-white/5 py-2 text-center text-sm font-bold text-yanci-accent transition-colors hover:bg-yanci-accent hover:text-[#0f3036]">Duba Labaran Ajiya</a>
+          </div>
+          <div class="rounded-lg border border-white/5 bg-[#0a2125] p-6">
+            <h3 class="mb-4 font-bold text-white">Biyan Kuɗi</h3>
+            <p class="mb-6 text-sm text-gray-400">Samun labarai masu inganci yana bukatar tallafi. Taimaka mana mu ci gaba da aiki.</p>
+            <a href="/contact" class="block w-full rounded bg-yanci-accent py-3 text-center font-bold text-[#0f3036] transition-colors hover:bg-white">Bada Tallafi</a>
+          </div>
         </div>
       </div>
     </div>

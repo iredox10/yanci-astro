@@ -1,0 +1,38 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import LoginForm from '../components/auth/LoginForm';
+import { getSessionUser } from '@lib/auth';
+
+export const prerender = false;
+
+const user = await getSessionUser(Astro.request);
+const redirect = new URL(Astro.request.url).searchParams.get('redirect');
+
+if (user) {
+  return Astro.redirect(redirect && redirect.startsWith('/') ? redirect : '/account');
+}
+---
+
+<BaseLayout
+  title="Shiga ciki — Yanci"
+  description="Shiga asusunka na Yanci don samun damar adana labarai da bayyana ra'ayoyinka."
+  path="/login/"
+>
+  <div class="flex min-h-[70vh] items-center justify-center px-4 py-16">
+    <div class="w-full max-w-sm">
+      <div class="mb-6 text-center">
+        <span class="text-xs font-bold uppercase tracking-widest text-yanci-accent">Asusu</span>
+        <h1 class="mt-2 font-serif text-3xl font-black text-yanci-primary">Shiga ciki</h1>
+        <p class="mt-1 text-sm text-yanci-primary/60">
+          Shigar da bayanan asusunka na Yanci don ci gaba.
+        </p>
+      </div>
+      <div class="border border-yanci-primary/15 bg-white p-6 shadow-sm">
+        <LoginForm client:load />
+      </div>
+      <a href="/" class="mt-6 block text-center text-sm text-yanci-primary/60 hover:text-yanci-primary">
+        &larr; Komawa gida
+      </a>
+    </div>
+  </div>
+</BaseLayout>

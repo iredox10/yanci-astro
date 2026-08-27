@@ -1,20 +1,20 @@
 import type { APIRoute } from 'astro';
-import { requireUser, roleName } from '@lib/auth';
+import { getSessionUser, roleName } from '@lib/auth';
 
 export const prerender = false;
 
 export const GET: APIRoute = async ({ request }) => {
-  const auth = await requireUser(request);
-  if (!auth.ok) {
+  const user = await getSessionUser(request);
+  if (!user) {
     return new Response(JSON.stringify({ ok: false, message: 'Unauthorized' }), {
-      status: auth.status,
+      status: 401,
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
     });
   }
   return new Response(
     JSON.stringify({
       ok: true,
-      user: { ...auth.user, roleLabel: roleName(auth.user.role) },
+      user: { ...user, roleLabel: roleName(user.role) },
     }),
     {
       status: 200,

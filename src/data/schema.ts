@@ -35,6 +35,12 @@ export interface Article {
   imageFocalY?: number;
   format?: string;
 
+  is_breaking?: boolean;
+  breaking_until?: string;
+  review_status?: 'pending' | 'approved' | 'rejected';
+  focal_point?: { x: number; y: number } | string;
+  saved_count?: number;
+
   // Unpacked from keyFigures JSON (overflow bag) in the legacy app
   imageCaption?: string;
   imageCredit?: string;
