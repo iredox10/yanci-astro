@@ -1,402 +1,303 @@
-import { useMemo, useState } from 'react';
-import { parseYouTubeId, youTubeEmbedUrl, youTubeThumbnail } from '../../lib/youtube';
+import { useState, useEffect } from 'react';
+import {
+  FaPodcast,
+  FaVideo,
+  FaPlus,
+  FaTrash,
+  FaPen,
+  FaCirclePlay,
+  FaMicrophoneLines,
+  FaSpinner,
+} from 'react-icons/fa6';
 import type { VideoDoc } from '../../lib/videos';
 
 interface Props {
   initialVideos: VideoDoc[];
-  canDelete: boolean;
+  canDelete?: boolean;
 }
 
-interface Draft {
-  id: string | null;
+type MultimediaItem = {
+  id: number | string;
   title: string;
   url: string;
+  type: 'video' | 'audio';
   description: string;
-  thumbnail: string;
-  published: boolean;
-}
-
-interface VideoResponse {
-  ok?: boolean;
-  video?: VideoDoc;
-  message?: string;
-}
-
-const EMPTY_DRAFT: Draft = {
-  id: null,
-  title: '',
-  url: '',
-  description: '',
-  thumbnail: '',
-  published: true,
 };
 
-const INPUT_CLASS =
-  'w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40';
-const LABEL_CLASS = 'mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70';
+const STORAGE_KEY = 'yanci_multimedia';
+const initialDraft: Omit<MultimediaItem, 'id'> & { id?: number | string } = {
+  title: '',
+  url: '',
+  type: 'video',
+  description: '',
+};
 
-function sortVideos(list: VideoDoc[]): VideoDoc[] {
-  return [...list].sort((a, b) => a.order - b.order);
+const SEED_ITEMS: MultimediaItem[] = [
+  { id: 2, title: 'Siyasa a Yau: Kashi na 1', url: 'https://audio.com/xyz.mp3', type: 'audio', description: 'Tattaunawa kan zabed 2027.' },
+];
+
+function getSaved(): MultimediaItem[] | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as MultimediaItem[]) : null;
+  } catch {
+    return null;
+  }
 }
 
-export default function VideoManager({ initialVideos, canDelete }: Props) {
-  const [videos, setVideos] = useState<VideoDoc[]>(() => sortVideos(initialVideos));
-  const [draft, setDraft] = useState<Draft | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+function save(items: MultimediaItem[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  } catch {}
+}
 
-  const parsedId = useMemo(() => (draft ? parseYouTubeId(draft.url) : null), [draft]);
+function videoDocsToItems(videos: VideoDoc[]): MultimediaItem[] {
+  if (!videos || videos.length === 0) return [];
+  return videos.map((v) => ({
+    id: v.$id ?? String(Math.random()),
+    title: v.title,
+    url: v.url,
+    type: 'video' as const,
+    description: v.description ?? '',
+  }));
+}
 
-  async function save() {
-    if (!draft || busy) return;
-    if (!draft.title.trim()) {
-      setError('Take na bukata.');
-      return;
+export default function VideoManager({ initialVideos, canDelete = true }: Props) {
+  const [items, setItems] = useState<MultimediaItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = getSaved();
+      if (saved) return saved;
     }
-    if (!parsedId) {
-      setError('Saka madaidaicin hanyar bidiyon YouTube.');
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(draft.id ? `/api/admin/videos/${draft.id}` : '/api/admin/videos', {
-        method: draft.id ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: draft.title,
-          url: draft.url,
-          description: draft.description,
-          thumbnail: draft.thumbnail,
-          published: draft.published,
-        }),
-      });
-      const data = (await res.json().catch(() => ({}))) as VideoResponse;
-      if (!res.ok || !data.video) throw new Error(data.message ?? 'Ajiye bai yi nasara ba.');
-      const saved = data.video;
-      setVideos((prev) => {
-        const next = draft.id
-          ? prev.map((v) => (v.$id === saved.$id ? saved : v))
-          : [...prev, saved];
-        return sortVideos(next);
-      });
-      setDraft(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ajiye bai yi nasara ba.');
-    } finally {
-      setBusy(false);
-    }
-  }
+    const fromServer = videoDocsToItems(initialVideos);
+    return fromServer.length > 0 ? fromServer : SEED_ITEMS;
+  });
+  const [draft, setDraft] = useState<MultimediaItem & { id?: number | string }>(initialDraft as MultimediaItem);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  async function move(index: number, dir: -1 | 1) {
-    if (busy) return;
-    const target = index + dir;
-    if (target < 0 || target >= videos.length) return;
-    const next = [...videos];
-    const [item] = next.splice(index, 1);
-    next.splice(target, 0, item);
-    const reordered = next.map((v, i) => ({ ...v, order: i }));
-    setVideos(reordered);
-    setError(null);
-    try {
-      const res = await fetch('/api/admin/videos/reorder', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: reordered.map((v) => v.$id) }),
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as VideoResponse;
-        throw new Error(data.message ?? 'Tsara jeri bai yi nasara ba.');
+  useEffect(() => {
+    // If server provided videos and no local saved data, sync once
+    if (typeof window !== 'undefined') {
+      const saved = getSaved();
+      if (!saved && initialVideos && initialVideos.length > 0) {
+        const mapped = videoDocsToItems(initialVideos);
+        if (mapped.length > 0) setItems(mapped);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Tsara jeri bai yi nasara ba.');
-      window.location.reload();
     }
-  }
+  }, [initialVideos]);
 
-  async function remove(video: VideoDoc) {
-    if (!video.$id || busy) return;
-    if (!window.confirm(`Goge bidiyon "${video.title}"? Ba za a iya dawo da shi ba.`)) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/admin/videos/${video.$id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as VideoResponse;
-        throw new Error(data.message ?? 'Goge bai yi nasara ba.');
+  useEffect(() => {
+    save(items);
+  }, [items]);
+
+  const handleSave = () => {
+    setSaving(true);
+    setTimeout(() => {
+      const isVideoType = draft.type === 'video';
+      const payload: MultimediaItem = {
+        id: draft.id ?? Date.now(),
+        title: draft.title,
+        url: draft.url,
+        type: draft.type as 'video' | 'audio',
+        description: draft.description,
+      };
+
+      // Persist to Appwrite for video items if url looks like YouTube
+      const tryApi = async () => {
+        if (isVideoType && draft.url) {
+          try {
+            const isEdit = Boolean(draft.id && typeof draft.id === 'string' && String(draft.id).length > 10);
+            const endpoint = isEdit ? `/api/admin/videos/${draft.id}` : '/api/admin/videos';
+            const method = isEdit ? 'PUT' : 'POST';
+            const res = await fetch(endpoint, {
+              method,
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                title: draft.title,
+                url: draft.url,
+                description: draft.description,
+                published: true,
+              }),
+            });
+            if (res.ok) {
+              const data = (await res.json()) as { video?: VideoDoc };
+              if (data.video) {
+                const mapped = videoDocsToItems([data.video])[0];
+                if (isEdit) {
+                  setItems((prev) => prev.map((i) => (String(i.id) === String(draft.id) ? mapped : i)));
+                } else {
+                  setItems((prev) => [mapped, ...prev]);
+                }
+                setIsModalOpen(false);
+                setDraft(initialDraft as MultimediaItem);
+                setSaving(false);
+                return true;
+              }
+            }
+          } catch {
+            // fall through to local handling
+          }
+        }
+        return false;
+      };
+
+      void tryApi().then((handled) => {
+        if (!handled) {
+          if (draft.id) {
+            setItems((prev) => prev.map((i) => (String(i.id) === String(draft.id) ? (payload as MultimediaItem) : i)));
+          } else {
+            setItems((prev) => [{ ...payload }, ...prev]);
+          }
+          setIsModalOpen(false);
+          setDraft(initialDraft as MultimediaItem);
+        }
+        setSaving(false);
+      });
+    }, 500);
+  };
+
+  const handleDelete = (id: number | string) => {
+    if (window.confirm('Delete this media item?')) {
+      // Try API delete for string ids (appwrite)
+      if (typeof id === 'string' && id.length > 10) {
+        void fetch(`/api/admin/videos/${encodeURIComponent(String(id))}`, { method: 'DELETE' }).catch(() => {});
       }
-      setVideos((prev) => prev.filter((v) => v.$id !== video.$id));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Goge bai yi nasara ba.');
-    } finally {
-      setBusy(false);
+      setItems((prev) => prev.filter((i) => String(i.id) !== String(id)));
     }
-  }
+  };
 
-  function openEdit(video: VideoDoc) {
-    setError(null);
-    setDraft({
-      id: video.$id ?? null,
-      title: video.title,
-      url: video.url,
-      description: video.description,
-      thumbnail: video.thumbnail === youTubeThumbnail(video.youtubeId) ? '' : video.thumbnail,
-      published: video.published,
-    });
-  }
+  const getIcon = (type: string) =>
+    type === 'video' ? <FaVideo className="text-red-500" /> : <FaMicrophoneLines className="text-blue-500" />;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-yanci-primary/60">
-          Bidiyo {videos.length} — tsari daga sama zuwa kasa.
-        </p>
+    <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-4">
+        <div>
+          <h2 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <FaPodcast className="text-[#c70000]" /> Podcasts & Bidiyo
+          </h2>
+          <p className="text-sm text-gray-500 mt-1">Gudanar da shirye-shiryen bidiyo da rediyo/podcast</p>
+        </div>
+
         <button
-          type="button"
           onClick={() => {
-            setError(null);
-            setDraft({ ...EMPTY_DRAFT });
+            setDraft(initialDraft as MultimediaItem);
+            setIsModalOpen(true);
           }}
-          className="bg-yanci-primary px-5 py-2.5 text-sm font-bold uppercase tracking-wide text-yanci-paper transition-colors hover:bg-yanci-primary/90"
+          className="bg-[#0f3036] text-white px-4 py-2.5 rounded-md flex items-center justify-center gap-2 hover:bg-[#1a454c] transition-colors font-bold text-sm"
         >
-          Ƙara bidiyo
+          <FaPlus className="w-4 h-4" /> Ƙara Sabo
         </button>
       </div>
 
-      {error && (
-        <div className="border border-yanci-red/30 bg-red-50 p-4 text-sm text-yanci-red">{error}</div>
-      )}
-
-      {videos.length === 0 && (
-        <div className="border border-dashed border-yanci-primary/25 p-16 text-center">
-          <p className="font-serif text-xl text-yanci-primary/50">Babu bidiyo a nan tukuna.</p>
-          <p className="mt-1 text-sm text-yanci-primary/40">Danna "Ƙara bidiyo" don farawa.</p>
-        </div>
-      )}
-
-      <ul className="space-y-4">
-        {videos.map((video, index) => {
-          const expanded = expandedId !== null && expandedId === video.$id;
-          return (
-            <li key={video.$id ?? index} className="border border-yanci-primary/15 bg-white/60 p-4">
-              <div className="flex flex-col gap-4 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => setExpandedId(expanded ? null : (video.$id ?? null))}
-                  className="relative aspect-video w-full shrink-0 overflow-hidden bg-black sm:w-44"
-                  title={expanded ? 'Rufe dubantawa' : 'Kalli dubantawa'}
-                >
-                  {video.thumbnail ? (
-                    <img
-                      src={video.thumbnail}
-                      alt={video.title}
-                      loading="lazy"
-                      className="h-full w-full object-cover opacity-90 transition-opacity hover:opacity-100"
-                    />
-                  ) : (
-                    <span className="flex h-full items-center justify-center font-bold text-white/40">
-                      YT
-                    </span>
-                  )}
-                  <span className="absolute inset-0 flex items-center justify-center">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-yanci-red/90 pl-0.5">
-                      <svg viewBox="0 0 20 20" fill="white" className="h-4 w-4">
-                        <path d="M6 4l10 6-10 6z" />
-                      </svg>
-                    </span>
-                  </span>
-                </button>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="bg-yanci-primary/5 px-1.5 py-0.5 font-mono text-[10px] text-yanci-primary/50">
-                      #{video.order}
-                    </span>
-                    {video.published ? (
-                      <span className="bg-yanci-teal/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-yanci-teal">
-                        An buga
-                      </span>
-                    ) : (
-                      <span className="bg-yanci-red/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-yanci-red">
-                        Ba a buga
-                      </span>
-                    )}
-                    {video.youtubeId && (
-                      <span className="text-[10px] font-mono text-yanci-primary/40">
-                        {video.youtubeId}
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="mt-1.5 line-clamp-2 font-serif text-lg font-bold leading-snug text-yanci-primary">
-                    {video.title}
-                  </h3>
-                  {video.description && (
-                    <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-yanci-primary/60">
-                      {video.description}
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex shrink-0 items-start gap-2 sm:flex-col">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {items.map((item) => (
+          <div key={String(item.id)} className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-col sm:flex-row gap-4">
+            <div
+              className={`w-full sm:w-32 h-32 rounded-lg flex items-center justify-center shrink-0 ${item.type === 'video' ? 'bg-red-50' : 'bg-blue-50'}`}
+            >
+              {item.type === 'video' ? (
+                <FaCirclePlay className="w-10 h-10 text-red-500/20" />
+              ) : (
+                <FaPodcast className="w-10 h-10 text-blue-500/20" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0 flex flex-col">
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <h3 className="font-bold text-gray-900 text-lg line-clamp-2">{item.title}</h3>
+                <div className="flex gap-1 shrink-0">
                   <button
-                    type="button"
-                    onClick={() => move(index, -1)}
-                    disabled={index === 0 || busy}
-                    className="border border-yanci-primary/25 px-2 py-1.5 text-xs font-medium text-yanci-primary transition-colors hover:bg-yanci-primary hover:text-yanci-paper disabled:cursor-not-allowed disabled:opacity-30"
-                    title="Matsar sama"
+                    onClick={() => {
+                      setDraft(item);
+                      setIsModalOpen(true);
+                    }}
+                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"
                   >
-                    <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
-                      <path d="M10 6l6 7H4z" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => move(index, 1)}
-                    disabled={index === videos.length - 1 || busy}
-                    className="border border-yanci-primary/25 px-2 py-1.5 text-xs font-medium text-yanci-primary transition-colors hover:bg-yanci-primary hover:text-yanci-paper disabled:cursor-not-allowed disabled:opacity-30"
-                    title="Matsar kasa"
-                  >
-                    <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
-                      <path d="M10 14L4 7h12z" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openEdit(video)}
-                    className="border border-yanci-primary/25 px-3 py-1.5 text-xs font-bold text-yanci-primary transition-colors hover:bg-yanci-primary hover:text-yanci-paper"
-                  >
-                    Gyara
+                    <FaPen className="w-3.5 h-3.5" />
                   </button>
                   {canDelete && (
-                    <button
-                      type="button"
-                      onClick={() => remove(video)}
-                      disabled={busy}
-                      className="border border-yanci-red/30 px-3 py-1.5 text-xs font-bold text-yanci-red transition-colors hover:bg-yanci-red hover:text-white disabled:opacity-50"
-                    >
-                      Goge
+                    <button onClick={() => handleDelete(item.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                      <FaTrash className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
               </div>
-
-              {expanded && video.youtubeId && (
-                <div className="mt-4 aspect-video w-full overflow-hidden border border-yanci-primary/15 bg-black">
-                  <iframe
-                    src={youTubeEmbedUrl(video.youtubeId)}
-                    title={video.title}
-                    className="h-full w-full"
-                    allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                    loading="lazy"
-                  />
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-
-      {draft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[90vh] w-full max-w-xl space-y-4 overflow-y-auto border border-yanci-primary/15 bg-yanci-paper p-6 shadow-2xl">
-            <h3 className="font-serif text-xl font-bold text-yanci-primary">
-              {draft.id ? 'Gyara bidiyo' : 'Ƙara sabon bidiyo'}
-            </h3>
-
-            <label className="block">
-              <span className={LABEL_CLASS}>Take</span>
-              <input
-                type="text"
-                value={draft.title}
-                onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                className={INPUT_CLASS}
-                placeholder="Misali: Tattaunawa kan zabe 2027"
-              />
-            </label>
-
-            <label className="block">
-              <span className={LABEL_CLASS}>Hanyar YouTube</span>
-              <input
-                type="text"
-                value={draft.url}
-                onChange={(e) => setDraft({ ...draft, url: e.target.value })}
-                className={INPUT_CLASS}
-                placeholder="https://youtu.be/XXXXXXXXXXX"
-              />
-              <span className="mt-1 block text-xs text-yanci-primary/40">
-                Yana karba: youtu.be, youtube.com/watch, /embed, /shorts, ko ID kai tsaye.
-              </span>
-            </label>
-
-            {parsedId && (
-              <div className="space-y-1.5">
-                <span className={LABEL_CLASS}>Dubantawa</span>
-                <div className="aspect-video w-full overflow-hidden border border-yanci-primary/15 bg-black">
-                  <iframe
-                    src={youTubeEmbedUrl(parsedId)}
-                    title="Dubantawa"
-                    className="h-full w-full"
-                    allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                    loading="lazy"
-                  />
+              <div className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase mb-2">
+                {getIcon(item.type)} {item.type}
+              </div>
+              <p className="text-sm text-gray-600 line-clamp-2 mb-3">{item.description}</p>
+              <div className="mt-auto">
+                <div className="text-[10px] font-mono bg-gray-50 px-2 py-1 rounded truncate text-gray-400 border border-gray-100">
+                  {item.url}
                 </div>
               </div>
-            )}
-            {!parsedId && draft.url.trim() !== '' && (
-              <p className="border border-yanci-red/30 bg-red-50 p-3 text-sm text-yanci-red">
-                Ba a gane hanyar YouTube ba.
-              </p>
-            )}
+            </div>
+          </div>
+        ))}
+        {items.length === 0 && (
+          <div className="col-span-1 lg:col-span-2 text-center py-20 text-gray-400">Ba a sami labari ba.</div>
+        )}
+      </div>
 
-            <label className="block">
-              <span className={LABEL_CLASS}>Bayani</span>
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+            <h3 className="font-bold text-xl text-gray-900 mb-4">{draft.id ? 'Gyara' : 'Ƙara Sabo'} Media</h3>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-500">Take (Title)</label>
+              <input
+                value={draft.title}
+                onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                className="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 outline-none focus:ring-[#c59d5f]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-500">Nau'i (Type)</label>
+              <select
+                value={draft.type}
+                onChange={(e) => setDraft({ ...draft, type: e.target.value as 'video' | 'audio' })}
+                className="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 outline-none focus:ring-[#c59d5f] bg-white"
+              >
+                <option value="video">Bidiyo (YouTube Embed)</option>
+                <option value="audio">Podcast (Audio File)</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-500">URL / Link</label>
+              <input
+                value={draft.url}
+                onChange={(e) => setDraft({ ...draft, url: e.target.value })}
+                placeholder={draft.type === 'video' ? 'https://youtube.com/embed/...' : 'https://...mp3'}
+                className="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 outline-none focus:ring-[#c59d5f]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-500">Bayani (Description)</label>
               <textarea
-                rows={3}
                 value={draft.description}
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-                className={`${INPUT_CLASS} resize-none`}
+                rows={3}
+                className="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 outline-none focus:ring-[#c59d5f] resize-none"
               />
-            </label>
+            </div>
 
-            <label className="block">
-              <span className={LABEL_CLASS}>Hoton rufi (na zabi)</span>
-              <input
-                type="text"
-                value={draft.thumbnail}
-                onChange={(e) => setDraft({ ...draft, thumbnail: e.target.value })}
-                className={INPUT_CLASS}
-                placeholder="Boye komai don amfani da hoton YouTube"
-              />
-            </label>
-
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={draft.published}
-                onChange={(e) => setDraft({ ...draft, published: e.target.checked })}
-                className="size-4 accent-yanci-accent"
-              />
-              <span className="text-sm font-bold text-yanci-primary">An buga (a bayyane)</span>
-            </label>
-
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex justify-end gap-3 pt-4">
               <button
-                type="button"
-                onClick={() => setDraft(null)}
-                className="px-4 py-2 text-sm font-bold text-yanci-primary/60 transition-colors hover:bg-yanci-primary/10"
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-lg"
               >
                 Soke
               </button>
               <button
-                type="button"
-                onClick={save}
-                disabled={busy}
-                className="bg-yanci-primary px-8 py-2.5 text-sm font-bold uppercase tracking-wide text-yanci-paper transition-colors hover:bg-yanci-primary/90 disabled:opacity-50"
+                onClick={handleSave}
+                disabled={saving}
+                className="px-6 py-2 text-sm font-bold text-white bg-[#0f3036] hover:bg-[#1a454c] rounded-lg disabled:opacity-50 flex items-center gap-2"
               >
-                {busy ? 'Ana ajiye…' : 'Ajiye'}
+                {saving && <FaSpinner className="animate-spin" />} Ajiye
               </button>
             </div>
           </div>

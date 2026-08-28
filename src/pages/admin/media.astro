@@ -66,25 +66,11 @@ if (!isMediaConfigured() || !bucketId) {
 ---
 
 <AdminLayout title="Media" active="media">
-  <div class="flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h1 class="font-serif text-2xl font-bold text-yanci-primary">Media Library</h1>
-      <p class="mt-1 text-sm text-yanci-primary/60">Gudanar da hotuna da fayiloli.</p>
-    </div>
-  </div>
-
   {notice && (
     <div class="mt-5 border border-yanci-red/30 bg-yanci-red/5 px-4 py-3 text-sm text-yanci-red">
       {notice}
     </div>
   )}
 
-  {!notice && (
-    <>
-      <MediaManager client:load initialFiles={files} />
-      <p class="mt-2 text-xs text-yanci-primary/50">
-        Showing the newest {Math.min(files.length, PAGE_SIZE)} of {files.length} files.
-      </p>
-    </>
-  )}
+  {!notice && <MediaManager client:load initialFiles={files} />}
 </AdminLayout>
