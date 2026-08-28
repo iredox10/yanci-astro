@@ -1,6 +1,6 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
-import AdminArticleEditor, { type ArticleDraft } from '../../../components/admin/AdminArticleEditor';
+import AdminArticleEditor from '../../../components/admin/AdminArticleEditor';
 import { getArticleById } from '@lib/appwrite-server';
 
 export const prerender = false;
@@ -11,39 +11,53 @@ if (!id) return Astro.redirect('/admin/articles');
 const article = id ? await getArticleById(id) : null;
 if (!article) return Astro.redirect('/admin/articles');
 
-const initial: ArticleDraft = {
+// Map to draft shape expected by AdminArticleEditor (mirrors yanci EMPTY_FORM)
+const initial: Record<string, any> = {
   $id: article.$id,
-  headline: String(article.headline ?? article.ogTitle ?? ''),
-  kicker: String(article.kicker ?? ''),
+  headline: String(article.headline ?? (article as any).ogTitle ?? ''),
+  kicker: String((article as any).kicker ?? ''),
+  subheading: String((article as any).subheading ?? ''),
   trail: String(article.trail ?? ''),
   body: String(article.body ?? ''),
   image: String(article.image ?? ''),
+  imageCaption: String((article as any).imageCaption ?? ''),
+  imageCredit: String((article as any).imageCredit ?? ''),
+  imageAlt: String((article as any).imageAlt ?? ''),
+  imageFocalX: typeof (article as any).imageFocalX === 'number' ? (article as any).imageFocalX : 50,
+  imageFocalY: typeof (article as any).imageFocalY === 'number' ? (article as any).imageFocalY : 50,
+  videoUrl: String((article as any).videoUrl ?? ''),
+  keyFigures: String((article as any).keyFigures ?? ''),
+  series: String((article as any).series ?? ''),
   pillar: String(article.pillar ?? 'news'),
-  section: String(article.section ?? ''),
+  section: String(article.section ?? 'headlines'),
+  format: String((article as any).format ?? 'news'),
+  type: String((article as any).type ?? 'standard'),
   author: String(article.author ?? ''),
-  slug: String(article.slug ?? ''),
+  coAuthor: String((article as any).coAuthor ?? ''),
   isLive: Boolean(article.isLive),
-  status: String(article.status ?? (article.isLive ? 'published' : 'draft')),
-  publishAt: article.publishAt ? String(article.publishAt) : undefined,
-  isSensitive: Boolean(article.isSensitive),
-  tags: Array.isArray(article.tags) ? article.tags.map(String) : [],
-  metaTitle: article.metaTitle ? String(article.metaTitle) : undefined,
-  imageFocalX: typeof article.imageFocalX === 'number' ? article.imageFocalX : undefined,
-  imageFocalY: typeof article.imageFocalY === 'number' ? article.imageFocalY : undefined,
-  imageAlt: article.imageAlt ? String(article.imageAlt) : undefined,
-  is_breaking: Boolean(article.is_breaking),
-  breaking_until: article.breaking_until ? String(article.breaking_until) : undefined,
-  review_status: (article.review_status as ArticleDraft['review_status']) ?? 'pending',
-  focal_point: article.focal_point ?? (typeof article.imageFocalX === 'number' && typeof article.imageFocalY === 'number' ? { x: article.imageFocalX, y: article.imageFocalY } : undefined),
+  isSensitive: Boolean((article as any).isSensitive),
+  status: String((article as any).status ?? (article.isLive ? 'published' : 'draft')),
+  publishAt: (article as any).publishAt ? String((article as any).publishAt) : '',
+  slug: String(article.slug ?? ''),
+  metaTitle: String((article as any).metaTitle ?? ''),
+  metaDescription: String((article as any).metaDescription ?? ''),
+  ogTitle: String((article as any).ogTitle ?? ''),
+  ogDescription: String((article as any).ogDescription ?? ''),
+  tags: Array.isArray(article.tags) ? (article.tags as string[]).join(', ') : String((article as any).tags ?? ''),
+  relatedArticles: Array.isArray((article as any).relatedArticles) ? ((article as any).relatedArticles as string[]).join(', ') : String((article as any).relatedArticles ?? ''),
+  corrections: (article as any).corrections ?? [],
+  pullQuotes: (article as any).pullQuotes ?? [],
+  editorialNotes: (article as any).editorialNotes ?? [],
+  is_breaking: Boolean((article as any).is_breaking),
+  breaking_until: (article as any).breaking_until ? String((article as any).breaking_until) : '',
+  breaking_duration: (article as any).breaking_duration ?? null,
+  review_status: (article as any).review_status ?? 'approved',
+  focal_point: (article as any).focal_point ?? undefined,
 };
 ---
 
-<AdminLayout title="Edit article" active="articles">
-  <div class="flex items-center justify-between">
-    <h1 class="font-serif text-2xl font-bold text-yanci-primary">Edit article</h1>
-    <a href="/admin/articles" class="text-sm font-medium text-yanci-primary/70 hover:text-yanci-primary">
-      ← Back to list
-    </a>
+<AdminLayout title="Gyara Labari" active="articles">
+  <div class="-m-4 md:-m-8 flex flex-col h-[calc(100vh-4rem)] bg-white">
+    <AdminArticleEditor client:load initial={initial} />
   </div>
-  <AdminArticleEditor client:load initial={initial} />
 </AdminLayout>

@@ -1,170 +1,47 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import StatusBadge from '../../components/admin/StatusBadge.astro';
 import { getArticles } from '@lib/appwrite-server';
-import AdminDeleteButton from '../../components/admin/AdminDeleteButton';
-import { pillarColors } from '../../data/schema';
+import { requireUser } from '@lib/auth';
+import AdminArticlesClient from '../../components/admin/AdminArticlesClient';
 
 export const prerender = false;
 
 const articles = await getArticles(500);
-const day = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+const auth = await requireUser(Astro.request);
+const userCategory = auth.ok ? (auth.user as any)?.category ?? null : null;
 
-const url = new URL(Astro.request.url);
-const query = url.searchParams.get('q')?.trim().toLowerCase() ?? '';
-const filter = url.searchParams.get('filter') ?? 'all';
-
-const statusOf = (a: { status?: string; isLive?: boolean }) =>
-  String(a.status ?? (a.isLive ? 'published' : 'draft'));
-
-const reviewStatusOf = (a: { review_status?: string }) =>
-  String(a.review_status ?? 'pending');
-
-const countBy = (pred: (a: (typeof articles)[number]) => boolean) => articles.filter(pred).length;
-
-const statuses = [
-  { id: 'all', label: `All (${articles.length})` },
-  { id: 'pending', label: `Pending Review (${countBy((a) => reviewStatusOf(a) === 'pending')})` },
-  { id: 'approved', label: `Approved (${countBy((a) => reviewStatusOf(a) === 'approved')})` },
-  { id: 'draft', label: `Drafts (${countBy((a) => statusOf(a) === 'draft')})` },
-  { id: 'scheduled', label: `Scheduled (${countBy((a) => statusOf(a) === 'scheduled')})` },
-  { id: 'published', label: `Published (${countBy((a) => statusOf(a) === 'published')})` },
-];
-
-const filtered = articles
-  .filter((a) => {
-    const status = statusOf(a);
-    const revStatus = reviewStatusOf(a);
-    if (filter === 'pending') {
-      if (revStatus !== 'pending') return false;
-    } else if (filter === 'approved') {
-      if (revStatus !== 'approved') return false;
-    } else if (filter === 'rejected') {
-      if (revStatus !== 'rejected') return false;
-    } else if (filter !== 'all') {
-      if (status !== filter) return false;
-    }
-    if (!query) return true;
-    const haystack = [a.headline, a.kicker, a.author, a.pillar, a.section, a.slug, revStatus, status]
-      .join(' ')
-      .toLowerCase();
-    return haystack.includes(query);
-  })
-  .sort((a, b) => String(b.$createdAt ?? '').localeCompare(String(a.$createdAt ?? '')));
-
-const titleFor = (a: { headline?: string; ogTitle?: string }) => String(a.headline ?? a.ogTitle ?? 'Untitled');
+// Serialize for client island – ensure JSON-safe
+const serialized = articles.map((a) => ({
+  $id: a.$id,
+  id: (a as any).id ?? a.$id,
+  headline: a.headline,
+  kicker: (a as any).kicker ?? '',
+  trail: a.trail,
+  body: a.body,
+  image: a.image,
+  pillar: a.pillar,
+  section: a.section,
+  type: (a as any).type ?? 'standard',
+  author: a.author,
+  coAuthor: (a as any).coAuthor ?? '',
+  format: (a as any).format ?? 'news',
+  status: a.status ?? 'published',
+  review_status: (a as any).review_status ?? 'approved',
+  slug: a.slug,
+  publishAt: (a as any).publishAt ?? a.publishAt,
+  $createdAt: a.$createdAt,
+  $updatedAt: a.$updatedAt,
+  tags: a.tags,
+  isLive: a.isLive,
+  isSensitive: a.isSensitive,
+  imageFocalX: (a as any).imageFocalX,
+  imageFocalY: (a as any).imageFocalY,
+}));
 ---
 
-<AdminLayout title="Articles" active="articles">
-  <div class="flex flex-wrap items-center justify-between gap-3">
-    <h1 class="font-serif text-2xl font-bold text-yanci-primary">Articles</h1>
-    <a
-      href="/admin/articles/new"
-      class="bg-yanci-primary px-4 py-2 text-sm font-bold uppercase tracking-wide text-yanci-paper hover:bg-yanci-primary/90"
-    >
-      + New article
-    </a>
+<AdminLayout title="Labarai" active="articles">
+  {/* Replicates yanci React AdminArticles exact Tailwind: layout flex-1 overflow-y-auto p-4 md:p-8 space-y-6, header with title, filters, table styles, buttons bg-[#0f3036] */}
+  <div class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 -m-4 md:-m-8">
+    <AdminArticlesClient client:load initialArticles={serialized} userCategory={userCategory} />
   </div>
-
-  <form class="mt-4 flex flex-wrap items-center gap-3" method="get">
-    <input
-      type="search"
-      name="q"
-      value={query}
-      placeholder="Search headline, author, section…"
-      class="w-72 border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40"
-    />
-    <button class="border border-yanci-primary/30 px-4 py-2 text-sm font-medium text-yanci-primary hover:bg-yanci-primary/10">
-      Search
-    </button>
-  </form>
-
-  <div class="mt-4 flex flex-wrap gap-1">
-    {statuses.map((s) => (
-      <a
-        href={`?filter=${s.id}`}
-        class:list={[
-          'px-3 py-1.5 text-sm font-medium transition-colors',
-          (filter === s.id || (s.id === 'all' && filter === 'all'))
-            ? 'bg-yanci-primary text-yanci-paper'
-            : 'bg-white/70 text-yanci-primary/80 hover:bg-white hover:text-yanci-primary',
-        ]}
-      >
-        {s.label}
-      </a>
-    ))}
-  </div>
-
-  <div class="mt-5 overflow-hidden border border-yanci-primary/15 bg-white/60">
-    <table class="w-full text-left text-sm">
-      <thead class="bg-yanci-primary/5 text-xs uppercase tracking-wide text-yanci-primary/60">
-        <tr>
-          <th class="px-4 py-2.5 font-semibold">Headline</th>
-          <th class="hidden px-4 py-2.5 font-semibold md:table-cell">Pillar</th>
-          <th class="hidden px-4 py-2.5 font-semibold lg:table-cell">Author</th>
-          <th class="px-4 py-2.5 font-semibold">Status & Review</th>
-          <th class="hidden px-4 py-2.5 font-semibold sm:table-cell">Updated</th>
-          <th class="px-4 py-2.5 text-right font-semibold">Actions</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-yanci-primary/10">
-        {filtered.length === 0 && (
-          <tr>
-            <td colspan={6} class="px-4 py-10 text-center text-yanci-primary/50">
-              No articles{query ? ` matching “${query}”` : ' in this view'}.
-            </td>
-          </tr>
-        )}
-        {filtered.map((a) => (
-          <tr class="hover:bg-white/60">
-            <td class="max-w-md px-4 py-3">
-              <a href={`/admin/articles/${a.$id}`} class="font-medium leading-snug text-yanci-dark hover:text-yanci-primary">
-                {titleFor(a)}
-              </a>
-              {a.slug && <p class="mt-0.5 truncate text-xs text-yanci-primary/40">{a.slug}</p>}
-            </td>
-            <td class="hidden px-4 py-3 md:table-cell">
-              <span class="flex items-center gap-1.5">
-                <span style={{ backgroundColor: pillarColors(String(a.pillar ?? 'news')).main }} class="inline-block size-2 rounded-full" />
-                <span class="capitalize text-yanci-dark/70">{String(a.pillar ?? 'news')}</span>
-              </span>
-            </td>
-            <td class="hidden px-4 py-3 text-yanci-dark/70 lg:table-cell">{String(a.author ?? '—')}</td>
-            <td class="px-4 py-3">
-              <div class="flex flex-wrap items-center gap-1.5">
-                <StatusBadge status={statusOf(a)} />
-                <span
-                  class:list={[
-                    'rounded-xs px-2 py-0.5 text-xs font-semibold uppercase tracking-wider',
-                    reviewStatusOf(a) === 'approved' && 'bg-emerald-500/15 text-emerald-700',
-                    reviewStatusOf(a) === 'rejected' && 'bg-rose-500/15 text-rose-700',
-                    reviewStatusOf(a) === 'pending' && 'bg-amber-500/20 text-amber-800',
-                  ]}
-                >
-                  {reviewStatusOf(a) === 'pending' ? 'Pending' : reviewStatusOf(a)}
-                </span>
-                {a.is_breaking && (
-                  <span class="rounded-xs bg-red-600 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest text-white">
-                    Breaking
-                  </span>
-                )}
-              </div>
-            </td>
-            <td class="hidden px-4 py-3 text-yanci-dark/50 sm:table-cell">
-              {day.format(new Date(String(a.$updatedAt ?? '')))}
-            </td>
-            <td class="whitespace-nowrap px-4 py-3 text-right">
-              <a href={`/admin/articles/${a.$id}`} class="mr-3 font-medium text-yanci-teal hover:text-yanci-teal/70">
-                Edit
-              </a>
-              <AdminDeleteButton client:load articleId={String(a.$id)} />
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-  <p class="mt-2 text-xs text-yanci-primary/50">
-    Showing {filtered.length} of {articles.length} articles.
-  </p>
 </AdminLayout>
