@@ -53,36 +53,29 @@ if (Astro.request.method === 'POST') {
 ---
 
 <!doctype html>
-<html lang="ha" class="h-full bg-[#0f3036]">
+<html lang="ha">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/icons/yc-mark.svg" />
     <title>Shiga Tsarin Gudanarwa — Yanci Admin</title>
   </head>
-  <body class="min-h-full font-sans antialiased" style="background-color: #0f3036 !important; color: #1c1917;">
-    <div class="flex min-h-screen items-center justify-center p-4 sm:p-6 lg:p-8" style="background-color: #0f3036;">
-      <div class="w-full max-w-md">
-        <!-- Logo & Header -->
-        <div class="mb-8 text-center">
-          <div class="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 shadow-lg border border-white/10">
-            <svg class="h-8 w-8 text-[#c59d5f]" viewBox="0 0 448 512" fill="currentColor" aria-hidden="true">
-              <path d="M144 144v48H304V144c0-44.2-35.8-80-80-80s-80 35.8-80 80zM80 192V144C80 64.5 144.5 0 224 0s144 64.5 144 144v48h16c35.3 0 64 28.7 64 64V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V256c0-35.3 28.7-64 64-64H80z"/>
-            </svg>
+  <body class="antialiased">
+    <div class="min-h-screen bg-[#0f3036] flex items-center justify-center p-4">
+      <div class="max-w-md w-full">
+        <div class="text-center mb-8">
+          <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/10 mb-4">
+            <svg class="text-[#c59d5f] text-2xl" style="width:1em;height:1em" viewBox="0 0 448 512" fill="currentColor" aria-hidden="true"><path d="M144 144v48H304V144c0-44.2-35.8-80-80-80s-80 35.8-80 80zM80 192V144C80 64.5 144.5 0 224 0s144 64.5 144 144v48h16c35.3 0 64 28.7 64 64V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V256c0-35.3 28.7-64 64-64H80z"></path></svg>
           </div>
-          <h1 class="text-3xl font-black tracking-tight text-white font-serif" style="color: #ffffff !important;">Yanci Admin</h1>
-          <p class="mt-2 text-sm text-white/80" style="color: rgba(255, 255, 255, 0.8) !important;">Shigar da bayanan ka don shiga tsarin edita</p>
+          <h1 class="text-2xl font-black text-white tracking-tight">Yanci Admin</h1>
+          <p class="text-white/50 text-sm mt-1">Shigar da imel da kalmar sirri don shiga</p>
         </div>
 
-        <!-- Login Card -->
-        <div class="rounded-2xl bg-white p-6 sm:p-8 shadow-2xl border border-gray-100">
+        <div class="bg-white rounded-2xl shadow-2xl p-8">
           <form id="admin-login-form" method="POST" action={`/admin/login?next=${encodeURIComponent(next)}`} class="space-y-5">
             <div>
-              <label for="email" class="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-gray-700">
-                <svg class="h-3.5 w-3.5 text-[#c59d5f]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                  <polyline points="22,6 12,13 2,6"/>
-                </svg>
+              <label for="email" class="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wider">
+                <svg class="inline w-3 h-3 mr-1 text-[#c59d5f]" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M48 64C21.5 64 0 85.5 0 112c0 15.1 7.1 29.3 19.2 38.4L236.8 313.6c11.4 8.5 27 8.5 38.4 0L492.8 150.4c12.1-9.1 19.2-23.3 19.2-38.4c0-26.5-21.5-48-48-48L48 64zM0 176L0 384c0 35.3 28.7 64 64 64l384 0c35.3 0 64-28.7 64-64l0-208L294.4 339.2c-22.8 17.1-54 17.1-76.8 0L0 176z"></path></svg>
                 Imel
               </label>
               <input
@@ -93,16 +86,13 @@ if (Astro.request.method === 'POST') {
                 placeholder="admin@yanci.ng"
                 required
                 autocomplete="username"
-                class="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 transition focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#c59d5f]"
+                class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#c59d5f] focus:border-transparent bg-gray-50 transition"
               />
             </div>
 
             <div>
-              <label for="password" class="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-gray-700">
-                <svg class="h-3.5 w-3.5 text-[#c59d5f]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                </svg>
+              <label for="password" class="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wider">
+                <svg class="inline w-3 h-3 mr-1 text-[#c59d5f]" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M336 352c97.2 0 176-78.8 176-176S433.2 0 336 0S160 78.8 160 176c0 18.7 2.9 36.8 8.3 53.7L7 391c-4.5 4.5-7 10.6-7 17l0 80c0 13.3 10.7 24 24 24l80 0c13.3 0 24-10.7 24-24l0-40 40 0c13.3 0 24-10.7 24-24l0-40 40 0c6.4 0 12.5-2.5 17-7l33.3-33.3c16.9 5.4 35 8.3 53.7 8.3zM376 96a40 40 0 1 1 0 80 40 40 0 1 1 0-80z"></path></svg>
                 Kalmar Sirri
               </label>
               <input
@@ -112,40 +102,31 @@ if (Astro.request.method === 'POST') {
                 placeholder="••••••••"
                 required
                 autocomplete="current-password"
-                class="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 transition focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#c59d5f]"
+                class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#c59d5f] focus:border-transparent bg-gray-50 transition"
               />
             </div>
 
             <div class="flex justify-end">
-              <a
-                href="/admin/forgot-password"
-                class="text-xs font-medium text-[#c59d5f] transition-colors hover:text-[#b0884a]"
-              >
+              <a href="/admin/forgot-password" class="text-xs text-[#c59d5f] hover:text-[#b0884a] transition-colors font-medium">
                 Manta kalmar sirri?
               </a>
             </div>
 
-            <div id="login-error" class:list={['rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm font-medium text-red-700 items-center gap-2', error ? 'flex' : 'hidden']}>
-              <svg class="h-4 w-4 shrink-0 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-              </svg>
+            <div id="login-error" class:list={['bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-sm text-red-700 font-medium', error ? 'block' : 'hidden']}>
               <span id="login-error-text">{error}</span>
             </div>
 
             <button
               id="login-submit-btn"
               type="submit"
-              class="w-full rounded-xl bg-[#0f3036] hover:bg-[#164b54] py-3.5 text-sm font-bold tracking-wide text-white transition-all shadow-md hover:shadow-lg cursor-pointer flex items-center justify-center gap-2"
+              class="w-full bg-[#0f3036] text-white py-3.5 rounded-xl font-bold hover:bg-[#1a4e56] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm tracking-wide"
             >
               <span id="btn-text">Shiga Tsarin</span>
-              <svg id="btn-icon" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
-              </svg>
             </button>
           </form>
 
-          <div class="mt-6 border-t border-gray-100 pt-4 text-center">
-            <a href="/" class="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 transition-colors hover:text-[#0f3036]">
+          <div class="mt-6 text-center">
+            <a href="/" class="text-xs text-gray-400 hover:text-[#0f3036] transition-colors">
               &larr; Koma Shafin Jama'a
             </a>
           </div>
@@ -159,23 +140,34 @@ if (Astro.request.method === 'POST') {
       const btnText = document.getElementById('btn-text');
       const errBox = document.getElementById('login-error');
       const errText = document.getElementById('login-error-text');
-
+      const emailInput = document.getElementById('email');
+      const passwordInput = document.getElementById('password');
+      function updateBtnState() {
+        if (!btn) return;
+        const hasValues = emailInput && passwordInput && emailInput.value.trim() && passwordInput.value;
+        if (hasValues && !btn.hasAttribute('data-loading')) {
+          btn.removeAttribute('disabled');
+        } else if (!hasValues && !btn.hasAttribute('data-loading')) {
+          btn.setAttribute('disabled', 'true');
+        }
+      }
+      if (emailInput) emailInput.addEventListener('input', () => { if (errBox) { errBox.classList.add('hidden'); errBox.classList.remove('block'); } updateBtnState(); });
+      if (passwordInput) passwordInput.addEventListener('input', () => { if (errBox) { errBox.classList.add('hidden'); errBox.classList.remove('block'); } updateBtnState(); });
+      updateBtnState();
       if (form) {
         form.addEventListener('submit', async (e) => {
           e.preventDefault();
           if (btn) {
             btn.setAttribute('disabled', 'true');
-            btn.style.opacity = '0.7';
+            btn.setAttribute('data-loading', 'true');
           }
           if (btnText) btnText.textContent = 'Ana shiga...';
           if (errBox) {
             errBox.classList.add('hidden');
-            errBox.classList.remove('flex');
+            errBox.classList.remove('block');
           }
-
           const email = form.email.value;
           const password = form.password.value;
-
           try {
             const res = await fetch('/api/auth/login', {
               method: 'POST',
@@ -193,11 +185,11 @@ if (Astro.request.method === 'POST') {
             if (errBox && errText) {
               errText.textContent = err.message || 'An sami matsala wajen shiga. Gwada sake.';
               errBox.classList.remove('hidden');
-              errBox.classList.add('flex');
+              errBox.classList.add('block');
             }
             if (btn) {
-              btn.removeAttribute('disabled');
-              btn.style.opacity = '1';
+              btn.removeAttribute('data-loading');
+              updateBtnState();
             }
             if (btnText) btnText.textContent = 'Shiga Tsarin';
           }
