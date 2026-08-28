@@ -3,8 +3,12 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 import StatCard from '../../components/admin/StatCard.astro';
 import { FaArrowTrendUp, FaEye, FaFileLines } from 'react-icons/fa6';
 import { getArticles, getMostRead } from '@lib/appwrite-server';
+import { requireUser } from '@lib/auth';
 
 export const prerender = false;
+
+const auth = await requireUser(Astro.request);
+const userName = auth.ok ? auth.user.name : 'Staff';
 
 const articles = await getArticles(200);
 const mostRead = await getMostRead(5);
@@ -12,7 +16,6 @@ const mostRead = await getMostRead(5);
 const liveArticles = articles.filter((a) => a.isLive);
 const newsPillar = articles.filter((a) => String(a.pillar ?? 'news') === 'news');
 
-const readById = new Map(mostRead.map((m) => [m.articleId, m.views]));
 const totalViews = mostRead.reduce((sum, m) => sum + m.views, 0);
 const fmt = new Intl.NumberFormat('en-GB');
 
@@ -31,84 +34,72 @@ const recent = [...articles]
 ---
 
 <AdminLayout title="Dashboard" active="dashboard">
-  <div class="flex-1 space-y-6 p-4 md:space-y-8 md:p-8">
+  <div class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 md:space-y-8">
     <div>
-      <h2 class="text-xl font-bold text-gray-800 md:text-2xl">Dashboard Overview</h2>
-      <p class="text-sm text-gray-500 md:text-base">Welcome back.</p>
+      <h2 class="text-xl md:text-2xl font-bold text-gray-800">Dashboard Overview</h2>
+      <p class="text-sm md:text-base text-gray-500">Welcome back, <span class="font-bold">{userName}</span>.</p>
     </div>
 
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
       <StatCard
-        label="Total Articles"
+        title="Total Articles"
         value={fmt.format(articles.length)}
         icon={FaFileLines}
         color="bg-blue-500"
       />
       <StatCard
-        label="Live Stories"
+        title="Live Stories"
         value={fmt.format(liveArticles.length)}
         icon={FaArrowTrendUp}
         color="bg-red-500"
       />
       <StatCard
-        label="News Pillar"
+        title="News Pillar"
         value={fmt.format(newsPillar.length)}
         icon={FaEye}
         color="bg-green-500"
       />
-      <div class="relative col-span-1 flex flex-col justify-between overflow-hidden rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:col-span-2 lg:col-span-1 md:p-6">
+      <div class="bg-white p-4 md:p-6 rounded-lg shadow-sm border border-gray-200 col-span-1 sm:col-span-2 lg:col-span-1 flex flex-col justify-between relative overflow-hidden">
         <div class="z-10">
-          <p class="text-xs font-medium uppercase tracking-wider text-gray-500 md:text-sm">
-            Page Views (tracked)
-          </p>
-          <h3 class="mt-1 text-2xl font-bold text-gray-900 md:text-3xl">{fmt.format(totalViews)}</h3>
+          <p class="text-xs md:text-sm text-gray-500 font-medium uppercase tracking-wider">Page Views (24h)</p>
+          <h3 class="text-2xl md:text-3xl font-bold text-gray-900 mt-1">{totalViews > 0 ? fmt.format(totalViews) : '0'}</h3>
           {totalViews > 0 ? (
-            <span class="text-xs font-bold text-green-500">↑ Real-time data</span>
+            <span class="text-green-500 text-xs font-bold">↑ Real-time data</span>
           ) : (
-            <span class="text-xs font-bold text-gray-400">No views yet</span>
+            <span class="text-gray-400 text-xs font-bold">No views yet</span>
           )}
         </div>
-        <div class="absolute -bottom-4 -right-4 z-0 h-32 w-32 rounded-full bg-green-50 blur-2xl"></div>
+        <div class="absolute -bottom-4 -right-4 w-32 h-32 bg-green-50 rounded-full blur-2xl z-0"></div>
       </div>
     </div>
 
-    <div class="overflow-hidden rounded-lg border border-gray-200 bg-white p-4 shadow-sm md:p-6">
-      <h3 class="mb-4 text-base font-bold text-[#c70000] md:text-lg">Most Read / Trending</h3>
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6 overflow-hidden">
+      <h3 class="font-bold text-base md:text-lg mb-4 text-[#c70000]">Most Read / Trending</h3>
       {mostRead.length > 0 ? (
-        <ul class="mb-6 space-y-3">
+        <ul class="space-y-3 mb-6">
           {mostRead.map((m, idx) => {
             const article = articles.find((x) => x.$id === m.articleId);
             return (
-              <li class="group flex cursor-pointer items-center gap-4 rounded-lg p-2 transition-colors hover:bg-gray-50">
-                <span class="text-2xl font-black text-gray-200 transition-colors group-hover:text-[#c59d5f]">
-                  {idx + 1}
-                </span>
-                <span class="line-clamp-1 flex-1 font-bold text-gray-800">
-                  {article ? titleFor(article) : 'Deleted article'}
-                </span>
-                <span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-bold text-gray-500">
-                  {fmt.format(m.views)} views
-                </span>
+              <li class="flex items-center gap-4 group cursor-pointer p-2 hover:bg-gray-50 rounded-lg transition-colors">
+                <span class="text-2xl font-black text-gray-200 group-hover:text-[#c59d5f] transition-colors">{idx + 1}</span>
+                <span class="flex-1 font-bold text-gray-800 line-clamp-1">{article ? titleFor(article) : 'Deleted article'}</span>
+                <span class="text-xs font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded-full">{fmt.format(m.views)} views</span>
               </li>
             );
           })}
         </ul>
       ) : (
-        <p class="mb-6 text-sm text-gray-400">
-          Babu bayanan karatu tukuna. Masu karatu ba su karanta labarai tukuna.
-        </p>
+        <p class="text-gray-400 text-sm mb-6">Babu bayanan karatu tukuna. Masu karatu ba su karanta labarai tukuna.</p>
       )}
 
-      <h3 class="mb-4 border-t border-gray-100 pt-4 text-base font-bold md:text-lg">
-        Recent Articles
-      </h3>
-      <div class="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
-        <table class="w-full min-w-[600px] text-left text-sm">
-          <thead class="bg-gray-50 uppercase tracking-wider text-gray-600">
+      <h3 class="font-bold text-base md:text-lg mb-4 pt-4 border-t border-gray-100">Recent Articles</h3>
+      <div class="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
+        <table class="w-full text-left text-sm min-w-[600px]">
+          <thead class="bg-gray-50 text-gray-600 uppercase tracking-wider">
             <tr>
               <th class="p-3">Title</th>
               <th class="p-3">Pillar</th>
-              <th class="hidden p-3 sm:table-cell">Type</th>
+              <th class="p-3 hidden sm:table-cell">Type</th>
               <th class="p-3">Status</th>
             </tr>
           </thead>
@@ -118,28 +109,20 @@ const recent = [...articles]
               const isLive = Boolean(article.isLive);
               return (
                 <tr class="hover:bg-gray-50">
-                  <td class="max-w-[200px] truncate p-3 font-medium text-gray-900 md:max-w-md">
-                    <a href={`/admin/articles/${article.$id}`} class="hover:underline">
-                      {titleFor(article)}
-                    </a>
-                  </td>
-                  <td class="p-3 text-xs capitalize">
-                    <span class:list={['rounded-full px-2 py-1 font-bold', pillarClass(pillar)]}>
+                  <td class="p-3 font-medium text-gray-900 truncate max-w-[200px] md:max-w-md">{titleFor(article)}</td>
+                  <td class="p-3 capitalize text-xs">
+                    <span class={`px-2 py-1 rounded-full font-bold ${pillarClass(pillar)}`}>
                       {pillar}
                     </span>
                   </td>
-                  <td class="hidden p-3 capitalize text-gray-500 sm:table-cell">
-                    {String(article.format ?? 'Standard')}
-                  </td>
+                  <td class="p-3 capitalize text-gray-500 hidden sm:table-cell">{String(article.format ?? 'Standard')}</td>
                   <td class="p-3">
                     {isLive ? (
-                      <span class="flex items-center gap-1 text-[10px] font-bold text-red-600 md:text-xs">
-                        <span class="h-2 w-2 animate-pulse rounded-full bg-red-600"></span> LIVE
+                      <span class="flex items-center gap-1 text-red-600 font-bold text-[10px] md:text-xs">
+                        <span class="w-2 h-2 bg-red-600 rounded-full animate-pulse"></span> LIVE
                       </span>
                     ) : (
-                      <span class="text-[10px] font-bold uppercase tracking-tight text-green-600 md:text-xs">
-                        {article.status === 'scheduled' ? 'Scheduled' : article.status === 'draft' ? 'Draft' : 'Published'}
-                      </span>
+                      <span class="text-green-600 font-bold text-[10px] md:text-xs uppercase tracking-tight">Published</span>
                     )}
                   </td>
                 </tr>
@@ -147,9 +130,7 @@ const recent = [...articles]
             })}
             {recent.length === 0 && (
               <tr>
-                <td colspan="4" class="p-4 text-center text-gray-500">
-                  No articles found.
-                </td>
+                <td colspan="4" class="p-4 text-center text-gray-500">No articles found for this category.</td>
               </tr>
             )}
           </tbody>
