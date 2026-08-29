@@ -1,146 +1,545 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { adminListCollection } from '@lib/admin-collections';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import {
+  FaGlobe,
+  FaMagnifyingGlass,
+  FaEnvelope,
+  FaBell,
+  FaWrench,
+  FaDatabase,
+  FaSpinner,
+  FaCheck,
+  FaTriangleExclamation,
+  FaEye,
+  FaEyeSlash,
+  FaFloppyDisk,
+  FaDownload,
+  FaUpload,
+  FaTrash,
+  FaRotateLeft,
+} from 'react-icons/fa6';
 
 export const prerender = false;
 
 const docs = await adminListCollection('settings');
 const doc = docs[0] ?? null;
+const docId = String((doc as any)?.$id ?? '');
 
-const GROUPS: { title: string; fields: { key: string; label: string; type: 'text' | 'textarea' | 'checkbox' }[] }[] = [
-  {
-    title: 'Bayanin shafin',
-    fields: [
-      { key: 'site_name', label: 'Sunan shafin', type: 'text' },
-      { key: 'site_url', label: 'Adireshin shafin', type: 'text' },
-      { key: 'tagline', label: 'Taken', type: 'text' },
-      { key: 'default_meta_desc', label: 'Default meta description', type: 'textarea' },
-    ],
-  },
-  {
-    title: 'Tuntuɓa',
-    fields: [
-      { key: 'contact_email', label: 'Imel na tuntuɓa', type: 'text' },
-      { key: 'advertising_email', label: 'Imel na talla', type: 'text' },
-      { key: 'contact_phone', label: 'Wayar tuntuɓa', type: 'text' },
-      { key: 'address', label: 'Adireshin ofis', type: 'textarea' },
-    ],
-  },
-  {
-    title: 'Kafofin sada zumunta',
-    fields: [
-      { key: 'twitter_url', label: 'Twitter / X', type: 'text' },
-      { key: 'facebook_url', label: 'Facebook', type: 'text' },
-      { key: 'instagram_url', label: 'Instagram', type: 'text' },
-      { key: 'youtube_url', label: 'YouTube', type: 'text' },
-    ],
-  },
-  {
-    title: 'Abubuwan shafin gida',
-    fields: [
-      { key: 'ticker_items', label: 'Ticker (daya a kowane layi)', type: 'textarea' },
-      { key: 'newsletter_enabled', label: 'Kunna newsletter', type: 'checkbox' },
-      { key: 'comments_enabled', label: 'Kunna comments', type: 'checkbox' },
-    ],
-  },
-  {
-    title: 'Maintenance',
-    fields: [
-      { key: 'maintenance_mode', label: 'Kunna yanayin gyara', type: 'checkbox' },
-      { key: 'maintenance_message', label: 'Sakon gyara', type: 'textarea' },
-    ],
-  },
-  {
-    title: 'SMTP (aika imel)',
-    fields: [
-      { key: 'smtp_host', label: 'Host', type: 'text' },
-      { key: 'smtp_port', label: 'Port', type: 'text' },
-      { key: 'smtp_user', label: 'User', type: 'text' },
-      { key: 'smtp_pass', label: 'Password', type: 'text' },
-    ],
-  },
+const DEFAULT_SETTINGS = {
+  site_name: 'Yanci',
+  tagline: 'Labarai na Gaskiya',
+  logo_url: '',
+  favicon_url: '',
+  contact_email: '',
+  contact_phone: '',
+  address: '',
+  facebook_url: '',
+  twitter_url: '',
+  instagram_url: '',
+  youtube_url: '',
+  default_meta_desc: '',
+  default_og_image: '',
+  google_analytics_id: '',
+  smtp_host: '',
+  smtp_port: 587,
+  smtp_user: '',
+  smtp_pass: '',
+  maintenance_mode: false,
+  maintenance_message: '',
+  comments_enabled: true,
+  newsletter_enabled: true,
+  vapid_public_key: '',
+  vapid_private_key: '',
+  firebase_config: '',
+};
+
+function normalizeDoc(d: any) {
+  if (!d) return DEFAULT_SETTINGS;
+  const out: any = { ...DEFAULT_SETTINGS, ...d };
+  // Appwrite may store booleans as strings
+  for (const k of ['maintenance_mode', 'comments_enabled', 'newsletter_enabled']) {
+    if (typeof out[k] === 'string') out[k] = out[k] === 'true';
+  }
+  out.smtp_port = Number(out.smtp_port) || 587;
+  return out;
+}
+
+const initial = normalizeDoc(doc);
+const initialJson = JSON.stringify(initial);
+
+type IconCmp = React.ComponentType<{ className?: string }>;
+const ic = (Icon: IconCmp, cls = 'w-5 h-5 shrink-0') =>
+  renderToStaticMarkup(createElement(Icon, { className: cls }));
+
+const TABS: { id: string; label: string; Icon: IconCmp }[] = [
+  { id: 'general', label: 'General', Icon: FaGlobe },
+  { id: 'seo', label: 'SEO & Metadata', Icon: FaMagnifyingGlass },
+  { id: 'email', label: 'Email / SMTP', Icon: FaEnvelope },
+  { id: 'notifications', label: 'Notifications', Icon: FaBell },
+  { id: 'maintenance', label: 'Maintenance', Icon: FaWrench },
+  { id: 'backup', label: 'Backup & Data', Icon: FaDatabase },
 ];
 ---
 
 <AdminLayout title="Settings" active="settings">
-  <div class="mb-6">
-    <h1 class="font-serif text-2xl font-bold text-yanci-primary">Site settings</h1>
-    <p class="mt-1 max-w-xl text-sm text-yanci-primary/60">
-      Wadannan saitin suna sarrafa abin da masu karatu ke gani a duk shafin. Ajiye bayanai sannan a sabunta shafi.
-    </p>
-  </div>
-
-  {!doc && (
-    <div class="mb-6 border border-yanci-red/30 bg-red-50 p-5 text-sm text-red-700">
-      Ba a sami bayanan saitin ba. Run <code>node scripts/seed-settings.mjs</code> don ƙirƙirar saitin farko.
-    </div>
-  )}
-
-  {doc && (
-    <form id="settings-form" class="grid gap-6 lg:grid-cols-2">
-      <input type="hidden" name="id" value={String(doc.$id ?? '')} />
-      {GROUPS.map((group) => (
-        <fieldset class="border border-yanci-primary/15 bg-white/60 p-5">
-          <legend class="px-2 font-serif text-base font-bold text-yanci-primary">{group.title}</legend>
-          <div class="space-y-4">
-            {group.fields.map((f) => (
-              <label class="block">
-                <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">{f.label}</span>
-                {f.type === 'checkbox' ? (
-                  <input type="checkbox" name={f.key} class="size-4 accent-yanci-accent" checked={String(doc[f.key] ?? '') === 'true'} />
-                ) : f.type === 'textarea' ? (
-                  <textarea
-                    name={f.key}
-                    rows={3}
-                    class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40"
-                  >{String(doc[f.key] ?? '')}</textarea>
-                ) : (
-                  <input
-                    type="text"
-                    name={f.key}
-                    value={String(doc[f.key] ?? '')}
-                    class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40"
-                  />
-                )}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-      ))}
-      <div class="lg:col-span-2">
-        <button type="submit" class="bg-yanci-primary px-8 py-2.5 text-sm font-bold uppercase tracking-wide text-yanci-paper hover:bg-yanci-primary/90">
-          Ajiye saitin
-        </button>
-        <span id="settings-msg" class="ml-4 text-xs text-yanci-red"></span>
+  <div class="-m-4 md:-m-8">
+    <div class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
+      <!-- Header -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-4">
+        <div>
+          <h2 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2" id="settings-header-title">
+            <span id="settings-header-icon" set:html={ic(TABS[0].Icon, 'w-5 h-5 text-[#c59d5f]')} />
+            <span id="settings-header-label">{TABS[0].label}</span>
+          </h2>
+          <p class="text-sm text-gray-500 mt-1">Configure your site settings</p>
+        </div>
+        <div class="flex gap-2">
+          <button id="settings-reset" type="button" class="px-4 py-2.5 rounded-md border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 flex items-center gap-2">
+            <span set:html={ic(FaRotateLeft, 'w-3.5 h-3.5')} /> Reset
+          </button>
+          <button id="settings-save" type="button" class="px-6 py-2.5 rounded-md font-bold text-sm flex items-center gap-2 transition-colors bg-[#0f3036] text-white hover:bg-[#1a454c] disabled:opacity-50">
+            <span id="settings-save-icon" set:html={ic(FaFloppyDisk, 'w-4 h-4')} />
+            <span id="settings-save-label">Save</span>
+          </button>
+        </div>
       </div>
-    </form>
-  )}
+
+      <!-- Tabs -->
+      <div class="flex gap-1 border-b border-gray-200 overflow-x-auto pb-px">
+        {
+          TABS.map((tab) => (
+            <button
+              type="button"
+              data-tab={tab.id}
+              class={`flex items-center gap-2 px-4 py-3 text-sm font-bold whitespace-nowrap border-b-2 transition-colors ${tab.id === 'general' ? 'border-[#c59d5f] text-[#0f3036]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            >
+              <span set:html={ic(tab.Icon, 'w-4 h-4')} /> {tab.label}
+            </button>
+          ))
+        }
+      </div>
+
+      <!-- Content -->
+      <div class="max-w-3xl space-y-6">
+        <!-- general -->
+        <div data-panel="general" class="space-y-6">
+          <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <h3 class="font-bold text-base text-gray-800 border-b border-gray-100 pb-3">Site Identity</h3>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Site Name</label>
+              <input data-field="site_name" value={String(initial.site_name ?? '')} class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Tagline</label>
+              <input data-field="tagline" value={String(initial.tagline ?? '')} class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Logo URL</label>
+              <input data-field="logo_url" value={String(initial.logo_url ?? '')} placeholder="https://example.com/logo.png" class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Favicon URL</label>
+              <input data-field="favicon_url" value={String(initial.favicon_url ?? '')} placeholder="https://example.com/favicon.ico" class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+          </div>
+
+          <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <h3 class="font-bold text-base text-gray-800 border-b border-gray-100 pb-3">Contact Information</h3>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Contact Email</label>
+              <input data-field="contact_email" type="email" value={String(initial.contact_email ?? '')} class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Contact Phone</label>
+              <input data-field="contact_phone" value={String(initial.contact_phone ?? '')} class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Address</label>
+              <input data-field="address" value={String(initial.address ?? '')} class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+          </div>
+
+          <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <h3 class="font-bold text-base text-gray-800 border-b border-gray-100 pb-3">Social Media</h3>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Facebook URL</label>
+              <input data-field="facebook_url" value={String(initial.facebook_url ?? '')} class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Twitter/X URL</label>
+              <input data-field="twitter_url" value={String(initial.twitter_url ?? '')} class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Instagram URL</label>
+              <input data-field="instagram_url" value={String(initial.instagram_url ?? '')} class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">YouTube URL</label>
+              <input data-field="youtube_url" value={String(initial.youtube_url ?? '')} class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+          </div>
+        </div>
+
+        <!-- seo -->
+        <div data-panel="seo" class="space-y-6 hidden">
+          <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <h3 class="font-bold text-base text-gray-800 border-b border-gray-100 pb-3">Default SEO</h3>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Default Meta Description</label>
+              <textarea data-field="default_meta_desc" rows="3" class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none resize-none">{String(initial.default_meta_desc ?? '')}</textarea>
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Default OG Image URL</label>
+              <input data-field="default_og_image" value={String(initial.default_og_image ?? '')} placeholder="https://example.com/og-image.jpg" class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Google Analytics ID</label>
+              <input data-field="google_analytics_id" value={String(initial.google_analytics_id ?? '')} placeholder="G-XXXXXXXXXX" class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+          </div>
+        </div>
+
+        <!-- email -->
+        <div data-panel="email" class="space-y-6 hidden">
+          <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <h3 class="font-bold text-base text-gray-800 border-b border-gray-100 pb-3">SMTP Configuration</h3>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">SMTP Host</label>
+              <input data-field="smtp_host" value={String(initial.smtp_host ?? '')} placeholder="smtp.gmail.com" class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">SMTP Port</label>
+                <input data-field="smtp_port" type="number" value={String(initial.smtp_port ?? 587)} class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+              </div>
+              <div>
+                <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">SMTP Password</label>
+                <div class="relative">
+                  <input data-field="smtp_pass" type="password" value={String(initial.smtp_pass ?? '')} class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none pr-10" />
+                  <button id="toggle-smtp-pass" type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <span class="eye-open" set:html={ic(FaEye, 'w-4 h-4')} />
+                    <span class="eye-closed hidden" set:html={ic(FaEyeSlash, 'w-4 h-4')} />
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">SMTP Username</label>
+              <input data-field="smtp_user" value={String(initial.smtp_user ?? '')} class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+          </div>
+        </div>
+
+        <!-- notifications -->
+        <div data-panel="notifications" class="space-y-6 hidden">
+          <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <h3 class="font-bold text-base text-gray-800 border-b border-gray-100 pb-3">Push Notifications</h3>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">VAPID Public Key</label>
+              <input data-field="vapid_public_key" value={String(initial.vapid_public_key ?? '')} class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">VAPID Private Key</label>
+              <input data-field="vapid_private_key" value={String(initial.vapid_private_key ?? '')} class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Firebase Config (JSON)</label>
+              <textarea data-field="firebase_config" rows="3" placeholder='{"apiKey":"...","projectId":"..."}' class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none resize-none">{String(initial.firebase_config ?? '')}</textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- maintenance -->
+        <div data-panel="maintenance" class="space-y-6 hidden">
+          <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <h3 class="font-bold text-base text-gray-800 border-b border-gray-100 pb-3">Maintenance Mode</h3>
+            <div class="flex items-center justify-between py-2">
+              <span class="text-sm font-medium text-gray-700">Enable Maintenance Mode</span>
+              <button type="button" data-toggle="maintenance_mode" class={`relative w-11 h-6 rounded-full transition-colors ${initial.maintenance_mode ? 'bg-[#0f3036]' : 'bg-gray-300'}`}>
+                <span class={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${initial.maintenance_mode ? 'translate-x-5' : ''}`}></span>
+              </button>
+            </div>
+            <div id="maintenance-message-wrap" class={initial.maintenance_mode ? '' : 'hidden'}>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Maintenance Message</label>
+              <textarea data-field="maintenance_message" rows="3" placeholder="We're currently performing maintenance. Please check back soon." class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none resize-none">{String(initial.maintenance_message ?? '')}</textarea>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <h3 class="font-bold text-base text-gray-800 border-b border-gray-100 pb-3">Feature Toggles</h3>
+            <div class="flex items-center justify-between py-2">
+              <span class="text-sm font-medium text-gray-700">Enable Comments</span>
+              <button type="button" data-toggle="comments_enabled" class={`relative w-11 h-6 rounded-full transition-colors ${initial.comments_enabled ? 'bg-[#0f3036]' : 'bg-gray-300'}`}>
+                <span class={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${initial.comments_enabled ? 'translate-x-5' : ''}`}></span>
+              </button>
+            </div>
+            <div class="flex items-center justify-between py-2">
+              <span class="text-sm font-medium text-gray-700">Enable Newsletter Signup</span>
+              <button type="button" data-toggle="newsletter_enabled" class={`relative w-11 h-6 rounded-full transition-colors ${initial.newsletter_enabled ? 'bg-[#0f3036]' : 'bg-gray-300'}`}>
+                <span class={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${initial.newsletter_enabled ? 'translate-x-5' : ''}`}></span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- backup -->
+        <div data-panel="backup" class="space-y-6 hidden">
+          <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <h3 class="font-bold text-base text-gray-800 border-b border-gray-100 pb-3">Export / Import Settings</h3>
+            <div class="flex gap-3">
+              <button id="export-settings" type="button" class="px-4 py-2.5 bg-[#0f3036] text-white rounded-lg font-bold text-sm flex items-center gap-2 hover:bg-[#1a454c]">
+                <span set:html={ic(FaDownload, 'w-4 h-4')} /> Export Settings
+              </button>
+              <label class="px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-lg font-bold text-sm flex items-center gap-2 hover:bg-gray-50 cursor-pointer">
+                <span set:html={ic(FaUpload, 'w-4 h-4')} /> Import Settings
+                <input id="import-settings" type="file" accept=".json" class="hidden" />
+              </label>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <h3 class="font-bold text-base text-gray-800 border-b border-gray-100 pb-3">Danger Zone</h3>
+            <div class="bg-red-50 border border-red-100 rounded-xl p-5">
+              <h4 class="font-bold text-red-800 mb-2 flex items-center gap-2"><span set:html={ic(FaTriangleExclamation, 'w-4 h-4')} /> Clear All Cached Data</h4>
+              <p class="text-sm text-red-600 mb-4">This will clear localStorage cache for highlights, stats, sports, and layout. Appwrite data will not be affected.</p>
+              <button id="clear-cache" type="button" class="px-4 py-2 bg-red-600 text-white rounded-lg font-bold text-sm hover:bg-red-700 flex items-center gap-2">
+                <span set:html={ic(FaTrash, 'w-3.5 h-3.5')} /> Clear Cache
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </AdminLayout>
 
-<script>
-  const form = document.getElementById('settings-form') as HTMLFormElement | null;
-  const msg = document.getElementById('settings-msg');
-  form?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const id = (form.elements.namedItem('id') as HTMLInputElement).value;
-    const data: Record<string, unknown> = {};
-    for (const el of form.elements) {
-      const node = el as HTMLInputElement | HTMLTextAreaElement;
-      if (!node.name || node.name === 'id') continue;
-      if (node.type === 'checkbox') data[node.name] = (node as HTMLInputElement).checked;
-      else data[node.name] = node.value;
-    }
-    if (msg) msg.textContent = '';
-    const res = await fetch(`/api/admin/settings/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+<script is:inline define:vars={{ initialJson, docId }}>
+  const DEFAULT_SETTINGS = JSON.parse(initialJson);
+  let settings = { ...DEFAULT_SETTINGS };
+  let activeTab = 'general';
+  let saving = false;
+  let saved = false;
+  let showSmtpPass = false;
+
+  const TABS_META = {
+    general: { label: 'General', color: '#c59d5f' },
+    seo: { label: 'SEO & Metadata', color: '#c59d5f' },
+    email: { label: 'Email / SMTP', color: '#c59d5f' },
+    notifications: { label: 'Notifications', color: '#c59d5f' },
+    maintenance: { label: 'Maintenance', color: '#c59d5f' },
+    backup: { label: 'Backup & Data', color: '#c59d5f' },
+  };
+
+  const headerLabel = document.getElementById('settings-header-label');
+  const saveBtn = document.getElementById('settings-save');
+  const saveLabel = document.getElementById('settings-save-label');
+  const saveIcon = document.getElementById('settings-save-icon');
+  const toggleSmtpBtn = document.getElementById('toggle-smtp-pass');
+  const smtpInput = document.querySelector('[data-field="smtp_pass"]');
+
+  function syncHeader() {
+    if (headerLabel) headerLabel.textContent = TABS_META[activeTab]?.label || activeTab;
+  }
+
+  function setTab(id) {
+    activeTab = id;
+    syncHeader();
+    document.querySelectorAll('[data-tab]').forEach((btn) => {
+      const isActive = btn.getAttribute('data-tab') === id;
+      btn.className = `flex items-center gap-2 px-4 py-3 text-sm font-bold whitespace-nowrap border-b-2 transition-colors ${isActive ? 'border-[#c59d5f] text-[#0f3036]' : 'border-transparent text-gray-500 hover:text-gray-700'}`;
     });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      if (msg) msg.textContent = json.message ?? 'Ajiye bai yi nasara ba';
-      return;
-    }
-    if (msg) { msg.textContent = 'An ajiye!'; msg.className = 'ml-4 text-xs font-bold text-yanci-teal'; }
+    document.querySelectorAll('[data-panel]').forEach((panel) => {
+      const isActive = panel.getAttribute('data-panel') === id;
+      panel.classList.toggle('hidden', !isActive);
+    });
+  }
+
+  document.querySelectorAll('[data-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => setTab(btn.getAttribute('data-tab')));
   });
+
+  // field bindings
+  document.querySelectorAll('[data-field]').forEach((el) => {
+    const key = el.getAttribute('data-field');
+    if (!key) return;
+    el.addEventListener('input', () => {
+      let val = el.value;
+      if (key === 'smtp_port') val = parseInt(val) || 587;
+      settings[key] = val;
+    });
+    el.addEventListener('change', () => {
+      let val = el.value;
+      if (key === 'smtp_port') val = parseInt(val) || 587;
+      settings[key] = val;
+    });
+  });
+
+  // toggles
+  function updateToggle(btn, checked) {
+    btn.className = `relative w-11 h-6 rounded-full transition-colors ${checked ? 'bg-[#0f3036]' : 'bg-gray-300'}`;
+    const knob = btn.querySelector('span');
+    if (knob) knob.className = `absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${checked ? 'translate-x-5' : ''}`;
+  }
+
+  document.querySelectorAll('[data-toggle]').forEach((btn) => {
+    const key = btn.getAttribute('data-toggle');
+    btn.addEventListener('click', () => {
+      settings[key] = !settings[key];
+      const checked = !!settings[key];
+      updateToggle(btn, checked);
+      if (key === 'maintenance_mode') {
+        const wrap = document.getElementById('maintenance-message-wrap');
+        if (wrap) wrap.classList.toggle('hidden', !checked);
+      }
+    });
+  });
+
+  // smtp pass visibility
+  if (toggleSmtpBtn && smtpInput) {
+    toggleSmtpBtn.addEventListener('click', () => {
+      showSmtpPass = !showSmtpPass;
+      smtpInput.type = showSmtpPass ? 'text' : 'password';
+      const open = toggleSmtpBtn.querySelector('.eye-open');
+      const closed = toggleSmtpBtn.querySelector('.eye-closed');
+      if (open && closed) {
+        open.classList.toggle('hidden', showSmtpPass);
+        closed.classList.toggle('hidden', !showSmtpPass);
+      }
+    });
+  }
+
+  function setSaveState(state) {
+    if (!saveBtn || !saveLabel) return;
+    if (state === 'saving') {
+      saveBtn.className = 'px-6 py-2.5 rounded-md font-bold text-sm flex items-center gap-2 transition-colors bg-[#0f3036] text-white opacity-50';
+      saveLabel.textContent = 'Saving...';
+      if (saveIcon) saveIcon.innerHTML = '<svg class="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/><path d="M4 12a8 8 0 018-8" stroke="currentColor" stroke-width="4" class="opacity-75"/></svg>';
+    } else if (state === 'saved') {
+      saveBtn.className = 'px-6 py-2.5 rounded-md font-bold text-sm flex items-center gap-2 transition-colors bg-green-600 text-white';
+      saveLabel.textContent = 'Saved!';
+      if (saveIcon) saveIcon.innerHTML = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7" /></svg>';
+    } else {
+      saveBtn.className = 'px-6 py-2.5 rounded-md font-bold text-sm flex items-center gap-2 transition-colors bg-[#0f3036] text-white hover:bg-[#1a454c] disabled:opacity-50';
+      saveLabel.textContent = 'Save';
+      if (saveIcon) saveIcon.innerHTML = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
+    }
+  }
+
+  async function handleSave() {
+    if (saving) return;
+    saving = true;
+    setSaveState('saving');
+    try {
+      // collect latest values from inputs
+      document.querySelectorAll('[data-field]').forEach((el) => {
+        const k = el.getAttribute('data-field');
+        if (!k) return;
+        let v = el.value;
+        if (k === 'smtp_port') v = parseInt(v) || 587;
+        settings[k] = v;
+      });
+      const payload = { ...settings };
+      // ensure numbers/booleans are correct types for API
+      payload.smtp_port = Number(payload.smtp_port) || 587;
+      const method = docId ? 'PUT' : 'POST';
+      const url = docId ? `/api/admin/settings/${encodeURIComponent(docId)}` : '/api/admin/settings/new';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('save failed');
+      saved = true;
+      setSaveState('saved');
+      setTimeout(() => {
+        saved = false;
+        setSaveState('idle');
+      }, 3000);
+    } catch (e) {
+      console.error('Failed to save:', e);
+      alert('Failed to save settings');
+      setSaveState('idle');
+    } finally {
+      saving = false;
+    }
+  }
+
+  if (saveBtn) saveBtn.addEventListener('click', handleSave);
+
+  const resetBtn = document.getElementById('settings-reset');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      if (!window.confirm('Reset all settings to defaults?')) return;
+      settings = { ...DEFAULT_SETTINGS };
+      document.querySelectorAll('[data-field]').forEach((el) => {
+        const k = el.getAttribute('data-field');
+        if (k && settings[k] !== undefined) el.value = String(settings[k] ?? '');
+      });
+      document.querySelectorAll('[data-toggle]').forEach((btn) => {
+        const k = btn.getAttribute('data-toggle');
+        updateToggle(btn, !!settings[k]);
+      });
+      const wrap = document.getElementById('maintenance-message-wrap');
+      if (wrap) wrap.classList.toggle('hidden', !settings.maintenance_mode);
+    });
+  }
+
+  const exportBtn = document.getElementById('export-settings');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+      document.querySelectorAll('[data-field]').forEach((el) => {
+        const k = el.getAttribute('data-field');
+        if (!k) return;
+        let v = el.value;
+        if (k === 'smtp_port') v = parseInt(v) || 587;
+        settings[k] = v;
+      });
+      const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'yanci-settings-' + new Date().toISOString().slice(0, 10) + '.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  const importInput = document.getElementById('import-settings');
+  if (importInput) {
+    importInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target.result);
+          settings = { ...settings, ...data };
+          document.querySelectorAll('[data-field]').forEach((el) => {
+            const k = el.getAttribute('data-field');
+            if (k && data[k] !== undefined) el.value = String(data[k] ?? '');
+          });
+          document.querySelectorAll('[data-toggle]').forEach((btn) => {
+            const k = btn.getAttribute('data-toggle');
+            if (k && data[k] !== undefined) updateToggle(btn, !!data[k]);
+          });
+          const wrap = document.getElementById('maintenance-message-wrap');
+          if (wrap) wrap.classList.toggle('hidden', !settings.maintenance_mode);
+          alert('Settings imported successfully');
+        } catch {
+          alert('Invalid JSON file');
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    });
+  }
+
+  const clearBtn = document.getElementById('clear-cache');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      localStorage.clear();
+      alert('Cache cleared');
+    });
+  }
 </script>

@@ -1,44 +1,357 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import SeoManager, { SEO_KEYS, type SeoValues } from '../../components/admin/SeoManager';
 import { adminListCollection } from '@lib/admin-collections';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import {
+  FaShieldHalved,
+  FaFloppyDisk,
+  FaGlobe,
+  FaLink,
+  FaImage,
+  FaShareNodes,
+  FaMagnifyingGlass,
+  FaSpinner,
+  FaCheck,
+} from 'react-icons/fa6';
 
 export const prerender = false;
 
 const docs = await adminListCollection('settings');
 const doc = docs[0] ?? null;
+const docId = String((doc as any)?.$id ?? '');
 
-const values = Object.fromEntries(
-  SEO_KEYS.map((key) => [key, String(doc?.[key] ?? '')]),
-) as SeoValues;
+// Map Astro settings doc to React defaultSettings where possible
+const defaultSettings = {
+  siteTitle: 'Yanci - Muryar Arewa',
+  siteDescription: "Labarai da ra'ayi daga Najeriya - Your trusted Nigerian news source",
+  siteUrl: 'https://yanci.com',
+  ogImage: '/og-image.jpg',
+  ogLocale: 'ha_NG',
+  ogType: 'website',
+  twitterHandle: '@yancinews',
+  googleAnalyticsId: '',
+  googleSearchConsoleId: '',
+  facebookAppId: '',
+  canonicalUrl: 'https://yanci.com',
+  robotsTxt: 'User-agent: *\nAllow: /\n\nSitemap: https://yanci.com/sitemap.xml',
+  metaKeywords: 'Nigeria news, Hausa news, Arewa, Yanci, Labarai, Najeriya',
+  author: 'Yanci Editorial Team',
+};
 
-const siteName = String(doc?.site_name ?? '') || 'Yanci';
-const tagline = String(doc?.tagline ?? '') || 'Jaridar Hausa mai zuwa';
-const siteUrl = String(doc?.site_url ?? '') || 'https://yanci.ng';
+function fromDoc(d: any) {
+  if (!d) return defaultSettings;
+  return {
+    siteTitle: String(d.seo_default_title ?? d.site_name ?? defaultSettings.siteTitle),
+    siteDescription: String(d.seo_default_description ?? d.default_meta_desc ?? defaultSettings.siteDescription),
+    siteUrl: String(d.site_url ?? d.siteUrl ?? defaultSettings.siteUrl),
+    ogImage: String(d.seo_og_image ?? d.default_og_image ?? defaultSettings.ogImage),
+    ogLocale: String(d.ogLocale ?? defaultSettings.ogLocale),
+    ogType: String(d.ogType ?? defaultSettings.ogType),
+    twitterHandle: String(d.seo_twitter_handle ?? d.twitterHandle ?? defaultSettings.twitterHandle),
+    googleAnalyticsId: String(d.ga_measurement_id ?? d.google_analytics_id ?? defaultSettings.googleAnalyticsId),
+    googleSearchConsoleId: String(d.seo_google_verification ?? d.googleSearchConsoleId ?? defaultSettings.googleSearchConsoleId),
+    facebookAppId: String(d.facebookAppId ?? d.facebook_app_id ?? defaultSettings.facebookAppId),
+    canonicalUrl: String(d.canonicalUrl ?? d.site_url ?? defaultSettings.canonicalUrl),
+    robotsTxt: String(d.robotsTxt ?? defaultSettings.robotsTxt),
+    metaKeywords: String(d.metaKeywords ?? defaultSettings.metaKeywords),
+    author: String(d.author ?? defaultSettings.author),
+  };
+}
+
+const initial = fromDoc(doc as any);
+const initialJson = JSON.stringify(initial);
+
+type IconCmp = React.ComponentType<{ className?: string }>;
+const ic = (Icon: IconCmp, cls = 'w-5 h-5 shrink-0') =>
+  renderToStaticMarkup(createElement(Icon, { className: cls }));
+
+const TABS = [
+  { id: 'general', label: 'General SEO', Icon: FaMagnifyingGlass },
+  { id: 'social', label: 'Social Media', Icon: FaShareNodes },
+  { id: 'verification', label: 'Verification', Icon: FaCheck },
+  { id: 'advanced', label: 'Advanced', Icon: FaShieldHalved },
+];
 ---
 
 <AdminLayout title="SEO" active="seo">
-  <div class="mb-6">
-    <h1 class="font-serif text-2xl font-bold text-yanci-primary">Kula da SEO</h1>
-    <p class="mt-1 max-w-xl text-sm text-yanci-primary/60">
-      Saitunan take, bayani, tabbatarwa da ma'aunin ziyara na dukan shafin.
-    </p>
-  </div>
+  <div class="-m-4 md:-m-8">
+    <div class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
+      <!-- Header -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-4">
+        <div>
+          <h2 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <span set:html={ic(FaShieldHalved, 'w-5 h-5 text-[#c59d5f]')} /> SEO & Metadata Settings
+          </h2>
+          <p class="text-sm text-gray-500 mt-1">Gudanar da SEO, metadata, da social media settings</p>
+        </div>
+        <button
+          id="seo-save"
+          type="button"
+          class="px-6 py-2.5 rounded-md flex items-center gap-2 font-bold text-sm transition-colors bg-[#0f3036] text-white hover:bg-[#1a454c] disabled:opacity-50"
+        >
+          <span id="seo-save-icon" set:html={ic(FaFloppyDisk, 'w-4 h-4')} />
+          <span id="seo-save-label">Ajiye Settings</span>
+        </button>
+      </div>
 
-  {!doc && (
-    <div class="mb-6 border border-yanci-red/30 bg-red-50 p-5 text-sm text-red-700">
-      Ba a sami bayanan saitin ba. Run <code>node scripts/seed-settings.mjs</code> don ƙirƙirar saitin farko.
+      <!-- Tabs -->
+      <div class="flex gap-2 border-b border-gray-200 overflow-x-auto">
+        {
+          TABS.map((tab) => (
+            <button
+              type="button"
+              data-seotab={tab.id}
+              class={`flex items-center gap-2 px-4 py-3 text-sm font-bold whitespace-nowrap border-b-2 transition-colors ${tab.id === 'general' ? 'border-[#c59d5f] text-[#0f3036]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            >
+              <span set:html={ic(tab.Icon, 'w-4 h-4')} /> {tab.label}
+            </button>
+          ))
+        }
+      </div>
+
+      <!-- General Tab -->
+      <div data-seopanel="general" class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-6">
+        <div>
+          <label class="text-sm font-bold text-gray-700 mb-2 block">Site Title</label>
+          <input data-seo="siteTitle" value={initial.siteTitle} class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+          <p class="text-xs text-gray-500 mt-1">Default title shown across all pages</p>
+        </div>
+
+        <div>
+          <label class="text-sm font-bold text-gray-700 mb-2 block">Site Description</label>
+          <textarea data-seo="siteDescription" rows="3" class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none resize-none">{initial.siteDescription}</textarea>
+          <p class="text-xs text-gray-500 mt-1">Used for search engine snippets (150-160 characters ideal)</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="text-sm font-bold text-gray-700 mb-2 block flex items-center gap-2"><span set:html={ic(FaGlobe, 'w-4 h-4')} /> Site URL</label>
+            <input data-seo="siteUrl" value={initial.siteUrl} placeholder="https://yanci.com" class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+          </div>
+          <div>
+            <label class="text-sm font-bold text-gray-700 mb-2 block flex items-center gap-2"><span set:html={ic(FaLink, 'w-4 h-4')} /> Canonical URL</label>
+            <input data-seo="canonicalUrl" value={initial.canonicalUrl} class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="text-sm font-bold text-gray-700 mb-2 block flex items-center gap-2"><span set:html={ic(FaImage, 'w-4 h-4')} /> Default OG Image</label>
+            <input data-seo="ogImage" value={initial.ogImage} placeholder="/og-image.jpg" class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+          </div>
+          <div>
+            <label class="text-sm font-bold text-gray-700 mb-2 block">Locale</label>
+            <input data-seo="ogLocale" value={initial.ogLocale} placeholder="ha_NG" class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+          </div>
+        </div>
+
+        <div>
+          <label class="text-sm font-bold text-gray-700 mb-2 block">Meta Keywords (comma-separated)</label>
+          <input data-seo="metaKeywords" value={initial.metaKeywords} class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+        </div>
+
+        <div>
+          <label class="text-sm font-bold text-gray-700 mb-2 block">Author</label>
+          <input data-seo="author" value={initial.author} class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+        </div>
+      </div>
+
+      <!-- Social Tab -->
+      <div data-seopanel="social" class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-6 hidden">
+        <div class="p-4 bg-blue-50 border border-blue-100 rounded-lg mb-6">
+          <p class="text-sm text-blue-800 font-medium">Configure how your site appears when shared on social media platforms.</p>
+        </div>
+
+        <div>
+          <label class="text-sm font-bold text-gray-700 mb-2 block">Twitter Handle</label>
+          <div class="flex">
+            <span class="inline-flex items-center px-3 bg-gray-100 border border-r-0 border-gray-200 rounded-l-lg text-gray-500 text-sm">@</span>
+            <input data-seo="twitterHandle" value={String(initial.twitterHandle).replace(/^@/, '')} class="flex-1 text-sm p-3 border border-gray-200 rounded-r-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+          </div>
+        </div>
+
+        <div>
+          <label class="text-sm font-bold text-gray-700 mb-2 block">Facebook App ID</label>
+          <input data-seo="facebookAppId" value={initial.facebookAppId} placeholder="1234567890" class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+        </div>
+
+        <div>
+          <label class="text-sm font-bold text-gray-700 mb-2 block">OG Type</label>
+          <select data-seo="ogType" class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none bg-white">
+            <option value="website" selected={initial.ogType === 'website'}>Website</option>
+            <option value="article" selected={initial.ogType === 'article'}>Article</option>
+            <option value="profile" selected={initial.ogType === 'profile'}>Profile</option>
+          </select>
+        </div>
+
+        <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+          <p class="text-xs font-bold text-gray-500 uppercase mb-3">Social Share Preview</p>
+          <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div class="aspect-video bg-gray-200 flex items-center justify-center">
+              <span set:html={ic(FaImage, 'text-gray-400 text-3xl w-8 h-8')} />
+            </div>
+            <div class="p-3">
+              <p class="text-xs text-gray-500 uppercase" id="seo-preview-url">{initial.siteUrl}</p>
+              <p class="font-bold text-sm mt-1" id="seo-preview-title">{initial.siteTitle}</p>
+              <p class="text-xs text-gray-600 mt-1 line-clamp-2" id="seo-preview-desc">{initial.siteDescription}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Verification Tab -->
+      <div data-seopanel="verification" class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-6 hidden">
+        <div class="p-4 bg-amber-50 border border-amber-100 rounded-lg mb-6">
+          <p class="text-sm text-amber-800 font-medium">Add verification codes from search engines to prove site ownership.</p>
+        </div>
+
+        <div>
+          <label class="text-sm font-bold text-gray-700 mb-2 block">Google Search Console Verification</label>
+          <input data-seo="googleSearchConsoleId" value={initial.googleSearchConsoleId} placeholder="google-site-verification=XXXXXXXXXXXX" class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+          <p class="text-xs text-gray-500 mt-1">Found in Google Search Console → Settings → Ownership verification</p>
+        </div>
+
+        <div>
+          <label class="text-sm font-bold text-gray-700 mb-2 block">Google Analytics ID</label>
+          <input data-seo="googleAnalyticsId" value={initial.googleAnalyticsId} placeholder="G-XXXXXXXXXX or UA-XXXXXXXXX" class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+        </div>
+      </div>
+
+      <!-- Advanced Tab -->
+      <div data-seopanel="advanced" class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-6 hidden">
+        <div>
+          <label class="text-sm font-bold text-gray-700 mb-2 block">robots.txt</label>
+          <textarea data-seo="robotsTxt" rows="8" class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none font-mono resize-none">{initial.robotsTxt}</textarea>
+          <p class="text-xs text-gray-500 mt-1">Controls how search engines crawl your site</p>
+        </div>
+      </div>
     </div>
-  )}
-
-  {doc && (
-    <SeoManager
-      client:load
-      docId={String(doc.$id)}
-      values={values}
-      siteName={siteName}
-      tagline={tagline}
-      siteUrl={siteUrl}
-    />
-  )}
+  </div>
 </AdminLayout>
+
+<script is:inline define:vars={{ initialJson, docId }}>
+  const STORAGE_KEY = 'yanci_seo_settings';
+  const defaultSettings = JSON.parse(initialJson);
+  let settings = (() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
+    } catch { return defaultSettings; }
+  })();
+  let activeTab = 'general';
+  let saving = false;
+  let saved = false;
+
+  // hydrate inputs from settings (in case localStorage differs)
+  document.querySelectorAll('[data-seo]').forEach((el) => {
+    const k = el.getAttribute('data-seo');
+    if (!k || settings[k] === undefined) return;
+    if (k === 'twitterHandle') {
+      el.value = String(settings[k]).replace(/^@/, '');
+    } else {
+      el.value = String(settings[k] ?? '');
+      if (el.tagName === 'SELECT') {
+        Array.from(el.options).forEach(o => o.selected = o.value === String(settings[k]));
+      }
+    }
+  });
+  // also sync preview
+  const previewUrl = document.getElementById('seo-preview-url');
+  const previewTitle = document.getElementById('seo-preview-title');
+  const previewDesc = document.getElementById('seo-preview-desc');
+  function syncPreview() {
+    if (previewUrl) previewUrl.textContent = settings.siteUrl;
+    if (previewTitle) previewTitle.textContent = settings.siteTitle;
+    if (previewDesc) previewDesc.textContent = settings.siteDescription;
+  }
+
+  function setTab(id) {
+    activeTab = id;
+    document.querySelectorAll('[data-seotab]').forEach((btn) => {
+      const isActive = btn.getAttribute('data-seotab') === id;
+      btn.className = `flex items-center gap-2 px-4 py-3 text-sm font-bold whitespace-nowrap border-b-2 transition-colors ${isActive ? 'border-[#c59d5f] text-[#0f3036]' : 'border-transparent text-gray-500 hover:text-gray-700'}`;
+    });
+    document.querySelectorAll('[data-seopanel]').forEach((panel) => {
+      panel.classList.toggle('hidden', panel.getAttribute('data-seopanel') !== id);
+    });
+  }
+
+  document.querySelectorAll('[data-seotab]').forEach((btn) => {
+    btn.addEventListener('click', () => setTab(btn.getAttribute('data-seotab')));
+  });
+
+  document.querySelectorAll('[data-seo]').forEach((el) => {
+    const key = el.getAttribute('data-seo');
+    if (!key) return;
+    const handler = () => {
+      let val = el.value;
+      if (key === 'twitterHandle') val = '@' + val.replace(/@/g, '');
+      if (key === 'ogType') val = el.value;
+      settings[key] = val;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+      syncPreview();
+    };
+    el.addEventListener('input', handler);
+    el.addEventListener('change', handler);
+  });
+
+  const saveBtn = document.getElementById('seo-save');
+  const saveLabel = document.getElementById('seo-save-label');
+  const saveIcon = document.getElementById('seo-save-icon');
+
+  function setSaveState(state) {
+    if (!saveBtn || !saveLabel || !saveIcon) return;
+    if (state === 'saving') {
+      saveBtn.className = 'px-6 py-2.5 rounded-md flex items-center gap-2 font-bold text-sm transition-colors bg-[#0f3036] text-white disabled:opacity-50';
+      saveLabel.textContent = 'Saving...';
+      saveIcon.innerHTML = '<svg class="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/><path d="M4 12a8 8 0 018-8" stroke="currentColor" stroke-width="4" class="opacity-75"/></svg>';
+    } else if (state === 'saved') {
+      saveBtn.className = 'px-6 py-2.5 rounded-md flex items-center gap-2 font-bold text-sm transition-colors bg-green-600 text-white';
+      saveLabel.textContent = 'Saved!';
+      saveIcon.innerHTML = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7" /></svg>';
+    } else {
+      saveBtn.className = 'px-6 py-2.5 rounded-md flex items-center gap-2 font-bold text-sm transition-colors bg-[#0f3036] text-white hover:bg-[#1a454c] disabled:opacity-50';
+      saveLabel.textContent = 'Ajiye Settings';
+      saveIcon.innerHTML = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
+    }
+  }
+
+  async function handleSave() {
+    if (saving) return;
+    saving = true;
+    setSaveState('saving');
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    // also try to persist to Appwrite if docId exists
+    if (docId) {
+      const payload = {
+        seo_default_title: settings.siteTitle,
+        seo_default_description: settings.siteDescription,
+        site_url: settings.siteUrl,
+        seo_og_image: settings.ogImage,
+        seo_twitter_handle: settings.twitterHandle,
+        ga_measurement_id: settings.googleAnalyticsId,
+        seo_google_verification: settings.googleSearchConsoleId,
+      };
+      try {
+        await fetch(`/api/admin/seo/${encodeURIComponent(docId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } catch {}
+    }
+    setTimeout(() => {
+      saved = true;
+      saving = false;
+      setSaveState('saved');
+      setTimeout(() => {
+        saved = false;
+        setSaveState('idle');
+      }, 3000);
+    }, 500);
+  }
+
+  if (saveBtn) saveBtn.addEventListener('click', handleSave);
+  syncPreview();
+</script>

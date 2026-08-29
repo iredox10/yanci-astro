@@ -1,26 +1,377 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import AdminCrud from '../../components/admin/AdminCrud.astro';
 import { adminListCollection } from '@lib/admin-collections';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import {
+  FaChartLine,
+  FaPlus,
+  FaTrash,
+  FaPen,
+  FaXmark,
+  FaSpinner,
+  FaArrowUp,
+  FaArrowDown,
+} from 'react-icons/fa6';
 
 export const prerender = false;
 
 const docs = await adminListCollection('stats');
+const initialStats = [
+  { id: 1, label: 'Labarai', value: 12500, suffix: '+', icon: 'article' },
+  { id: 2, label: 'Masu karatu', value: 500, suffix: 'K+', icon: 'reader' },
+  { id: 3, label: 'Kasashen duniya', value: 45, suffix: '', icon: 'globe' },
+];
+
+// Normalize Appwrite docs to React shape
+function normalizeDocs(list: any[]) {
+  if (!list || list.length === 0) return null;
+  return list.map((doc: any, idx: number) => ({
+    $id: String(doc.$id ?? doc.id ?? ''),
+    id: doc.$id ?? doc.id ?? idx + 1,
+    label: String(doc.label ?? ''),
+    value: Number(doc.value ?? 0),
+    suffix: String(doc.suffix ?? ''),
+    icon: String(doc.icon ?? 'article'),
+    order: Number(doc.order ?? idx),
+    active: doc.active !== undefined ? Boolean(doc.active) : true,
+  }));
+}
+
+const normalized = normalizeDocs(docs as any[]);
+const statsForClient = normalized && normalized.length > 0 ? normalized : initialStats;
+const statsJson = JSON.stringify(statsForClient);
+const hasAppwrite = Boolean(normalized && normalized.length > 0);
+
+type IconCmp = React.ComponentType<{ className?: string }>;
+const ic = (Icon: IconCmp, cls = 'w-5 h-5 shrink-0') =>
+  renderToStaticMarkup(createElement(Icon, { className: cls }));
 ---
 
 <AdminLayout title="Homepage stats" active="homepage-stats">
-  <AdminCrud
-    collection="homepage-stats"
-    title="Homepage stats"
-    description="Big numbers shown in the dark stats band on the homepage (e.g. 12,500+ labarai)."
-    docs={docs}
-    fields={[
-      { key: 'label', label: 'Label', placeholder: 'Labarai' },
-      { key: 'value', label: 'Value', type: 'number', placeholder: '12500' },
-      { key: 'suffix', label: 'Suffix', placeholder: '+' },
-      { key: 'icon', label: 'Icon', options: ['article', 'reader', 'staff', 'chart'], type: 'select' },
-      { key: 'order', label: 'Order', type: 'number' },
-      { key: 'active', label: 'Active', type: 'checkbox' },
-    ]}
-  />
+  <div class="-m-4 md:-m-8">
+    <div class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-4">
+        <div>
+          <h2 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <span set:html={ic(FaChartLine, 'w-5 h-5 text-[#c59d5f]')} /> Homepage Statistics
+          </h2>
+          <p class="text-sm text-gray-500 mt-1">Gudanar da lambobin da ke shafin farko <span id="stats-source-label">{hasAppwrite ? '(Appwrite)' : '(Local)'}</span></p>
+        </div>
+        <button id="stats-add" type="button" class="bg-[#0f3036] text-white px-4 py-2.5 rounded-md flex items-center gap-2 hover:bg-[#1a454c] font-bold text-sm">
+          <span set:html={ic(FaPlus, 'w-4 h-4')} /> Ƙara Stat
+        </button>
+      </div>
+
+      <div class="bg-[#0f3036] rounded-2xl p-8">
+        <p class="text-xs font-bold text-[#c59d5f] uppercase tracking-widest mb-4">Live Preview</p>
+        <div id="stats-preview" class="grid grid-cols-3 gap-8">
+          {
+            statsForClient.map((stat: any) => (
+              <div class="text-center">
+                <div class="text-3xl md:text-4xl font-serif font-black text-white mb-1">
+                  {Number(stat.value).toLocaleString()}
+                  {stat.suffix}
+                </div>
+                <div class="text-xs font-bold uppercase tracking-widest text-[#c59d5f]">{stat.label}</div>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+
+      <div id="stats-list" class="space-y-3">
+        {
+          statsForClient.map((stat: any, index: number) => (
+            <div
+              data-stat-id={String(stat.$id ?? stat.id)}
+              class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex items-center justify-between"
+            >
+              <div class="flex items-center gap-4">
+                <div class="text-2xl font-black text-[#0f3036]">
+                  {Number(stat.value).toLocaleString()}
+                  {stat.suffix}
+                </div>
+                <div>
+                  <p class="font-bold text-gray-900">{stat.label}</p>
+                </div>
+              </div>
+              <div class="flex gap-1">
+                <button type="button" data-move="up" data-index={String(index)} disabled={index === 0} class="p-1.5 text-gray-400 hover:bg-gray-100 rounded disabled:opacity-30">
+                  <span set:html={ic(FaArrowUp, 'w-3 h-3')} />
+                </button>
+                <button type="button" data-move="down" data-index={String(index)} disabled={index === statsForClient.length - 1} class="p-1.5 text-gray-400 hover:bg-gray-100 rounded disabled:opacity-30">
+                  <span set:html={ic(FaArrowDown, 'w-3 h-3')} />
+                </button>
+                <button type="button" data-edit={String(stat.$id ?? stat.id)} class="p-1.5 text-blue-600 hover:bg-blue-50 rounded">
+                  <span set:html={ic(FaPen, 'w-3.5 h-3.5')} />
+                </button>
+                <button type="button" data-delete={String(stat.$id ?? stat.id)} class="p-1.5 text-red-600 hover:bg-red-50 rounded">
+                  <span set:html={ic(FaTrash, 'w-3.5 h-3.5')} />
+                </button>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+
+      <!-- Modal -->
+      <div id="stats-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+          <div class="flex items-center justify-between">
+            <h3 id="stats-modal-title" class="font-bold text-xl text-gray-900">Ƙara Sabo Stat</h3>
+            <button id="stats-modal-close" type="button" class="text-gray-400 hover:text-gray-600"><span set:html={ic(FaXmark, 'w-5 h-5')} /></button>
+          </div>
+          <div class="space-y-3">
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase">Label</label>
+              <input id="stats-input-label" placeholder="Masu karatu, Labarai, etc." class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase">Value (Number)</label>
+              <input id="stats-input-value" type="number" class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase">Suffix (e.g. +, K+, %)</label>
+              <input id="stats-input-suffix" placeholder="+, K+, %, etc." class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+          </div>
+          <div class="flex justify-end gap-3 pt-4 border-t border-gray-100">
+            <button id="stats-cancel" type="button" class="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-lg">Soke</button>
+            <button id="stats-save" type="button" class="px-6 py-2 text-sm font-bold text-white bg-[#0f3036] hover:bg-[#1a454c] rounded-lg disabled:opacity-50 flex items-center gap-2">
+              <span id="stats-save-spinner" class="hidden"><span set:html={ic(FaSpinner, 'w-4 h-4 animate-spin')} /></span> Ajiye
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </AdminLayout>
+
+<script is:inline define:vars={{ statsJson }}>
+  const STORAGE_KEY = 'yanci_homepage_stats';
+  const initialStatsFallback = JSON.parse(statsJson);
+  let stats = (() => {
+    try {
+      // Prefer Appwrite data if present, else localStorage, else initial
+      if (Array.isArray(initialStatsFallback) && initialStatsFallback.length > 0 && initialStatsFallback[0].$id) {
+        // has Appwrite ids, use as is but also sync to localStorage
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(initialStatsFallback));
+        return initialStatsFallback;
+      }
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return initialStatsFallback;
+  })();
+  let useAppwrite = (() => {
+    try {
+      return stats.some(s => s.$id);
+    } catch { return false; }
+  })();
+  let draft = { label: '', value: 0, suffix: '', icon: 'article' };
+  let editingId = null;
+  let saving = false;
+
+  const previewEl = document.getElementById('stats-preview');
+  const listEl = document.getElementById('stats-list');
+  const modal = document.getElementById('stats-modal');
+  const modalTitle = document.getElementById('stats-modal-title');
+  const labelInput = document.getElementById('stats-input-label');
+  const valueInput = document.getElementById('stats-input-value');
+  const suffixInput = document.getElementById('stats-input-suffix');
+  const saveBtn = document.getElementById('stats-save');
+  const saveSpinner = document.getElementById('stats-save-spinner');
+  const addBtn = document.getElementById('stats-add');
+  const closeBtn = document.getElementById('stats-modal-close');
+  const cancelBtn = document.getElementById('stats-cancel');
+
+  function persistLocal() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(stats)); } catch {}
+  }
+
+  async function persistAppwrite(data, isUpdate) {
+    if (!useAppwrite) return;
+    try {
+      if (isUpdate && data.$id) {
+        await fetch(`/api/admin/homepage-stats/${encodeURIComponent(data.$id)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label: data.label, value: Number(data.value), suffix: data.suffix, icon: data.icon, order: data.order ?? 0 }),
+        });
+      } else if (!isUpdate) {
+        await fetch('/api/admin/homepage-stats/new', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label: data.label, value: Number(data.value), suffix: data.suffix, icon: data.icon, order: data.order ?? stats.length }),
+        });
+      }
+    } catch {}
+  }
+
+  function renderPreview() {
+    if (!previewEl) return;
+    previewEl.innerHTML = stats.map(s => `
+      <div class="text-center">
+        <div class="text-3xl md:text-4xl font-serif font-black text-white mb-1">${Number(s.value).toLocaleString()}${(s.suffix || '')}</div>
+        <div class="text-xs font-bold uppercase tracking-widest text-[#c59d5f]">${(s.label || '')}</div>
+      </div>
+    `).join('');
+  }
+
+  function renderList() {
+    if (!listEl) return;
+    listEl.innerHTML = stats.map((stat, index) => `
+      <div data-stat-id="${String(stat.$id ?? stat.id)}" class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <div class="text-2xl font-black text-[#0f3036]">${Number(stat.value).toLocaleString()}${(stat.suffix || '')}</div>
+          <div><p class="font-bold text-gray-900">${(stat.label || '')}</p></div>
+        </div>
+        <div class="flex gap-1">
+          <button type="button" data-move="up" data-index="${index}" ${index === 0 ? 'disabled' : ''} class="p-1.5 text-gray-400 hover:bg-gray-100 rounded disabled:opacity-30">
+            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M12 5l-7 7M12 5l7 7"/></svg>
+          </button>
+          <button type="button" data-move="down" data-index="${index}" ${index === stats.length - 1 ? 'disabled' : ''} class="p-1.5 text-gray-400 hover:bg-gray-100 rounded disabled:opacity-30">
+            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M12 19l-7-7M12 19l7-7"/></svg>
+          </button>
+          <button type="button" data-edit="${String(stat.$id ?? stat.id)}" class="p-1.5 text-blue-600 hover:bg-blue-50 rounded">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button type="button" data-delete="${String(stat.$id ?? stat.id)}" class="p-1.5 text-red-600 hover:bg-red-50 rounded">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+          </button>
+        </div>
+      </div>
+    `).join('');
+    bindListEvents();
+  }
+
+  function bindListEvents() {
+    listEl.querySelectorAll('[data-move]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.getAttribute('data-index'));
+        const dir = btn.getAttribute('data-move');
+        handleMove(idx, dir);
+      });
+    });
+    listEl.querySelectorAll('[data-edit]').forEach(btn => {
+      btn.addEventListener('click', () => openEdit(btn.getAttribute('data-edit')));
+    });
+    listEl.querySelectorAll('[data-delete]').forEach(btn => {
+      btn.addEventListener('click', () => handleDelete(btn.getAttribute('data-delete')));
+    });
+  }
+
+  function openModal() {
+    if (modal) modal.classList.remove('hidden');
+  }
+  function closeModal() {
+    if (modal) modal.classList.add('hidden');
+    editingId = null;
+  }
+
+  function openNew() {
+    draft = { label: '', value: 0, suffix: '', icon: 'article' };
+    editingId = null;
+    if (modalTitle) modalTitle.textContent = 'Ƙara Sabo Stat';
+    if (labelInput) labelInput.value = '';
+    if (valueInput) valueInput.value = '0';
+    if (suffixInput) suffixInput.value = '';
+    if (saveBtn) saveBtn.disabled = true;
+    openModal();
+  }
+
+  function openEdit(id) {
+    const found = stats.find(s => String(s.$id ?? s.id) === String(id));
+    if (!found) return;
+    draft = { ...found };
+    editingId = String(found.$id ?? found.id);
+    if (modalTitle) modalTitle.textContent = 'Gyara Stat';
+    if (labelInput) labelInput.value = draft.label || '';
+    if (valueInput) valueInput.value = String(draft.value ?? 0);
+    if (suffixInput) suffixInput.value = draft.suffix || '';
+    if (saveBtn) saveBtn.disabled = !draft.label;
+    openModal();
+  }
+
+  async function handleSave() {
+    if (saving) return;
+    if (!draft.label) return;
+    saving = true;
+    if (saveSpinner) saveSpinner.classList.remove('hidden');
+    if (saveBtn) saveBtn.disabled = true;
+    const data = { ...draft, order: draft.order ?? stats.length, value: Number(draft.value) || 0 };
+    let updated;
+    if (editingId) {
+      const isAppwrite = stats.find(s => String(s.$id ?? s.id) === String(editingId) && s.$id);
+      updated = stats.map(s => String(s.$id ?? s.id) === String(editingId) ? { ...s, ...data } : s);
+      stats = updated;
+      renderPreview(); renderList(); persistLocal();
+      const target = stats.find(s => String(s.$id ?? s.id) === String(editingId));
+      if (target) await persistAppwrite(target, true);
+    } else {
+      const newItem = { ...data, id: Date.now(), $id: undefined };
+      // if useAppwrite, try to create server-side and get id
+      if (useAppwrite) {
+        try {
+          const res = await fetch('/api/admin/homepage-stats/new', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ label: data.label, value: Number(data.value), suffix: data.suffix, icon: data.icon, order: stats.length }),
+          });
+          const json = await res.json().catch(() => ({}));
+          if (json.id) newItem.$id = json.id;
+        } catch {}
+      }
+      stats = [...stats, newItem];
+      renderPreview(); renderList(); persistLocal();
+    }
+    saving = false;
+    if (saveSpinner) saveSpinner.classList.add('hidden');
+    closeModal();
+  }
+
+  async function handleDelete(id) {
+    if (!window.confirm('Share wannan statistic?')) return;
+    const target = stats.find(s => String(s.$id ?? s.id) === String(id));
+    if (useAppwrite && target && target.$id) {
+      try { await fetch(`/api/admin/homepage-stats/${encodeURIComponent(target.$id)}`, { method: 'DELETE' }); } catch {}
+    }
+    stats = stats.filter(s => String(s.$id ?? s.id) !== String(id));
+    renderPreview(); renderList(); persistLocal();
+  }
+
+  function handleMove(index, direction) {
+    const newItems = [...stats];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= newItems.length) return;
+    const tmp = newItems[index];
+    newItems[index] = newItems[targetIndex];
+    newItems[targetIndex] = tmp;
+    stats = newItems;
+    renderPreview(); renderList(); persistLocal();
+  }
+
+  if (labelInput) labelInput.addEventListener('input', () => {
+    draft.label = labelInput.value;
+    if (saveBtn) saveBtn.disabled = !draft.label;
+  });
+  if (valueInput) valueInput.addEventListener('input', () => {
+    draft.value = parseInt(valueInput.value) || 0;
+  });
+  if (suffixInput) suffixInput.addEventListener('input', () => {
+    draft.suffix = suffixInput.value;
+  });
+  if (addBtn) addBtn.addEventListener('click', openNew);
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+  if (saveBtn) saveBtn.addEventListener('click', handleSave);
+  if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+  renderPreview();
+  renderList();
+  bindListEvents();
+</script>
