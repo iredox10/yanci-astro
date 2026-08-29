@@ -1,260 +1,553 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import { listAutofetchSources } from '@lib/autofetch-store';
-import { getAutofetchDrafts } from '@lib/admin-store';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { FaRobot, FaPlus, FaPlay, FaTrash, FaCompass, FaPencil } from 'react-icons/fa6';
+import { getArticles } from '@lib/appwrite-server';
+import { adminListCollection } from '@lib/admin-collections';
 
 export const prerender = false;
 
-const [sources, drafts] = await Promise.all([
-  listAutofetchSources(false),
-  getAutofetchDrafts(20),
-]);
-const day = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+type IconCmp = React.ComponentType<{ className?: string }>;
+const ic = (Icon: IconCmp, cls = 'w-5 h-5 shrink-0') =>
+  renderToStaticMarkup(createElement(Icon, { className: cls }));
+
+let articles: any[] = [];
+let sources: any[] = [];
+try {
+  articles = await getArticles(500);
+} catch {}
+try {
+  sources = await adminListCollection('autofetch', 200);
+} catch {}
+
+const pendingAiArticles = (articles || []).filter((a) => a.author === 'AI Fetcher' && a.status === 'draft');
+
+const CURATED_FEEDS = [
+  { name: 'BBC World News', url: 'http://feeds.bbci.co.uk/news/world/rss.xml', category: 'Global' },
+  { name: 'BBC Africa', url: 'http://feeds.bbci.co.uk/news/world/africa/rss.xml', category: 'Africa' },
+  { name: 'Al Jazeera English', url: 'https://www.aljazeera.com/xml/rss/all.xml', category: 'Global' },
+  { name: 'CNN Top Stories', url: 'http://rss.cnn.com/rss/edition.rss', category: 'Global' },
+  { name: 'Reuters World', url: 'https://www.reutersagency.com/feed/?best-topics=world-news&post_type=best', category: 'Global' },
+  { name: 'New York Times World', url: 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml', category: 'Global' },
+  { name: 'Vanguard Nigeria', url: 'https://www.vanguardngr.com/feed/', category: 'Nigeria' },
+  { name: 'Punch Newspapers', url: 'https://punchng.com', type: 'scrape', category: 'Nigeria' },
+  { name: 'Premium Times', url: 'https://www.premiumtimesng.com/feed', category: 'Nigeria' },
+  { name: 'The Guardian (UK)', url: 'https://www.theguardian.com/world/rss', category: 'Global' },
+  { name: 'The Guardian Nigeria', url: 'https://guardian.ng/feed/', category: 'Nigeria' },
+  { name: 'TechCrunch', url: 'https://techcrunch.com/feed/', category: 'Technology' },
+];
+
+const AI_PROVIDERS = [
+  {
+    name: 'Groq',
+    models: [
+      { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B', recommended: true },
+      { id: 'meta-llama/llama-4-scout-17b-16e-instruct', label: 'Llama 4 Scout 17B' },
+      { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B' },
+      { id: 'qwen/qwen3-32b', label: 'Qwen 3 32B' }
+    ]
+  },
+  {
+    name: 'Cohere',
+    models: [
+      { id: 'command-r-plus-08-2024', label: 'Command R+ (08-2024)', recommended: true },
+      { id: 'command-r-08-2024', label: 'Command R (08-2024)' }
+    ]
+  },
+  {
+    name: 'Gemini',
+    models: [
+      { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
+      { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+      { id: 'gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash' },
+      { id: 'gemini-3.1-flash-preview', label: 'Gemini 3.1 Flash Preview' }
+    ]
+  },
+  {
+    name: 'DeepSeek',
+    models: [
+      { id: 'deepseek-v4-flash', label: 'DeepSeek v4 Flash' },
+      { id: 'deepseek-v4-pro', label: 'DeepSeek v4 Pro' }
+    ]
+  },
+  {
+    name: 'OpenRouter',
+    models: [
+      { id: 'google/gemma-4-31b-it:free', label: 'Gemma 4 31B (Free)' },
+      { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B (Free)' },
+      { id: 'openai/gpt-oss-120b:free', label: 'GPT-OSS 120B (Free)' },
+      { id: 'qwen/qwen3-next-80b-a3b-instruct:free', label: 'Qwen 3 Next 80B (Free)' },
+      { id: 'nvidia/nemotron-3-ultra-550b-a55b:free', label: 'Nemotron 3 Ultra (Free)' },
+      { id: 'nvidia/nemotron-3-super-120b-a12b:free', label: 'Nemotron 3 Super 120B (Free)' },
+      { id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', label: 'Nemotron 3 Nano Omni (Free)' },
+      { id: 'liquid/lfm-2.5-1.2b-thinking:free', label: 'Liquid LFM 2.5 Thinking (Free)' },
+      { id: 'poolside/laguna-m.1:free', label: 'Poolside Laguna M.1 (Free)' },
+      { id: 'nousresearch/hermes-3-llama-3.1-405b:free', label: 'Hermes 3 405B (Free)' },
+      { id: 'cognitivecomputations/dolphin-mistral-24b-venice-edition:free', label: 'Dolphin Mistral 24B (Free)' }
+    ]
+  }
+];
+
+const curatedJson = JSON.stringify(CURATED_FEEDS);
+const providersJson = JSON.stringify(AI_PROVIDERS);
+const sourcesJson = JSON.stringify(sources);
 ---
 
-<AdminLayout title="Autofetch" active="autofetch">
-  <div class="flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h1 class="font-serif text-2xl font-bold text-yanci-primary">Autofetch sources</h1>
-      <p class="mt-1 max-w-xl text-sm text-yanci-primary/60">
-        RSS or article URLs synced into drafts. Run sync to pull the active sources now — nothing is published
-        automatically; everything lands in Drafts for editorial review.
-      </p>
-    </div>
-    <button id="run-sync" class="bg-yanci-primary px-5 py-2 text-sm font-bold uppercase tracking-wide text-yanci-paper hover:bg-yanci-primary/90">
-      Run sync
-    </button>
-  </div>
-
-  <div id="sync-result" class="mt-3 hidden text-sm"></div>
-
-  <div class="mt-5 overflow-hidden border border-yanci-primary/15 bg-white/60">
-    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-yanci-primary/10 bg-yanci-primary/5 px-4 py-3">
-      <div>
-        <h2 class="font-serif text-lg font-bold text-yanci-primary">Review drafts ({drafts.length})</h2>
-        <p class="text-xs text-yanci-primary/60">Labarai da autofetch ya fitar, suna jiran amincewa. Zaɓi sannan danna "Buga (Publish)".</p>
+<AdminLayout title="Auto Fetcher" active="autofetch">
+  <div class="-m-4 md:-m-8">
+    <div class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <span set:html={ic(FaRobot, 'w-5 h-5 text-[#c59d5f]')} /> Auto Fetcher
+          </h2>
+          <p class="text-sm text-gray-500 mt-1">Manage automated news gathering agents</p>
+        </div>
+        <div class="flex gap-2 flex-wrap">
+            <button
+              id="btn-discover"
+              type="button"
+              class="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-2.5 rounded-md flex items-center justify-center gap-2 hover:bg-blue-100 transition-colors font-bold text-sm w-full sm:w-auto"
+            >
+              <span set:html={ic(FaCompass, 'w-4 h-4')} /> Discover Sources
+            </button>
+            <button
+              id="btn-add"
+              type="button"
+              class="bg-white border border-[#0f3036] text-[#0f3036] px-4 py-2.5 rounded-md flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors font-bold text-sm w-full sm:w-auto"
+            >
+              <span set:html={ic(FaPlus, 'w-4 h-4')} /> Sabon Source
+            </button>
+            <button
+              id="btn-ai"
+              type="button"
+              class="bg-purple-50 border border-purple-200 text-purple-700 px-4 py-2.5 rounded-md flex items-center justify-center gap-2 hover:bg-purple-100 transition-colors font-bold text-sm w-full sm:w-auto"
+            >
+              <span set:html={ic(FaRobot, 'w-4 h-4')} /> AI Model
+            </button>
+            <button
+              id="btn-run"
+              type="button"
+              class="bg-[#0f3036] hover:bg-[#1a454c] text-white px-4 py-2.5 rounded-md flex items-center justify-center gap-2 transition-colors font-bold text-sm w-full sm:w-auto"
+            >
+              <span set:html={ic(FaPlay, 'w-4 h-4')} /> <span id="run-label">Run Fetcher Now</span>
+            </button>
+        </div>
       </div>
-      <button id="publish-selected" class="bg-emerald-700 px-4 py-2 text-xs font-bold uppercase tracking-wide text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-40" disabled>
-        Buga zaɓaƙɓu
-      </button>
-    </div>
-    {drafts.length === 0 ? (
-      <p class="px-4 py-8 text-center text-sm text-yanci-primary/50">No autofetch drafts waiting for review.</p>
-    ) : (
-      <ul class="divide-y divide-yanci-primary/10">
-        {drafts.map((d) => (
-          <li class="flex items-start gap-3 px-4 py-3 hover:bg-white/60">
-            <input type="checkbox" class="mt-1 size-4 accent-emerald-700 shrink-0" data-draft={d.$id} aria-label={`Publish select: ${String(d.headline ?? '')}`} />
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-medium text-yanci-dark">{String(d.headline ?? '')}</p>
-              <p class="mt-0.5 text-xs text-yanci-primary/50">
-                {String(d.section ?? '') || 'No section'} · {d.$createdAt ? day.format(new Date(String(d.$createdAt))) : ''}
-              </p>
+
+      <div id="ai-settings" class="bg-white p-6 rounded-lg shadow-sm border border-purple-200 hidden">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-gray-800">AI Translation Settings</h3>
+            <button id="ai-close" type="button" class="text-sm text-gray-500 hover:text-gray-800">Close</button>
+          </div>
+          <p class="text-sm text-gray-500 mb-6">
+            Select the primary AI model to use for translations. If you choose "Auto (Default)", the system will use the best available model and automatically cycle through backups if one fails.
+          </p>
+          
+          <button
+            id="ai-auto"
+            type="button"
+            class="w-full text-left p-4 mb-6 rounded border font-bold flex justify-between items-center transition-colors bg-white border-gray-300 hover:bg-gray-50 text-gray-800"
+          >
+            <span>Auto (Default Recommended)</span>
+            <span id="ai-auto-badge" class="text-[10px] bg-purple-200 text-purple-800 px-2 py-1 rounded-full uppercase tracking-wider hidden">Active</span>
+          </button>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6" id="providers-grid">
+            {AI_PROVIDERS.map((provider) => (
+              <div class="border border-gray-100 rounded-lg p-4 bg-gray-50">
+                <h4 class="font-bold text-gray-800 mb-3">{provider.name}</h4>
+                <div class="space-y-2">
+                  {provider.models.map((model) => (
+                    <button
+                      data-provider={provider.name}
+                      data-model={model.id}
+                      type="button"
+                      class="w-full text-left p-3 rounded border text-sm flex justify-between items-center transition-colors bg-white border-gray-200 hover:border-purple-200 hover:bg-purple-50 text-gray-700"
+                    >
+                      <span>{model.label}</span>
+                      {model.recommended && (
+                        <span class="text-[10px] bg-amber-100 text-amber-800 px-2 py-1 rounded-full uppercase tracking-wider font-bold">🌟 Recommended</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+      </div>
+
+      <form id="add-form" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hidden">
+          <h3 class="font-bold text-gray-800 mb-4">Add New Source</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-gray-600 mb-1">Name / Publisher</label>
+              <input required id="add-name" type="text" class="w-full p-2 border rounded" placeholder="e.g. BBC Hausa" />
             </div>
-            <a href={`/admin/articles/${encodeURIComponent(String(d.$id ?? ''))}`} class="shrink-0 text-xs font-medium text-yanci-teal hover:text-yanci-teal/70">Gyara</a>
-          </li>
-        ))}
-      </ul>
-    )}
-  </div>
+            <div>
+              <label class="block text-xs font-bold text-gray-600 mb-1">URL (RSS feed or Website)</label>
+              <input required id="add-url" type="url" class="w-full p-2 border rounded" placeholder="https://..." />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-gray-600 mb-1">Fetch Mode</label>
+              <select id="add-type" class="w-full p-2 border rounded">
+                <option value="rss">RSS Feed (Fastest)</option>
+                <option value="scrape">Web Scraper</option>
+                <option value="agent">AI Agent</option>
+              </select>
+            </div>
+          </div>
+          <div class="mt-4 flex justify-end gap-2">
+            <button id="add-cancel" type="button" class="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+            <button type="submit" class="px-4 py-2 text-sm text-white bg-green-600 hover:bg-green-700 rounded font-bold">Save Source</button>
+          </div>
+      </form>
 
-  <div class="mt-8 overflow-hidden border border-yanci-primary/15 bg-white/60">
-    <table class="w-full text-left text-sm">
-      <thead class="bg-yanci-primary/5 text-xs uppercase tracking-wide text-yanci-primary/60">
-        <tr>
-          <th class="px-4 py-2.5 font-semibold">Name</th>
-          <th class="hidden px-4 py-2.5 font-semibold md:table-cell">URL</th>
-          <th class="hidden px-4 py-2.5 font-semibold sm:table-cell">Type</th>
-          <th class="px-4 py-2.5 font-semibold">Active</th>
-          <th class="hidden px-4 py-2.5 font-semibold lg:table-cell">Last run</th>
-          <th class="px-4 py-2.5 text-right font-semibold">Actions</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-yanci-primary/10">
-        {sources.length === 0 && (
-          <tr>
-            <td colspan={6} class="px-4 py-10 text-center text-yanci-primary/50">
-              No sources configured. Add the first one below.
-            </td>
-          </tr>
-        )}
-        {sources.map((s) => (
-          <tr class="hover:bg-white/60">
-            <td class="px-4 py-3 font-medium text-yanci-dark">{String(s.name)}</td>
-            <td class="hidden max-w-sm truncate px-4 py-3 text-yanci-primary/50 md:table-cell">{String(s.url)}</td>
-            <td class="hidden px-4 py-3 capitalize text-yanci-dark/70 sm:table-cell">{String(s.type ?? 'article')}</td>
-            <td class="px-4 py-3">
-              <span class="rounded-full px-2 py-0.5 text-xs font-bold uppercase {s.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'}">
-                {s.isActive ? 'On' : 'Off'}
-              </span>
-            </td>
-            <td class="hidden px-4 py-3 text-yanci-dark/50 lg:table-cell">
-              {s.lastRun ? day.format(new Date(String(s.lastRun))) : 'Never'}
-            </td>
-            <td class="whitespace-nowrap px-4 py-3 text-right">
-              <button data-toggle={s.$id} class="mr-3 font-medium text-yanci-teal hover:text-yanci-teal/70">
-                {s.isActive ? 'Disable' : 'Enable'}
-              </button>
-              <button data-edit={s.$id} class="mr-3 font-medium text-yanci-teal hover:text-yanci-teal/70">Edit</button>
-              <button data-del={s.$id} class="text-xs font-medium text-yanci-red hover:text-yanci-red/70">Delete</button>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
+      <div id="discover-panel" class="bg-white p-6 rounded-lg shadow-sm border border-blue-200 hidden">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-gray-800">Discover News Sources</h3>
+            <button id="discover-close" type="button" class="text-sm text-gray-500 hover:text-gray-800">Close</button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {CURATED_FEEDS.map((feed) => (
+              <div class="border border-gray-100 bg-gray-50 rounded-lg p-4 hover:border-blue-300 transition-colors flex flex-col justify-between">
+                <div>
+                  <div class="flex justify-between items-start">
+                    <h4 class="font-bold text-gray-900">{feed.name}</h4>
+                    <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-1 bg-white border border-gray-200 rounded text-gray-600">{feed.category}</span>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-2 truncate" title={feed.url}>{feed.url}</p>
+                </div>
+                <button 
+                  data-feed={feed.name}
+                  data-url={feed.url}
+                  data-feed-type={feed.type || 'rss'}
+                  type="button"
+                  class="mt-4 w-full py-2 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 rounded text-xs font-bold transition-colors"
+                >
+                  Use this Feed
+                </button>
+              </div>
+            ))}
+          </div>
+      </div>
 
-  <form id="source-form" class="mt-8 border border-yanci-primary/15 bg-white/60 p-5 lg:max-w-2xl">
-    <input type="hidden" name="id" />
-    <h2 class="mb-4 font-serif text-lg font-bold text-yanci-primary" id="form-title">Add source</h2>
-    <div class="grid gap-4 sm:grid-cols-2">
-      <label class="block">
-        <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">Name</span>
-        <input name="name" type="text" required placeholder="BBC Africa"
-          class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40" />
-      </label>
-      <label class="block">
-        <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">Type</span>
-        <select name="type"
-          class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40">
-          <option value="rss">RSS feed</option>
-          <option value="article">Article page</option>
-          <option value="homepage">Homepage</option>
-        </select>
-      </label>
-      <label class="block sm:col-span-2">
-        <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">URL</span>
-        <input name="url" type="url" required placeholder="https://feeds.bbci.co.uk/news/world/africa/rss.xml"
-          class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40" />
-      </label>
-      <label class="flex items-center gap-2 sm:col-span-2">
-        <input name="isActive" type="checkbox" class="size-4 accent-yanci-accent" />
-        <span class="text-sm text-yanci-primary/70">Active (included in sync)</span>
-      </label>
+      <div id="run-log" class="bg-black text-green-400 font-mono text-xs p-4 rounded-lg overflow-auto max-h-[300px] whitespace-pre-wrap hidden"></div>
+
+      <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <table class="w-full text-left text-sm min-w-[600px]">
+          <thead class="bg-gray-50 text-gray-600 uppercase tracking-wider border-b border-gray-200">
+            <tr>
+              <th class="p-4 w-12">Status</th>
+              <th class="p-4">Source Details</th>
+              <th class="p-4 w-32">Mode</th>
+              <th class="p-4 text-right w-24">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100" id="sources-body">
+            {sources.length === 0 ? (
+              <tr><td colspan="4" class="p-8 text-center text-gray-500">No sources configured yet.</td></tr>
+            ) : sources.map((source: any) => (
+              <tr class="hover:bg-gray-50 group transition-colors">
+                <td class="p-4">
+                  <button 
+                    data-toggle={source.$id}
+                    data-active={String(source.isActive)}
+                    class={`w-10 h-6 rounded-full flex items-center transition-colors ${source.isActive ? 'bg-green-500' : 'bg-gray-300'}`}
+                  >
+                    <div class={`w-4 h-4 bg-white rounded-full mx-1 transition-transform ${source.isActive ? 'translate-x-4' : 'translate-x-0'}`} />
+                  </button>
+                </td>
+                <td class="p-4">
+                  <p class="font-bold text-gray-900">{String(source.name ?? '')}</p>
+                  <p class="text-xs text-gray-500 truncate max-w-sm">{String(source.url ?? '')}</p>
+                </td>
+                <td class="p-4">
+                  <span class={`px-2 py-1 rounded text-[10px] font-black uppercase ${
+                    source.type === 'rss' ? 'bg-blue-100 text-blue-800' : 
+                    source.type === 'scrape' ? 'bg-orange-100 text-orange-800' : 'bg-purple-100 text-purple-800'
+                  }`}>
+                    {String(source.type ?? 'rss')}
+                  </span>
+                </td>
+                <td class="p-4 text-right">
+                  <button data-delete={source.$id} class="p-2 text-red-600 hover:bg-red-50 rounded-full transition-colors" title="Delete">
+                    <span set:html={ic(FaTrash, 'w-4 h-4')} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="mt-12">
+        <div class="mb-4">
+          <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+            Pending AI News ({pendingAiArticles.length})
+          </h3>
+          <p class="text-sm text-gray-500">Review and publish stories automatically fetched by agents</p>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <table class="w-full text-left text-sm min-w-[600px]">
+            <thead class="bg-gray-50 text-gray-600 uppercase tracking-wider border-b border-gray-200">
+              <tr>
+                <th class="p-4 w-12">Status</th>
+                <th class="p-4">Headline</th>
+                <th class="p-4 w-32">Date</th>
+                <th class="p-4 text-right w-32">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              {pendingAiArticles.length === 0 ? (
+                <tr><td colspan="4" class="p-8 text-center text-gray-500">No pending AI news found. Run the fetcher to get more.</td></tr>
+              ) : pendingAiArticles.map((article: any) => (
+                <tr class="hover:bg-gray-50 group transition-colors">
+                  <td class="p-4">
+                    <span class="w-3 h-3 rounded-full bg-amber-500 inline-block animate-pulse"></span>
+                  </td>
+                  <td class="p-4">
+                    <p class="font-bold text-gray-900 line-clamp-1">{String(article.headline ?? '')}</p>
+                    {article.source_url && (
+                      <a href={String(article.source_url)} target="_blank" rel="noreferrer" class="text-xs text-blue-500 hover:underline truncate inline-block max-w-md mt-1">
+                        Source: {String(article.source_url)}
+                      </a>
+                    )}
+                  </td>
+                  <td class="p-4 text-gray-500 text-xs">
+                    {article.$createdAt ? new Date(String(article.$createdAt)).toLocaleDateString() : ''}
+                  </td>
+                  <td class="p-4 text-right">
+                    <div class="flex justify-end gap-2">
+                      <a href={`/admin/articles/${String(article.$id ?? '')}`} class="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors" title="Review & Edit">
+                        <span set:html={ic(FaPencil, 'w-4 h-4')} />
+                      </a>
+                      <button data-delete-article={String(article.$id ?? '')} class="p-2 text-red-600 hover:bg-red-50 rounded-full transition-colors" title="Delete">
+                        <span set:html={ic(FaTrash, 'w-4 h-4')} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
-    <div class="mt-4 flex items-center gap-3">
-      <button type="submit" class="bg-yanci-primary px-5 py-2 text-sm font-bold uppercase tracking-wide text-yanci-paper hover:bg-yanci-primary/90">Save</button>
-      <button type="button" id="form-reset" class="border border-yanci-primary/30 px-4 py-2 text-sm font-medium text-yanci-primary/70 hover:bg-yanci-primary/10">Reset</button>
-      <span id="form-msg" class="text-xs text-yanci-red"></span>
-    </div>
-  </form>
+  </div>
 </AdminLayout>
 
-<script define:vars={{ sources }}>
-  const sourcesById = new Map(
-    sources.map((s) => [s.$id, s]),
-  );
-  const form = document.getElementById('source-form');
-  const formTitle = document.getElementById('form-title');
-  const msg = document.getElementById('form-msg');
-  const syncBtn = document.getElementById('run-sync');
-  const syncResult = document.getElementById('sync-result');
+<script is:inline define:vars={{ curatedJson, providersJson, sourcesJson }}>
+  const CURATED_FEEDS = JSON.parse(curatedJson);
+  const AI_PROVIDERS = JSON.parse(providersJson);
+  let sources = JSON.parse(sourcesJson);
 
-  function setMsg(text) { if (msg) msg.textContent = text; }
+  const btnDiscover = document.getElementById('btn-discover');
+  const btnAdd = document.getElementById('btn-add');
+  const btnAi = document.getElementById('btn-ai');
+  const btnRun = document.getElementById('btn-run');
+  const runLabel = document.getElementById('run-label');
+  const panelDiscover = document.getElementById('discover-panel');
+  const panelAi = document.getElementById('ai-settings');
+  const panelAdd = document.getElementById('add-form');
+  const runLog = document.getElementById('run-log');
+  const addName = document.getElementById('add-name');
+  const addUrl = document.getElementById('add-url');
+  const addType = document.getElementById('add-type');
 
-  function fill(doc) {
-    form.elements.namedItem('id').value = String(doc.$id ?? '');
-    form.elements.namedItem('name').value = String(doc.name ?? '');
-    form.elements.namedItem('url').value = String(doc.url ?? '');
-    form.elements.namedItem('type').value = String(doc.type ?? 'rss');
-    form.elements.namedItem('isActive').checked = Boolean(doc.isActive);
-    if (formTitle) formTitle.textContent = 'Edit source';
-    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
+  let aiSettings = { provider: 'Gemini', model: 'gemini-1.5-flash' };
+  let isRunning = false;
 
-  function resetForm() {
-    form.reset();
-    form.elements.namedItem('id').value = '';
-    if (formTitle) formTitle.textContent = 'Add source';
-    setMsg('');
-  }
+  fetch('/api/get-ai-settings').then((r) => r.json()).then((data) => {
+    aiSettings = data || aiSettings;
+    updateAiActive();
+  }).catch(() => {});
 
-  document.querySelectorAll('[data-edit]').forEach((btn) =>
-    btn.addEventListener('click', () => fill(sourcesById.get(btn.dataset.edit) ?? {})));
-
-  document.querySelectorAll('[data-del]').forEach((btn) =>
-    btn.addEventListener('click', async () => {
-      const id = btn.dataset.del;
-      if (!window.confirm('Delete this source?')) return;
-      const res = await fetch(`/api/admin/autofetch-sources/${id}`, { method: 'DELETE' });
-      if (res.ok) window.location.reload();
-      else { const d = await res.json().catch(() => ({})); setMsg(d.message ?? 'Delete failed'); }
-    }));
-
-  document.querySelectorAll('[data-toggle]').forEach((btn) =>
-    btn.addEventListener('click', async () => {
-      const s = sourcesById.get(btn.dataset.toggle);
-      if (!s) return;
-      const res = await fetch(`/api/admin/autofetch-sources/${s.$id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...s, isActive: !s.isActive, labels: s.labels ?? [] }),
-      });
-      if (res.ok) window.location.reload();
-    }));
-
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const id = form.elements.namedItem('id').value;
-    const fd = new FormData(form);
-    const data = {
-      name: String(fd.get('name') ?? ''),
-      url: String(fd.get('url') ?? ''),
-      type: String(fd.get('type') ?? 'rss'),
-      isActive: fd.get('isActive') === 'on',
-      labels: [],
-    };
-    const res = await fetch(`/api/admin/autofetch-sources/${id || 'new'}`, {
-      method: id ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) return setMsg(json.message ?? 'Save failed');
-    window.location.reload();
-  });
-
-  document.getElementById('form-reset')?.addEventListener('click', resetForm);
-
-  syncBtn?.addEventListener('click', async () => {
-    syncBtn.textContent = 'Syncing…';
-    syncBtn.setAttribute('disabled', 'true');
-    try {
-      const res = await fetch('/api/autofetch/run', { method: 'POST' });
-      const data = await res.json().catch(() => ({}));
-      syncResult?.classList.remove('hidden');
-      if (res.ok) {
-        syncResult.className = 'mt-3 rounded-sm bg-emerald-50 p-4 text-sm text-emerald-700';
-        syncResult.textContent = `Sync complete: ${data.created ?? 0} new drafts from ${(data.sources ?? []).length} sources.`;
-      } else {
-        syncResult.className = 'mt-3 rounded-sm bg-red-50 p-4 text-sm text-red-700';
-        syncResult.textContent = data.message ?? 'Sync failed';
-      }
-    } finally {
-      syncBtn.textContent = 'Run sync';
-      syncBtn.removeAttribute('disabled');
+  function updateAiActive() {
+    const autoBadge = document.getElementById('ai-auto-badge');
+    const autoBtn = document.getElementById('ai-auto');
+    const activeIsAuto = !aiSettings.model;
+    if (autoBadge) autoBadge.classList.toggle('hidden', !activeIsAuto);
+    if (autoBtn) {
+      autoBtn.className = `w-full text-left p-4 mb-6 rounded border font-bold flex justify-between items-center transition-colors ${!aiSettings.model ? 'bg-purple-100 border-purple-300 text-purple-900' : 'bg-white border-gray-300 hover:bg-gray-50 text-gray-800'}`;
     }
+    document.querySelectorAll('[data-provider]').forEach((btn) => {
+      const model = btn.getAttribute('data-model');
+      const isActive = aiSettings.model === model;
+      btn.className = `w-full text-left p-3 rounded border text-sm flex justify-between items-center transition-colors ${isActive ? 'bg-purple-100 border-purple-300 text-purple-900 font-bold' : 'bg-white border-gray-200 hover:border-purple-200 hover:bg-purple-50 text-gray-700'}`;
+    });
+  }
+
+  function togglePanel(target) {
+    const panels = { discover: panelDiscover, ai: panelAi, add: panelAdd };
+    Object.entries(panels).forEach(([key, el]) => {
+      if (!el) return;
+      if (key === target) el.classList.toggle('hidden');
+      else el.classList.add('hidden');
+    });
+  }
+
+  if (btnDiscover) btnDiscover.addEventListener('click', () => togglePanel('discover'));
+  if (btnAdd) btnAdd.addEventListener('click', () => togglePanel('add'));
+  if (btnAi) btnAi.addEventListener('click', () => togglePanel('ai'));
+  document.getElementById('discover-close')?.addEventListener('click', () => panelDiscover?.classList.add('hidden'));
+  document.getElementById('ai-close')?.addEventListener('click', () => panelAi?.classList.add('hidden'));
+  document.getElementById('add-cancel')?.addEventListener('click', () => panelAdd?.classList.add('hidden'));
+
+  // Use feed
+  document.querySelectorAll('[data-feed]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const name = btn.getAttribute('data-feed');
+      const url = btn.getAttribute('data-url');
+      const type = btn.getAttribute('data-feed-type') || 'rss';
+      if (addName) addName.value = name || '';
+      if (addUrl) addUrl.value = url || '';
+      if (addType) addType.value = type;
+      panelDiscover?.classList.add('hidden');
+      panelAdd?.classList.remove('hidden');
+    });
   });
 
-  const publishBtn = document.getElementById('publish-selected');
-  const draftBoxes = document.querySelectorAll('input[type="checkbox"][data-draft]');
-  const updatePublishState = () => {
-    const any = [...draftBoxes].some((b) => b.checked);
-    if (!publishBtn) return;
-    publishBtn.disabled = !any;
-    publishBtn.textContent = any ? `Buga zaɓaƙɓu (${[...draftBoxes].filter((b) => b.checked).length})` : 'Buga zaɓaƙɓu';
-  };
-  draftBoxes.forEach((b) => b.addEventListener('change', updatePublishState));
-  publishBtn?.addEventListener('click', async () => {
-    const ids = [...draftBoxes].filter((b) => b.checked).map((b) => b.dataset.draft);
-    if (ids.length === 0) return;
-    const res = await fetch('/api/admin/articles/publish', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids }),
+  // Add source
+  const addForm = document.getElementById('add-form');
+  if (addForm) {
+    addForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        name: addName ? addName.value : '',
+        url: addUrl ? addUrl.value : '',
+        type: addType ? addType.value : 'rss',
+        isActive: true,
+      };
+      try {
+        // Try Appwrite direct if available, else API
+        const res = await fetch('/api/admin/autofetch-sources/new', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const t = await res.text();
+          throw new Error(t || 'Failed');
+        }
+        window.location.reload();
+      } catch (err) {
+        alert('Error adding source: ' + (err && err.message ? err.message : err));
+      }
     });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok) window.location.reload();
-    else setMsg(data.message ?? 'Publish failed');
+  }
+
+  // Toggle active and Delete source
+  document.querySelectorAll('[data-toggle]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-toggle');
+      const current = btn.getAttribute('data-active') === 'true';
+      try {
+        const res = await fetch(`/api/admin/autofetch-sources/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isActive: !current }),
+        });
+        if (res.ok) window.location.reload();
+        else alert('Error updating source');
+      } catch (e) {
+        alert('Error updating source: ' + (e && e.message ? e.message : e));
+      }
+    });
   });
+  document.querySelectorAll('[data-delete]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-delete');
+      if (!window.confirm('Are you sure you want to delete this source?')) return;
+      try {
+        const res = await fetch(`/api/admin/autofetch-sources/${id}`, { method: 'DELETE' });
+        if (res.ok) window.location.reload();
+        else alert('Error deleting source');
+      } catch (e) {
+        alert('Error deleting source: ' + (e && e.message ? e.message : e));
+      }
+    });
+  });
+
+  // Delete pending article
+  document.querySelectorAll('[data-delete-article]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-delete-article');
+      if (!window.confirm('Delete this fetched news?')) return;
+      try {
+        const res = await fetch(`/api/admin/articles/${id}`, { method: 'DELETE' });
+        if (res.ok) window.location.reload();
+        else {
+          // fallback: try other endpoint
+          await fetch('/api/admin/articles/delete', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id }) });
+          window.location.reload();
+        }
+      } catch (e) {
+        alert('Delete failed');
+      }
+    });
+  });
+
+  // AI settings handling
+  document.getElementById('ai-auto')?.addEventListener('click', async () => {
+    aiSettings = { provider: null, model: null };
+    updateAiActive();
+    try {
+      await fetch('/api/save-ai-settings', { method: 'POST', body: JSON.stringify(aiSettings) });
+    } catch {}
+  });
+  document.querySelectorAll('[data-provider]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const provider = btn.getAttribute('data-provider');
+      const model = btn.getAttribute('data-model');
+      aiSettings = { provider, model };
+      updateAiActive();
+      try {
+        await fetch('/api/save-ai-settings', { method: 'POST', body: JSON.stringify(aiSettings) });
+      } catch {}
+    });
+  });
+
+  // Run autofetch streaming
+  if (btnRun) {
+    btnRun.addEventListener('click', async () => {
+      if (isRunning) return;
+      isRunning = true;
+      if (btnRun) {
+        btnRun.disabled = true;
+        btnRun.classList.remove('bg-[#0f3036]', 'hover:bg-[#1a454c]');
+        btnRun.classList.add('bg-gray-400');
+      }
+      if (runLabel) runLabel.textContent = 'Running...';
+      if (runLog) {
+        runLog.textContent = 'Starting auto-fetch task in background...\nThis may take a minute...\n\n';
+        runLog.classList.remove('hidden');
+      }
+      try {
+        const res = await fetch('/api/run-autofetch', { method: 'POST' });
+        if (!res.ok) throw new Error('Network response was not ok');
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          if (runLog) runLog.textContent += chunk;
+        }
+        if (runLog) runLog.textContent += '\n\n✅ Stream completed.';
+      } catch (err) {
+        if (runLog) runLog.textContent += '\n❌ Failed to connect to local API endpoint.\n' + (err && err.message ? err.message : err);
+      } finally {
+        isRunning = false;
+        if (btnRun) {
+          btnRun.disabled = false;
+          btnRun.classList.add('bg-[#0f3036]', 'hover:bg-[#1a454c]');
+          btnRun.classList.remove('bg-gray-400');
+        }
+        if (runLabel) runLabel.textContent = 'Run Fetcher Now';
+      }
+    });
+  }
 </script>

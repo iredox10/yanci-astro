@@ -1,336 +1,267 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import { Account, Client, Users } from 'node-appwrite';
-import type { Models } from 'node-appwrite';
-import { APPWRITE_API_KEY } from 'astro:env/server';
-import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
-import { requireUser, roleName, sessionTokenFrom } from '@lib/auth';
-import { getStaff } from '@lib/appwrite-server';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import {
+  FaUser,
+  FaEnvelope,
+  FaLock,
+  FaEye,
+  FaEyeSlash,
+  FaSpinner,
+  FaCheck,
+  FaTriangleExclamation,
+  FaArrowRightFromBracket,
+} from 'react-icons/fa6';
+import { requireUser } from '@lib/auth';
 
 export const prerender = false;
 
-const MONTHS_HA = [
-  'Janairu', 'Faburairu', 'Maris', 'Afrilu', 'Mayu', 'Yuni',
-  'Yuli', 'Agusta', 'Satumba', 'Oktoba', 'Nuwamba', 'Disamba',
-];
-
-function hausaDate(iso: string | undefined | null): string {
-  if (!iso) return '\u2014';
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '\u2014';
-  return `${date.getDate()} ${MONTHS_HA[date.getMonth()]} ${date.getFullYear()}`;
-}
+type IconCmp = React.ComponentType<{ className?: string }>;
+const ic = (Icon: IconCmp, cls = 'w-5 h-5 shrink-0') =>
+  renderToStaticMarkup(createElement(Icon, { className: cls }));
 
 const auth = await requireUser(Astro.request);
 if (!auth.ok) {
   return Astro.redirect(`/admin/login?next=${encodeURIComponent('/admin/profile')}`);
 }
 const user = auth.user;
-
-const ROLE_HAUSA: Record<string, string> = {
-  super_admin: 'Babban Mai Gadi',
-  admin: 'Babban Mai Gadi',
-  managing_editor: 'Babban Edita',
-  editor: 'Edita',
-  author: 'Marubuci',
-  contributor: 'Mai Ba da Gudummawa',
-};
-const roleLabel = ROLE_HAUSA[user.role] ?? roleName(user.role);
-
-const initials =
-  user.name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((word) => word.charAt(0).toUpperCase())
-    .join('') || '?';
-
-// Full Appwrite record adds the registration date; the staff row may carry a photo and bio.
-let registeredAt: string | null = null;
-let staffPhoto: string | null = null;
-let configured = Boolean(APPWRITE_API_KEY && PUBLIC_APPWRITE_ENDPOINT && PUBLIC_APPWRITE_PROJECT_ID);
-if (configured) {
-  try {
-    const api = new Users(
-      new Client()
-        .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-        .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-        .setKey(APPWRITE_API_KEY ?? ''),
-    );
-    const [record, staff] = await Promise.all([api.get(user.id), getStaff(200)]);
-    registeredAt = record.registration;
-    staffPhoto =
-      staff.find((s) => s.email.toLowerCase() === user.email.toLowerCase())?.image || null;
-  } catch (error) {
-    console.error('[admin/profile] failed to load account details', error);
-  }
-}
-
-interface SessionInfo {
-  provider: string;
-  device: string;
-  ip: string;
-  created: string;
-  expire: string;
-}
-
-let currentSession: SessionInfo | null = null;
-let otherSessionCount = 0;
-const token = await sessionTokenFrom(Astro.request);
-if (token && configured) {
-  try {
-    const account = new Account(
-      new Client()
-        .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-        .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-        .setSession(token),
-    );
-    const list = await account.listSessions();
-    otherSessionCount = Math.max(list.sessions.length - 1, 0);
-    const active = list.sessions.find((s: Models.Session) => s.current);
-    if (active) {
-      currentSession = {
-        provider: active.provider.replace(/_/g, ' '),
-        device: [active.osName, active.clientName].filter(Boolean).join(' \u00b7 ') || '\u2014',
-        ip: active.ip || '\u2014',
-        created: hausaDate(active.$createdAt),
-        expire: hausaDate(active.expire),
-      };
-    }
-  } catch {
-    currentSession = null;
-  }
-}
+const initialName = user.name || '';
+const initialEmail = user.email || '';
 ---
 
 <AdminLayout title="Profile" active="profile">
-  <div class="mb-6">
-    <h1 class="font-serif text-2xl font-bold text-yanci-primary">Bayanina</h1>
-    <p class="mt-1 max-w-xl text-sm text-yanci-primary/60">
-      Sarrafa asusunka: sunarka, kalmar sirri, da bayanin zama na yanzu.
-    </p>
-  </div>
-
-  <div class="grid max-w-3xl gap-6">
-    <!-- Identity card -->
-    <section class="border border-yanci-primary/15 bg-white/60 p-5">
-      <div class="flex items-center gap-4">
-        <div class="size-20 shrink-0 overflow-hidden border border-yanci-primary/20 bg-yanci-accent font-serif text-2xl font-bold text-yanci-primary">
-          {staffPhoto ? (
-            <img src={staffPhoto} alt={user.name} class="size-full object-cover" />
-          ) : (
-            <span id="initials" class="flex size-full items-center justify-center">{initials}</span>
-          )}
+  <div class="-m-4 md:-m-8">
+    <div class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
+      <div class="max-w-3xl mx-auto space-y-6">
+        <div>
+          <h2 class="text-xl md:text-2xl font-bold text-gray-800">Your Profile</h2>
+          <p class="text-sm text-gray-500">Manage your account settings</p>
         </div>
-        <div class="min-w-0">
-          <p id="display-name" class="truncate font-serif text-xl font-bold text-yanci-primary">{user.name}</p>
-          <p class="truncate text-sm text-yanci-primary/60">{user.email}</p>
-          <div class="mt-1 flex flex-wrap items-center gap-2 text-xs">
-            <span class="bg-yanci-accent px-2 py-0.5 font-bold uppercase tracking-widest text-yanci-primary">{roleLabel}</span>
-            <span class="text-yanci-primary/60">Memba tun {hausaDate(registeredAt)}</span>
-          </div>
+
+        <!-- Profile Card -->
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <h3 class="font-bold text-base text-gray-800 mb-4 flex items-center gap-2">
+            <span set:html={ic(FaUser, 'w-4 h-4 text-[#c59d5f]')} /> Profile Information
+          </h3>
+          <form id="profile-form" class="space-y-4">
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Full Name</label>
+              <input id="profile-name" value={initialName} class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Email</label>
+              <input value={initialEmail} disabled class="w-full text-sm p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-500" />
+              <p class="text-xs text-gray-400 mt-1">Email cannot be changed. Contact a super admin if needed.</p>
+            </div>
+            <div class="flex items-center gap-2 min-h-[20px]">
+              <span id="profile-success" class="text-sm text-green-600 font-bold items-center gap-1 hidden"><span set:html={ic(FaCheck, 'w-3 h-3')} /> Profile updated</span>
+              <span id="profile-error" class="text-sm text-red-600 font-bold items-center gap-1 hidden"><span set:html={ic(FaTriangleExclamation, 'w-3 h-3')} /> Update failed</span>
+            </div>
+            <button id="profile-save" type="submit" class="px-6 py-2.5 bg-[#0f3036] text-white rounded-lg font-bold text-sm hover:bg-[#1a454c] disabled:opacity-50 flex items-center gap-2">
+              <span id="profile-save-spinner" class="hidden"><span set:html={ic(FaSpinner, 'w-4 h-4 animate-spin')} /></span> Save Changes
+            </button>
+          </form>
+        </div>
+
+        <!-- Password Card -->
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <h3 class="font-bold text-base text-gray-800 mb-4 flex items-center gap-2">
+            <span set:html={ic(FaLock, 'w-4 h-4 text-[#c59d5f]')} /> Change Password
+          </h3>
+          <form id="password-form" class="space-y-4">
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Current Password</label>
+              <div class="relative">
+                <input id="pw-current" type="password" class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none pr-10" />
+                <button id="toggle-pw" type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  <span id="eye-open" set:html={ic(FaEye, 'w-4 h-4')} />
+                  <span id="eye-closed" class="hidden" set:html={ic(FaEyeSlash, 'w-4 h-4')} />
+                </button>
+              </div>
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">New Password</label>
+              <input id="pw-new" type="password" placeholder="At least 8 characters" class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+            <div>
+              <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Confirm New Password</label>
+              <input id="pw-confirm" type="password" class="w-full text-sm p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </div>
+            <div class="flex items-center gap-2 flex-wrap min-h-[20px]">
+              <span id="pw-success" class="text-sm text-green-600 font-bold items-center gap-1 hidden"><span set:html={ic(FaCheck, 'w-3 h-3')} /> Password changed</span>
+              <span id="pw-mismatch" class="text-sm text-red-600 font-bold items-center gap-1 hidden"><span set:html={ic(FaTriangleExclamation, 'w-3 h-3')} /> Passwords don't match</span>
+              <span id="pw-short" class="text-sm text-red-600 font-bold items-center gap-1 hidden"><span set:html={ic(FaTriangleExclamation, 'w-3 h-3')} /> Password too short</span>
+              <span id="pw-error" class="text-sm text-red-600 font-bold items-center gap-1 hidden"><span set:html={ic(FaTriangleExclamation, 'w-3 h-3')} /> Failed. Check current password.</span>
+            </div>
+            <button id="pw-save" type="submit" class="px-6 py-2.5 bg-[#0f3036] text-white rounded-lg font-bold text-sm hover:bg-[#1a454c] disabled:opacity-50 flex items-center gap-2">
+              <span id="pw-spinner" class="hidden"><span set:html={ic(FaSpinner, 'w-4 h-4 animate-spin')} /></span> Update Password
+            </button>
+          </form>
+        </div>
+
+        <!-- Session Card -->
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <h3 class="font-bold text-base text-gray-800 mb-4 flex items-center gap-2">
+            <span set:html={ic(FaArrowRightFromBracket, 'w-4 h-4 text-[#c59d5f]')} /> Sessions
+          </h3>
+          <p class="text-sm text-gray-500 mb-4">Log out from all other devices where you're currently signed in.</p>
+          <button id="logout-all" type="button" class="px-4 py-2.5 border border-red-200 text-red-600 rounded-lg font-bold text-sm hover:bg-red-50 flex items-center gap-2">
+            <span set:html={ic(FaArrowRightFromBracket, 'w-4 h-4')} /> Logout Everywhere Else
+          </button>
         </div>
       </div>
-
-      <form id="name-form" class="mt-6 space-y-4">
-        <label class="block">
-          <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">Sunar nunaƙa</span>
-          <input
-            id="name-input"
-            type="text"
-            value={user.name}
-            maxlength="64"
-            required
-            class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40"
-          />
-        </label>
-        <label class="block">
-          <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">Imel</span>
-          <input
-            type="email"
-            value={user.email}
-            disabled
-            class="w-full cursor-not-allowed border border-yanci-primary/15 bg-yanci-paper px-3 py-2 text-sm text-yanci-primary/50"
-          />
-          <span class="mt-1 block text-xs text-yanci-primary/50">Ba a iya canza imel ba.</span>
-        </label>
-        <p id="name-error" class="hidden text-xs font-bold text-yanci-red"></p>
-        <button
-          type="submit"
-          data-label="Ajiye suna"
-          class="bg-yanci-primary px-8 py-2.5 text-sm font-bold uppercase tracking-wide text-yanci-paper transition-colors hover:bg-yanci-primary/90 disabled:opacity-50"
-        >
-          Ajiye suna
-        </button>
-      </form>
-    </section>
-
-    <!-- Password card -->
-    <section class="border border-yanci-primary/15 bg-white/60 p-5">
-      <h2 class="font-serif text-base font-bold text-yanci-primary">Canza kalmar sirri</h2>
-      <form id="pw-form" class="mt-4 space-y-4">
-        <label class="block">
-          <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">Kalmar sirri ta yanzu</span>
-          <input id="pw-current" type="password" required autocomplete="current-password"
-            class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40" />
-        </label>
-        <div class="grid gap-4 sm:grid-cols-2">
-          <label class="block">
-            <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">Sabuwar kalmar sirri</span>
-            <input id="pw-new" type="password" required minlength="8" autocomplete="new-password"
-              class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40" />
-          </label>
-          <label class="block">
-            <span class="mb-1 block text-xs font-bold uppercase tracking-wide text-yanci-primary/70">Tabbatar da sabuwar</span>
-            <input id="pw-confirm" type="password" required minlength="8" autocomplete="new-password"
-              class="w-full border border-yanci-primary/25 bg-white px-3 py-2 text-sm focus:border-yanci-accent focus:outline-none focus:ring-2 focus:ring-yanci-accent/40" />
-          </label>
-        </div>
-        <p class="text-xs text-yanci-primary/50">A kalla haruffa 8.</p>
-        <p id="pw-error" class="hidden text-xs font-bold text-yanci-red"></p>
-        <button
-          type="submit"
-          data-label="Sabunta kalmar sirri"
-          class="bg-yanci-primary px-8 py-2.5 text-sm font-bold uppercase tracking-wide text-yanci-paper transition-colors hover:bg-yanci-primary/90 disabled:opacity-50"
-        >
-          Sabunta kalmar sirri
-        </button>
-      </form>
-    </section>
-
-    <!-- Session card -->
-    <section class="border border-yanci-primary/15 bg-white/60 p-5">
-      <h2 class="font-serif text-base font-bold text-yanci-primary">Zama na yanzu</h2>
-      {currentSession ? (
-        <dl class="mt-4 grid gap-x-8 gap-y-2 text-sm sm:grid-cols-[10rem_1fr]">
-          <dt class="text-xs font-bold uppercase tracking-wide text-yanci-primary/60">Hanyar shiga</dt>
-          <dd class="capitalize text-yanci-primary">{currentSession.provider}</dd>
-          <dt class="text-xs font-bold uppercase tracking-wide text-yanci-primary/60">Na'ura / burauza</dt>
-          <dd class="text-yanci-primary">{currentSession.device}</dd>
-          <dt class="text-xs font-bold uppercase tracking-wide text-yanci-primary/60">Adireshin IP</dt>
-          <dd class="text-yanci-primary">{currentSession.ip}</dd>
-          <dt class="text-xs font-bold uppercase tracking-wide text-yanci-primary/60">Bude ranar</dt>
-          <dd class="text-yanci-primary">{currentSession.created}</dd>
-          <dt class="text-xs font-bold uppercase tracking-wide text-yanci-primary/60">Karewa</dt>
-          <dd class="text-yanci-primary">{currentSession.expire}</dd>
-        </dl>
-      ) : (
-        <p class="mt-4 text-sm text-yanci-primary/60">Bayanan zama ba a samu ba.</p>
-      )}
-      {otherSessionCount > 0 && (
-        <p class="mt-3 text-xs text-yanci-primary/60">
-          Akwai wasu zamanai {otherSessionCount} masu aiki akan asusunka.
-        </p>
-      )}
-    </section>
-  </div>
-
-  <div id="toast" role="status"
-    class="pointer-events-none fixed bottom-6 right-6 translate-y-2 bg-yanci-primary px-5 py-2.5 text-sm font-bold uppercase tracking-wide text-yanci-paper opacity-0 shadow-lg transition-all duration-300">
-    An sabunta
+    </div>
   </div>
 </AdminLayout>
 
-<script>
-  const toast = document.getElementById('toast');
-  let toastTimer: ReturnType<typeof setTimeout> | undefined;
+<script is:inline>
+  const profileForm = document.getElementById('profile-form');
+  const profileName = document.getElementById('profile-name');
+  const profileSuccess = document.getElementById('profile-success');
+  const profileError = document.getElementById('profile-error');
+  const profileSave = document.getElementById('profile-save');
+  const profileSpinner = document.getElementById('profile-save-spinner');
 
-  function showToast(): void {
-    if (!toast) return;
-    toast.classList.remove('opacity-0', 'translate-y-2');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-      toast.classList.add('opacity-0', 'translate-y-2');
-    }, 2500);
+  const pwForm = document.getElementById('password-form');
+  const pwCurrent = document.getElementById('pw-current');
+  const pwNew = document.getElementById('pw-new');
+  const pwConfirm = document.getElementById('pw-confirm');
+  const pwSuccess = document.getElementById('pw-success');
+  const pwMismatch = document.getElementById('pw-mismatch');
+  const pwShort = document.getElementById('pw-short');
+  const pwError = document.getElementById('pw-error');
+  const pwSave = document.getElementById('pw-save');
+  const pwSpinner = document.getElementById('pw-spinner');
+  const togglePw = document.getElementById('toggle-pw');
+  const eyeOpen = document.getElementById('eye-open');
+  const eyeClosed = document.getElementById('eye-closed');
+  const logoutAllBtn = document.getElementById('logout-all');
+
+  let showPw = false;
+
+  function hideAllProfileStatus() {
+    if (profileSuccess) { profileSuccess.classList.add('hidden'); profileSuccess.classList.remove('flex'); }
+    if (profileError) { profileError.classList.add('hidden'); profileError.classList.remove('flex'); }
+  }
+  function hideAllPwStatus() {
+    if (pwSuccess) { pwSuccess.classList.add('hidden'); pwSuccess.classList.remove('flex'); }
+    if (pwMismatch) { pwMismatch.classList.add('hidden'); pwMismatch.classList.remove('flex'); }
+    if (pwShort) { pwShort.classList.add('hidden'); pwShort.classList.remove('flex'); }
+    if (pwError) { pwError.classList.add('hidden'); pwError.classList.remove('flex'); }
   }
 
-  function setError(el: HTMLElement | null, message: string): void {
-    if (!el) return;
-    el.textContent = message;
-    el.classList.toggle('hidden', message === '');
-  }
-
-  async function post(payload: Record<string, unknown>): Promise<{ ok: boolean; message?: string; name?: unknown }> {
-    const res = await fetch('/api/admin/profile', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+  if (togglePw && pwCurrent && eyeOpen && eyeClosed) {
+    togglePw.addEventListener('click', () => {
+      showPw = !showPw;
+      pwCurrent.type = showPw ? 'text' : 'password';
+      eyeOpen.classList.toggle('hidden', showPw);
+      eyeClosed.classList.toggle('hidden', !showPw);
     });
-    return (await res.json().catch(() => ({}))) as { ok: boolean; message?: string; name?: unknown };
   }
 
-  function busy(form: HTMLFormElement, loading: boolean): void {
-    const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
-    if (!button) return;
-    button.disabled = loading;
-    button.textContent = loading ? 'Ana aiki\u2026' : (button.dataset.label ?? button.textContent);
-  }
-
-  const nameForm = document.getElementById('name-form') as HTMLFormElement | null;
-  nameForm?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const input = document.getElementById('name-input') as HTMLInputElement | null;
-    if (!input) return;
-    if (!input.value.trim()) {
-      setError(document.getElementById('name-error'), 'Sunan ba zai iya komai ba');
-      return;
-    }
-    setError(document.getElementById('name-error'), '');
-    busy(nameForm, true);
-    const out = await post({ action: 'name', name: input.value.trim() });
-    busy(nameForm, false);
-    if (!out.ok) {
-      setError(document.getElementById('name-error'), out.message ?? 'An kasa sabunta suna');
-      return;
-    }
-    const name = typeof out.name === 'string' && out.name ? out.name : input.value.trim();
-    const display = document.getElementById('display-name');
-    if (display) display.textContent = name;
-    const badge = document.getElementById('initials');
-    if (badge) {
-      badge.textContent =
-        name
-          .split(/\s+/)
-          .slice(0, 2)
-          .map((w) => w.charAt(0).toUpperCase())
-          .join('') || '?';
-    }
-    showToast();
-  });
-
-  const pwForm = document.getElementById('pw-form') as HTMLFormElement | null;
-  pwForm?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const current = document.getElementById('pw-current') as HTMLInputElement | null;
-    const next = document.getElementById('pw-new') as HTMLInputElement | null;
-    const confirm = document.getElementById('pw-confirm') as HTMLInputElement | null;
-    if (!current || !next || !confirm) return;
-
-    setError(document.getElementById('pw-error'), '');
-    if (next.value !== confirm.value) {
-      setError(document.getElementById('pw-error'), 'Sababbin kalmomin sirri ba su dace ba');
-      return;
-    }
-    if (next.value.length < 8) {
-      setError(document.getElementById('pw-error'), 'Kalmar sirri ta fi gajarta (a kalla haruffa 8)');
-      return;
-    }
-
-    busy(pwForm, true);
-    const out = await post({
-      action: 'password',
-      currentPassword: current.value,
-      newPassword: next.value,
-      confirmPassword: confirm.value,
+  if (profileForm) {
+    profileForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideAllProfileStatus();
+      if (!profileName || !profileSave) return;
+      const name = profileName.value.trim();
+      profileSave.disabled = true;
+      if (profileSpinner) profileSpinner.classList.remove('hidden');
+      try {
+        // Try new profile endpoint first, fallback to account update
+        let res = await fetch('/api/admin/profile', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'name', name }),
+        });
+        if (!res.ok) {
+          // fallback to direct Appwrite account update via API
+          res = await fetch('/api/account/name', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name }),
+          });
+          if (!res.ok) throw new Error('failed');
+        }
+        if (profileSuccess) { profileSuccess.classList.remove('hidden'); profileSuccess.classList.add('flex'); }
+        setTimeout(hideAllProfileStatus, 3000);
+      } catch (err) {
+        if (profileError) { profileError.classList.remove('hidden'); profileError.classList.add('flex'); }
+      } finally {
+        profileSave.disabled = false;
+        if (profileSpinner) profileSpinner.classList.add('hidden');
+      }
     });
-    busy(pwForm, false);
-    if (!out.ok) {
-      setError(document.getElementById('pw-error'), out.message ?? 'An kasa canza kalmar sirri');
-      return;
-    }
-    current.value = '';
-    next.value = '';
-    confirm.value = '';
-    showToast();
-  });
+  }
+
+  if (pwForm) {
+    pwForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideAllPwStatus();
+      const current = pwCurrent ? pwCurrent.value : '';
+      const next = pwNew ? pwNew.value : '';
+      const confirm = pwConfirm ? pwConfirm.value : '';
+      if (next !== confirm) {
+        if (pwMismatch) { pwMismatch.classList.remove('hidden'); pwMismatch.classList.add('flex'); }
+        return;
+      }
+      if (next.length < 8) {
+        if (pwShort) { pwShort.classList.remove('hidden'); pwShort.classList.add('flex'); }
+        return;
+      }
+      if (!pwSave) return;
+      pwSave.disabled = true;
+      if (pwSpinner) pwSpinner.classList.remove('hidden');
+      try {
+        let res = await fetch('/api/admin/profile', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'password', currentPassword: current, newPassword: next, confirmPassword: confirm }),
+        });
+        if (!res.ok) {
+          // fallback
+          res = await fetch('/api/account/password', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ oldPassword: current, newPassword: next }),
+          });
+          if (!res.ok) throw new Error('failed');
+        }
+        if (pwCurrent) pwCurrent.value = '';
+        if (pwNew) pwNew.value = '';
+        if (pwConfirm) pwConfirm.value = '';
+        if (pwSuccess) { pwSuccess.classList.remove('hidden'); pwSuccess.classList.add('flex'); }
+        setTimeout(hideAllPwStatus, 3000);
+      } catch (err) {
+        if (pwError) { pwError.classList.remove('hidden'); pwError.classList.add('flex'); }
+      } finally {
+        pwSave.disabled = false;
+        if (pwSpinner) pwSpinner.classList.add('hidden');
+      }
+    });
+  }
+
+  if (logoutAllBtn) {
+    logoutAllBtn.addEventListener('click', async () => {
+      if (!window.confirm('Log out from all other devices?')) return;
+      try {
+        // Try delete sessions via API
+        let res = await fetch('/api/admin/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'deleteSessions' }),
+        });
+        if (!res.ok) {
+          res = await fetch('/api/account/sessions', { method: 'DELETE' });
+          if (!res.ok) throw new Error('failed');
+        }
+        // Also call logout endpoint then redirect
+        await fetch('/api/auth/logout', { method: 'POST' });
+        window.location.href = '/admin/login';
+      } catch (e) {
+        alert('Failed to logout from other devices');
+      }
+    });
+  }
 </script>

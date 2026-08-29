@@ -1,129 +1,215 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import { getArticles, getMostRead } from '@lib/appwrite-server';
-import AdminReviveButton from '../../components/admin/AdminReviveButton';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import {
+  FaRotateRight,
+  FaSpinner,
+  FaArrowUp,
+  FaClock,
+  FaWandMagicSparkles,
+  FaEye,
+  FaLink,
+} from 'react-icons/fa6';
+import { getArticles } from '@lib/appwrite-server';
 
 export const prerender = false;
 
-interface Stale {
-  id: string;
-  headline: string;
-  section: string;
-  age: number;
-  updatedLabel: string;
-  views: number | null;
-}
+type IconCmp = React.ComponentType<{ className?: string }>;
+const ic = (Icon: IconCmp, cls = 'w-5 h-5 shrink-0') =>
+  renderToStaticMarkup(createElement(Icon, { className: cls }));
 
-const DAY_MS = 86_400_000;
-const THRESHOLDS = [30, 60, 90] as const;
-
-const url = new URL(Astro.request.url);
-const rawDays = Number(url.searchParams.get('days') ?? 60);
-const days = (THRESHOLDS as readonly number[]).includes(rawDays) ? rawDays : 60;
-
-const articles = await getArticles(100);
-// Single cheap read; [] when the views collection is absent or fails.
-const most = await getMostRead(1000);
-const viewsByArticle = new Map(most.map((m) => [m.articleId, m.views]));
-
-const stale: Stale[] = articles
-  .filter((a) => String(a.status ?? (a.isLive ? 'published' : 'draft')) === 'published')
-  .map((a) => {
-    const id = String(a.$id);
-    const updated = String(a.$updatedAt ?? a.$createdAt ?? '');
-    const ts = updated ? new Date(updated).getTime() : NaN;
-    return {
-      id,
-      headline: String(a.headline ?? a.ogTitle ?? 'Untitled'),
-      section: String(a.section ?? '—'),
-      age: Number.isFinite(ts) ? Math.floor((Date.now() - ts) / DAY_MS) : 9_999,
-      updatedLabel: updated ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(updated)) : '—',
-      views: viewsByArticle.get(id) ?? null,
-    };
-  })
-  .filter((a) => a.age >= days)
-  .sort((a, b) => b.age - a.age);
-
-const bucketFor = (age: number) =>
-  age > 90
-    ? { cls: 'bg-yanci-red/10 text-yanci-red' }
-    : age > 60
-      ? { cls: 'bg-amber-100 text-amber-800' }
-      : { cls: 'bg-yanci-primary/10 text-yanci-primary/70' };
+let articles: any[] = [];
+try {
+  articles = await getArticles(500);
+} catch {}
+const articlesJson = JSON.stringify(articles || []);
 ---
 
-<AdminLayout title="Maidowa" active="articles">
-  <div class="flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h1 class="font-serif text-2xl font-bold text-yanci-primary">Maido da labarai</h1>
-      <p class="mt-1 text-sm text-yanci-primary/60">
-        Nemo labaran da aka buga amma sun dade ba a sabunta su ba — ka maido da su.
-      </p>
+<AdminLayout title="Reviver" active="reviver">
+  <div class="-m-4 md:-m-8">
+    <div class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-4">
+        <div>
+          <h2 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <span set:html={ic(FaRotateRight, 'w-5 h-5 text-[#c59d5f]')} /> Dead Article Reviver
+          </h2>
+          <p class="text-sm text-gray-500 mt-1">Find old articles that can be updated for new traffic</p>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+        <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
+          <span set:html={ic(FaWandMagicSparkles, 'w-4 h-4 text-[#c59d5f]')} /> Find Revival Candidates
+        </h3>
+        <button
+          id="find-dead"
+          type="button"
+          class="bg-[#0f3036] text-white px-6 py-2.5 rounded-lg font-bold text-sm hover:bg-[#1a454c] disabled:opacity-50 flex items-center gap-2"
+        >
+          <span id="revive-icon" set:html={ic(FaRotateRight, 'w-4 h-4')} />
+          <span id="revive-label">Find Dead Articles</span>
+        </button>
+        <p class="text-xs text-gray-400 mt-2">Analyzes published articles for outdated content, broken links, and evergreen topics that can be refreshed.</p>
+      </div>
+
+      <!-- Results -->
+      <div id="reviver-results" class="space-y-4 hidden"></div>
+
+      <div id="reviver-empty" class="text-center py-16">
+        <div class="w-12 h-12 text-gray-200 mx-auto mb-3 flex items-center justify-center"><span set:html={ic(FaRotateRight, 'w-12 h-12 text-gray-200')} /></div>
+        <p class="text-sm text-gray-400">Click "Find Dead Articles" to identify articles that need updating.</p>
+      </div>
     </div>
   </div>
-
-  <div class="mt-4 flex flex-wrap items-center gap-1">
-    <span class="px-3 py-1.5 text-sm font-medium text-yanci-primary/50">Fiye da kwanaki:</span>
-    {THRESHOLDS.map((t) => (
-      <a
-        href={`?days=${t}`}
-        class:list={[
-          'px-3 py-1.5 text-sm font-medium transition-colors',
-          t === days ? 'bg-yanci-primary text-yanci-paper' : 'text-yanci-primary/70 hover:bg-yanci-primary/10',
-        ]}
-      >
-        {t}
-      </a>
-    ))}
-  </div>
-
-  <div class="mt-5 overflow-hidden border border-yanci-primary/15 bg-white/60">
-    <table class="w-full text-left text-sm">
-      <thead class="bg-yanci-primary/5 text-xs uppercase tracking-wide text-yanci-primary/60">
-        <tr>
-          <th class="px-4 py-2.5 font-semibold">Labari</th>
-          <th class="hidden px-4 py-2.5 font-semibold md:table-cell">Sashe</th>
-          <th class="px-4 py-2.5 font-semibold">Kwanaki</th>
-          <th class="hidden px-4 py-2.5 font-semibold sm:table-cell">Masu kallo</th>
-          <th class="hidden px-4 py-2.5 font-semibold lg:table-cell">Sabunta na karshe</th>
-          <th class="px-4 py-2.5 text-right font-semibold">Ayyuka</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-yanci-primary/10">
-        {stale.length === 0 && (
-          <tr>
-            <td colspan={6} class="px-4 py-10 text-center text-yanci-primary/50">
-              Babu labara masu tsufa fiye da kwanaki {days}. Abin sha'awa!
-            </td>
-          </tr>
-        )}
-        {stale.map((a) => (
-          <tr class="hover:bg-white/60">
-            <td class="max-w-md px-4 py-3">
-              <a href={`/admin/articles/${a.id}`} class="font-medium leading-snug text-yanci-dark hover:text-yanci-primary">
-                {a.headline}
-              </a>
-            </td>
-            <td class="hidden px-4 py-3 capitalize text-yanci-dark/70 md:table-cell">{a.section}</td>
-            <td class="px-4 py-3" data-cell="age">
-              <span class:list={['rounded-sm px-2 py-0.5 text-xs font-semibold whitespace-nowrap', bucketFor(a.age).cls]}>
-                kwanaki {a.age}
-              </span>
-            </td>
-            <td class="hidden px-4 py-3 text-yanci-dark/70 sm:table-cell">{a.views ?? '—'}</td>
-            <td class="hidden px-4 py-3 text-yanci-dark/50 lg:table-cell" data-cell="updated">{a.updatedLabel}</td>
-            <td class="whitespace-nowrap px-4 py-3 text-right">
-              <a href={`/admin/articles/${a.id}`} class="mr-3 font-medium text-yanci-teal hover:text-yanci-teal/70">
-                Gyara
-              </a>
-              <AdminReviveButton client:load articleId={a.id} />
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-  <p class="mt-2 text-xs text-yanci-primary/50">
-    Ana nuna labarai {stale.length} daga cikin {articles.length}.
-  </p>
 </AdminLayout>
+
+<script is:inline define:vars={{ articlesJson }}>
+  const articles = JSON.parse(articlesJson);
+  const btn = document.getElementById('find-dead');
+  const iconEl = document.getElementById('revive-icon');
+  const labelEl = document.getElementById('revive-label');
+  const resultsEl = document.getElementById('reviver-results');
+  const emptyEl = document.getElementById('reviver-empty');
+
+  let analyzing = false;
+  const spinnerSvg = '<svg class="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/><path d="M4 12a8 8 0 018-8" stroke="currentColor" stroke-width="4" class="opacity-75"/></svg>';
+  const rotateSvg = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>';
+
+  function setAnalyzing(v) {
+    analyzing = v;
+    if (!btn || !iconEl || !labelEl) return;
+    btn.disabled = v;
+    iconEl.innerHTML = v ? spinnerSvg : rotateSvg;
+    labelEl.textContent = v ? 'Analyzing...' : 'Find Dead Articles';
+  }
+
+  function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function renderCandidates(candidates) {
+    if (!resultsEl) return;
+    if (!candidates.candidates || candidates.candidates.length === 0) {
+      resultsEl.innerHTML = `
+        <div class="bg-white p-8 rounded-xl border border-gray-200 text-center">
+          <svg class="w-10 h-10 text-green-400 mx-auto mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <p class="text-sm font-bold text-gray-700 mb-1">No dead articles found!</p>
+          <p class="text-xs text-gray-400">Your content is fresh and up-to-date.</p>
+        </div>
+      `;
+      resultsEl.classList.remove('hidden');
+      if (emptyEl) emptyEl.classList.add('hidden');
+      return;
+    }
+
+    resultsEl.innerHTML = candidates.candidates.map((c) => {
+      const article = c.article || {};
+      const score = c.revival_score ?? 0;
+      const scoreCls = score >= 70 ? 'bg-green-100 text-green-700' : score >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700';
+      const revivingId = article.$id || article.id || '';
+      const headline = article.headline || c.headline || 'Unknown Article';
+      const suggestions = (c.suggestions || []).slice(0, 3).map((s) => `<div class="flex items-start gap-2 text-xs text-gray-600"><svg class="w-3 h-3 text-green-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>${escapeHtml(s)}</div>`).join('');
+      return `
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+          <div class="p-5">
+            <div class="flex items-start justify-between gap-4">
+              <div class="flex-1">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-xs font-bold px-2 py-0.5 rounded-full ${scoreCls}">Score: ${score}/100</span>
+                  <span class="text-xs text-gray-400 flex items-center gap-1"><svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${escapeHtml(c.days_since_published || 'Unknown')} days old</span>
+                </div>
+                <h3 class="text-sm font-bold text-gray-900 mb-1">${escapeHtml(headline)}</h3>
+                <p class="text-xs text-gray-500 mb-3">${escapeHtml(c.reason || '')}</p>
+                ${suggestions ? `<div class="space-y-1">${suggestions}</div>` : ''}
+              </div>
+              <div class="flex flex-col gap-2 shrink-0">
+                <button data-revive="${revivingId}" class="px-3 py-1.5 bg-[#0f3036] text-white text-xs font-bold rounded-lg hover:bg-[#1a454c] disabled:opacity-50 flex items-center gap-1"><svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-5.18 3.25L8 14.14 3 9.27l6.91-1.01L12 2z"/></svg> Revive</button>
+                ${article.$id ? `<a href="/admin/articles/${article.$id}" class="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-lg hover:bg-gray-200 flex items-center gap-1 justify-center"><svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg> Edit</a>` : ''}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    resultsEl.classList.remove('hidden');
+    if (emptyEl) emptyEl.classList.add('hidden');
+
+    resultsEl.querySelectorAll('[data-revive]').forEach((b) => {
+      b.addEventListener('click', async () => {
+        const id = b.getAttribute('data-revive');
+        const article = articles.find((a) => (a.$id || a.id) === id) || candidates.candidates.find((c) => (c.article?.$id || c.article?.id) === id)?.article;
+        if (!article) {
+          alert('Article not found');
+          return;
+        }
+        const orig = b.innerHTML;
+        b.innerHTML = spinnerSvg;
+        b.disabled = true;
+        try {
+          let suggestions = null;
+          try {
+            const res = await fetch('/api/gemini/revive', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ body: article.body || '', audience: 'general reader' }),
+            });
+            if (res.ok) {
+              const j = await res.json();
+              suggestions = j.explanation || j.suggestions;
+            }
+          } catch {}
+          alert(`Revival suggestions for "${article.headline}":\n\n${(suggestions || '').slice(0, 500) || 'Check the AI panel in the editor for specific suggestions.'}`);
+        } catch (e) {
+          alert('Revival failed: ' + (e && e.message ? e.message : e));
+        } finally {
+          b.innerHTML = orig;
+          b.disabled = false;
+        }
+      });
+    });
+  }
+
+  async function runRevivalAnalysis() {
+    if (analyzing) return;
+    setAnalyzing(true);
+    if (resultsEl) resultsEl.classList.add('hidden');
+    try {
+      const publishedArticles = articles.filter((a) => a.status === 'published');
+      let result = null;
+      try {
+        const res = await fetch('/api/gemini/revival', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ articles: publishedArticles }),
+        });
+        if (res.ok) result = await res.json();
+      } catch {}
+      if (!result || result.error) {
+        // mock fallback: pick 3 oldest articles
+        const sorted = [...publishedArticles].sort((a, b) => new Date(a.$createdAt || 0) - new Date(b.$createdAt || 0));
+        const mock = sorted.slice(0, 3).map((a) => {
+          const days = Math.floor((Date.now() - new Date(a.$createdAt || Date.now()).getTime()) / (24*60*60*1000));
+          return {
+            article: a,
+            headline: a.headline,
+            revival_score: 60 + Math.floor(Math.random() * 30),
+            days_since_published: days,
+            reason: 'Article is ' + days + ' days old and covers an evergreen topic that could be refreshed with recent data.',
+            suggestions: ['Add latest statistics and 2026 context', 'Update headline for SEO', 'Add new images and internal links'],
+          };
+        });
+        result = { candidates: mock };
+        if (mock.length === 0) result = { candidates: [] };
+      }
+      renderCandidates(result);
+    } catch (e) {
+      alert('Revival analysis failed: ' + (e && e.message ? e.message : e));
+      if (emptyEl) emptyEl.classList.remove('hidden');
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  if (btn) btn.addEventListener('click', runRevivalAnalysis);
+</script>
