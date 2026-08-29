@@ -52,12 +52,11 @@ type NavEntry =
   | { href: string; label: string; Icon: IconCmp };
 
 const NAV: NavEntry[] = [
-  { href: '/admin/dashboard', label: 'Dashboard', Icon: FaChartPie },
+  { href: '/admin', label: 'Dashboard', Icon: FaChartPie },
   { href: '/admin/articles', label: 'Articles', Icon: FaFileLines },
   { href: '/admin/calendar', label: 'Calendar', Icon: FaCalendarDays },
   { href: '/admin/live', label: 'Live Coverage', Icon: FaTowerBroadcast },
   { href: '/admin/elections', label: 'Elections', Icon: FaCheckToSlot },
-  { href: '/admin/fact-checks', label: 'Fact Checks', Icon: FaCheckToSlot },
   { href: '/admin/media', label: 'Media Library', Icon: FaImage },
   { href: '/admin/multimedia', label: 'Multimedia', Icon: FaPhotoFilm },
   { href: '/admin/sports', label: 'Sports', Icon: FaTrophy },
@@ -81,10 +80,10 @@ const NAV: NavEntry[] = [
   { href: '/admin/articles/new', label: 'New Article', Icon: FaCirclePlus },
 ];
 
-const path = Astro.url.pathname.replace(/\/$/, '');
+const rawPath = Astro.url.pathname.replace(/\/$/, '') || '/admin';
 const bestHref = NAV.filter(
   (l): l is Exclude<NavEntry, { header: string }> =>
-    !('header' in l) && (path === l.href || path.startsWith(`${l.href}/`)),
+    !('header' in l) && (rawPath === l.href || rawPath.startsWith(`${l.href}/`) || (l.href === '/admin' && rawPath === '/admin/dashboard')),
 )
   .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
@@ -101,142 +100,107 @@ const initial = userName.charAt(0).toUpperCase();
     <link rel="icon" type="image/svg+xml" href="/icons/yc-mark.svg" />
     <title>{title} — Yanci Admin</title>
   </head>
-  <body class="flex h-screen w-screen overflow-hidden bg-gray-100 font-sans text-yanci-dark antialiased">
-    <!-- Mobile Scrim Overlay -->
-    <div
-      id="admin-overlay"
-      class="fixed inset-0 z-40 hidden bg-black/60 backdrop-blur-xs transition-opacity duration-300 md:hidden"
-      aria-hidden="true"
-    ></div>
+  <body class="bg-gray-100 font-sans text-yanci-dark antialiased">
+    <div class="flex h-screen overflow-hidden bg-gray-100 font-sans">
+      <div id="admin-overlay" class="fixed inset-0 z-40 hidden bg-black/50 lg:hidden" aria-hidden="true"></div>
 
-    <!-- Sidebar Column -->
-    <aside
-      id="admin-sidebar"
-      class="fixed inset-y-0 left-0 z-50 flex w-64 md:w-68 shrink-0 -translate-x-full flex-col bg-[#0f3036] text-white shadow-2xl transition-transform duration-300 ease-in-out md:static md:translate-x-0 md:shadow-none"
-    >
-      <!-- Brand Header -->
-      <div class="flex h-16 shrink-0 items-center justify-between border-b border-white/10 px-6">
-        <a href="/admin/dashboard" class="flex items-center gap-2">
-          <span class="font-serif text-2xl font-black tracking-tighter text-white">
-            Yanci<span class="text-[#c59d5f]">.</span>
-          </span>
-          <span class="rounded bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#c59d5f]">
-            Admin
-          </span>
-        </a>
-        <button
-          id="sidebar-close"
-          class="rounded-lg p-1.5 text-gray-400 hover:bg-white/10 hover:text-white md:hidden cursor-pointer"
-          aria-label="Rufe labarun gefe"
-        >
-          <span set:html={ic(FaXmark, 'w-5 h-5')} />
-        </button>
-      </div>
-
-      <!-- User Mini Profile -->
-      <div class="border-b border-white/10 bg-black/15 px-6 py-3.5">
-        <div class="flex items-center gap-3">
-          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#c59d5f] to-[#0f3036] font-bold text-[#0f3036] shadow-sm">
-            {initial}
-          </div>
-          <div class="min-w-0 flex-1">
-            <p class="truncate text-xs font-bold text-white">{userName}</p>
-            <p class="truncate text-[11px] font-medium text-[#c59d5f] capitalize">{roleLabel}</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Navigation Links -->
-      <nav class="flex-1 space-y-1 overflow-y-auto p-3.5">
-        {NAV.map((entry) =>
-          'header' in entry ? (
-            <div class="px-4 pb-1 pt-3 text-[10px] font-bold uppercase tracking-widest text-white/40">
-              {entry.header}
+      <aside
+        id="admin-sidebar"
+        class="fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 -translate-x-full transform flex-col bg-[#0f3036] text-white transition-transform duration-300 lg:static lg:translate-x-0"
+      >
+        <div class="flex items-center justify-between border-b border-white/10 p-6">
+          <div>
+            <h1 class="font-serif text-2xl font-black tracking-tighter text-white">
+              Yanci<span class="text-[#c59d5f]">.</span> Admin
+            </h1>
+            <div class="mt-2 text-xs text-gray-400">
+              Logged in as <br />
+              <span class="text-sm font-bold text-white">{userName}</span>
+              <span class="block capitalize text-[#c59d5f]">{roleLabel}</span>
             </div>
-          ) : (
-            <a
-              href={entry.href}
-              class:list={[
-                'flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors',
-                bestHref === entry.href
-                  ? 'bg-[#c59d5f] font-bold text-[#0f3036] shadow-xs'
-                  : 'text-gray-300 hover:bg-white/10 hover:text-white',
-              ]}
-            >
-              <span set:html={ic(entry.Icon, 'w-4 h-4 shrink-0')} />
-              <span class="truncate">{entry.label}</span>
-            </a>
-          ),
-        )}
-      </nav>
-
-      <!-- Footer Utility Links -->
-      <div class="shrink-0 space-y-1 border-t border-white/10 p-3.5">
-        <a
-          href="/admin/profile"
-          class:list={[
-            'flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors',
-            bestHref === '/admin/profile'
-              ? 'bg-[#c59d5f] font-bold text-[#0f3036]'
-              : 'text-gray-300 hover:bg-white/10 hover:text-white',
-          ]}
-        >
-          <span set:html={ic(FaUser, 'w-4 h-4 shrink-0')} /> My Profile
-        </a>
-        <form method="post" action="/api/auth/logout">
+          </div>
           <button
-            type="submit"
-            class="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm font-medium text-gray-300 transition-colors hover:bg-white/10 hover:text-white cursor-pointer"
+            id="sidebar-close"
+            class="rounded-full p-2 text-white hover:bg-white/10 lg:hidden"
+            aria-label="Close menu"
           >
-            <span set:html={ic(FaArrowRightFromBracket, 'w-4 h-4 shrink-0')} /> Logout
+            <span set:html={ic(FaXmark, 'w-6 h-6 text-white')} />
           </button>
-        </form>
-        <a
-          href="/"
-          class="flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-red-400 transition-colors hover:bg-red-600/20 hover:text-red-300"
-        >
-          <span set:html={ic(FaRightFromBracket, 'w-4 h-4 shrink-0')} /> Back to Site
-        </a>
-      </div>
-    </aside>
-
-    <!-- Main Content Column -->
-    <div class="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-      <!-- Top Navigation Bar -->
-      <header class="flex h-16 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 md:px-8 shadow-xs">
-        <div class="flex items-center gap-3">
-          <button
-            id="sidebar-open"
-            class="rounded-lg p-2 text-gray-600 hover:bg-gray-100 hover:text-gray-900 md:hidden cursor-pointer"
-            aria-label="Bude menu"
-          >
-            <span set:html={ic(FaBars, 'w-5 h-5')} />
-          </button>
-          <h2 class="font-serif text-lg font-bold text-gray-900">{title}</h2>
         </div>
 
-        <div class="flex items-center gap-3 md:gap-4">
+        <nav class="flex-1 space-y-1 overflow-y-auto p-4">
+          {NAV.map((entry) =>
+            'header' in entry ? (
+              <div class="px-4 pb-1 pt-2 text-[10px] font-bold uppercase tracking-widest text-white/30">
+                {entry.header}
+              </div>
+            ) : (
+              <a
+                href={entry.href}
+                class:list={[
+                  'flex items-center gap-3 rounded-md px-4 py-3 transition-colors',
+                  bestHref === entry.href
+                    ? 'bg-[#c59d5f] font-bold text-[#0f3036]'
+                    : 'hover:bg-white/10',
+                ]}
+              >
+                <span set:html={ic(entry.Icon)} />
+                {entry.label}
+              </a>
+            ),
+          )}
+        </nav>
+
+        <div class="space-y-2 border-t border-white/10 p-4">
+          <a
+            href="/admin/profile"
+            class:list={[
+              'flex items-center gap-3 rounded-md px-4 py-3 text-sm transition-colors',
+              bestHref === '/admin/profile'
+                ? 'bg-[#c59d5f] font-bold text-[#0f3036]'
+                : 'text-gray-300 hover:bg-white/10 hover:text-white',
+            ]}
+          >
+            <span set:html={ic(FaUser)} /> My Profile
+          </a>
+          <form method="post" action="/api/auth/logout">
+            <button
+              type="submit"
+              class="flex w-full items-center gap-3 rounded-md px-4 py-3 text-left text-sm text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <span set:html={ic(FaArrowRightFromBracket)} /> Logout
+            </button>
+          </form>
           <a
             href="/"
-            target="_blank"
-            class="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+            class="flex items-center gap-3 rounded-md px-4 py-3 text-sm text-red-400 transition-colors hover:bg-red-600/20 hover:text-red-300"
           >
-            <span set:html={ic(FaRightFromBracket, 'w-3.5 h-3.5')} />
-            Duba Shafin
+            <span set:html={ic(FaRightFromBracket)} /> Back to Site
           </a>
-          <div class="flex items-center gap-2 border-l border-gray-200 pl-3 md:pl-4">
-            <div class="flex h-8 w-8 items-center justify-center rounded-xl bg-[#0f3036] text-xs font-bold text-[#c59d5f]">
-              {initial}
-            </div>
-            <span class="hidden md:inline text-xs font-bold text-gray-800">{userName}</span>
-          </div>
         </div>
-      </header>
+      </aside>
 
-      <!-- Scrollable Main Canvas -->
-      <main id="admin-main" class="h-full min-w-0 flex-1 overflow-y-auto bg-gray-50/70 p-4 md:p-8">
-        <slot />
-      </main>
+      <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header class="flex h-16 shrink-0 items-center justify-between bg-[#0f3036] px-4 text-white shadow-md lg:hidden">
+          <button
+            id="sidebar-open"
+            class="rounded-md p-2 hover:bg-white/10"
+            aria-label="Open menu"
+          >
+            <span set:html={ic(FaBars, 'w-6 h-6 text-white')} />
+          </button>
+          <h1 class="font-serif text-xl font-black tracking-tighter text-white">
+            Yanci<span class="text-[#c59d5f]">.</span>
+          </h1>
+          <div class="flex h-10 w-10 items-center justify-center rounded-full bg-[#c59d5f]/20 text-xs font-bold text-[#c59d5f]">
+            {initial}
+          </div>
+        </header>
+
+        <main id="admin-main" class="flex min-w-0 flex-1 flex-col overflow-y-auto bg-gray-50">
+          <slot />
+        </main>
+      </div>
     </div>
 
     <script is:inline>
@@ -244,20 +208,18 @@ const initial = userName.charAt(0).toUpperCase();
       const overlay = document.getElementById('admin-overlay');
       const openBtn = document.getElementById('sidebar-open');
       const closeBtn = document.getElementById('sidebar-close');
-
       function setOpen(open) {
         if (!sidebar || !overlay) return;
         sidebar.classList.toggle('-translate-x-full', !open);
         overlay.classList.toggle('hidden', !open);
-        document.body.style.overflow = open && window.innerWidth < 768 ? 'hidden' : '';
+        document.body.style.overflow = open && window.innerWidth < 1024 ? 'hidden' : '';
       }
-
       openBtn?.addEventListener('click', () => setOpen(true));
       closeBtn?.addEventListener('click', () => setOpen(false));
       overlay?.addEventListener('click', () => setOpen(false));
       sidebar?.addEventListener('click', (e) => {
         const t = e.target;
-        if (t && t.closest && t.closest('a') && window.innerWidth < 768) setOpen(false);
+        if (t && t.closest && t.closest('a') && window.innerWidth < 1024) setOpen(false);
       });
     </script>
   </body>
