@@ -193,7 +193,7 @@ export default function AdminLiveConsole({ article: initialArticle, userName }: 
       if (!res.ok || !data.ok) throw new Error(data.message || 'Post failed');
       // optimistic update + reload
       const current = parseLiveUpdates((article as any).liveUpdates);
-      const merged = [newUpdate as LiveUpdate, ...current];
+      const merged = [newUpdate as unknown as LiveUpdate, ...current];
       setArticle((prev) => ({ ...prev, liveUpdates: merged } as Article));
       setUpdateText('');
       setUpdateTitle('');

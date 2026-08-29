@@ -11,6 +11,9 @@ const fields: FieldSpec[] = [
   { key: 'bio', type: 'string' },
   { key: 'image', type: 'string' },
   { key: 'order', type: 'number' },
+  { key: 'pin', type: 'string' },
+  { key: 'label', type: 'string' },
+  { key: 'lastActive', type: 'string' },
 ];
 
 export const { POST, PUT, DELETE } = makeCrudHandler('staff', fields, 'admin');

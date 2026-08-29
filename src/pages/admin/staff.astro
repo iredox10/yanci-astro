@@ -1,0 +1,42 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import AdminStaffClient from '../../components/admin/AdminStaffClient';
+import { adminListCollection } from '@lib/admin-collections';
+import { getArticles } from '@lib/appwrite-server';
+
+export const prerender = false;
+
+const [staffDocs, articles] = await Promise.all([
+  adminListCollection('staff'),
+  getArticles(500),
+]);
+
+// Normalize for client: ensure JSON-safe
+const staff = staffDocs.map((d: any) => ({
+  $id: d.$id,
+  id: d.$id ?? d.id,
+  name: d.name ?? '',
+  email: d.email ?? '',
+  role: d.role ?? 'editor',
+  category: d.category ?? null,
+  label: d.label ?? d.name ?? '',
+  pin: d.pin ?? null,
+  status: d.status ?? 'active',
+  lastActive: d.lastActive ?? d.last_active ?? null,
+  createdAt: d.createdAt ?? d.$createdAt ?? null,
+  $createdAt: d.$createdAt ?? null,
+}));
+
+const articleData = articles.map((a: any) => ({
+  $id: a.$id,
+  id: a.$id ?? a.id,
+  author: a.author ?? '',
+}));
+---
+
+<AdminLayout title="Ma'aikatan Redaksha" active="users">
+  {/* Exact replication of yanci React AdminStaff outer: flex-1 overflow-y-auto p-4 md:p-8 space-y-6 — offset AdminLayout's main padding */}
+  <div class="-m-4 md:-m-8">
+    <AdminStaffClient client:load initialStaff={staff} articles={articleData} />
+  </div>
+</AdminLayout>

@@ -74,9 +74,9 @@ function sanitizeInput(body: Record<string, unknown>) {
     breaking_until: body.breaking_until !== undefined ? (typeof body.breaking_until === 'string' && body.breaking_until ? body.breaking_until : undefined) : undefined,
     review_status: body.review_status !== undefined ? (['pending', 'approved', 'rejected'].includes(String(body.review_status)) ? String(body.review_status) : 'pending') : undefined,
     focal_point: body.focal_point !== undefined ? (body.focal_point ? (typeof body.focal_point === 'object' ? JSON.stringify(body.focal_point) : sanitizePlainText(String(body.focal_point), 100)) : undefined) : undefined,
-    videoUrl: body.videoUrl !== undefined ? (sanitizeImageUrl(String(body.videoUrl ?? '')) ?? sanitizePlainText(String(body.videoUrl ?? ''), 500) || undefined) : undefined,
+    videoUrl: body.videoUrl !== undefined ? ((sanitizeImageUrl(String(body.videoUrl ?? '')) ?? sanitizePlainText(String(body.videoUrl ?? ''), 500)) || undefined) : undefined,
     keyFigures: body.keyFigures !== undefined ? sanitizePlainText(String(body.keyFigures ?? ''), 4000) || undefined : undefined,
-    mapEmbedUrl: body.mapEmbedUrl !== undefined ? (sanitizeImageUrl(String(body.mapEmbedUrl ?? '')) ?? sanitizePlainText(String(body.mapEmbedUrl ?? ''), 1000) || undefined) : undefined,
+    mapEmbedUrl: body.mapEmbedUrl !== undefined ? ((sanitizeImageUrl(String(body.mapEmbedUrl ?? '')) ?? sanitizePlainText(String(body.mapEmbedUrl ?? ''), 1000)) || undefined) : undefined,
   };
   if (liveUpdates !== undefined) out.liveUpdates = liveUpdates;
   // strip undefined keys so partial updates don't overwrite with empty
