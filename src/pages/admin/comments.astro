@@ -27,7 +27,7 @@ const enriched = comments.map((c: any) => ({
 ---
 
 <AdminLayout title="Comments" active="comments">
-  <div class="-m-4 md:-m-8">
+  <div class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
     <AdminCommentsClient client:load initialComments={enriched} />
   </div>
 </AdminLayout>
