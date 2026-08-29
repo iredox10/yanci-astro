@@ -1,73 +1,23 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import AdminCollectionDeleteButton from '../../components/admin/AdminCollectionDeleteButton';
+import AdminNewsletterClient from '../../components/admin/AdminNewsletterClient';
 import { adminListCollection } from '@lib/admin-collections';
+import { getArticles } from '@lib/appwrite-server';
 
 export const prerender = false;
 
-const subscribers = await adminListCollection('newsletter', 2000);
-
-const active = subscribers.filter((s) => String(s.status ?? 'subscribed') !== 'unsubscribed');
-const day = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+let subscribers: any[] = [];
+let articles: any[] = [];
+try {
+  subscribers = await adminListCollection('newsletter', 2000);
+} catch {}
+try {
+  articles = await getArticles(200);
+} catch {}
 ---
 
 <AdminLayout title="Newsletter" active="newsletter">
-  <div class="flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h1 class="font-serif text-2xl font-bold text-yanci-primary">Newsletter subscribers</h1>
-      <p class="mt-1 text-sm text-yanci-primary/60">
-        {active.length} active of {subscribers.length} total. Emails are collected from the homepage subscribe form.
-      </p>
-    </div>
-    <a
-      href={`data:text/csv;charset=utf-8,${encodeURIComponent('email,name,status,subscribed_at\n' + subscribers.map((s) => [s.email, s.name ?? '', s.status ?? 'subscribed', s.subscribed_at ?? s.$createdAt ?? ''].map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n'))}`}
-      download="yanci-newsletter-subscribers.csv"
-      class="border border-yanci-primary/30 px-4 py-2 text-sm font-medium text-yanci-primary hover:bg-yanci-primary/10"
-    >
-      Export CSV
-    </a>
+  <div class="-m-4 md:-m-8">
+    <AdminNewsletterClient client:load initialSubscribers={subscribers} initialArticles={articles as unknown as any[]} />
   </div>
-
-  <div class="mt-5 overflow-hidden border border-yanci-primary/15 bg-white/60">
-    <table class="w-full text-left text-sm">
-      <thead class="bg-yanci-primary/5 text-xs uppercase tracking-wide text-yanci-primary/60">
-        <tr>
-          <th class="px-4 py-2.5 font-semibold">Email</th>
-          <th class="hidden px-4 py-2.5 font-semibold sm:table-cell">Name</th>
-          <th class="px-4 py-2.5 font-semibold">Status</th>
-          <th class="hidden px-4 py-2.5 font-semibold md:table-cell">Subscribed</th>
-          <th class="px-4 py-2.5 text-right font-semibold">Actions</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-yanci-primary/10">
-        {subscribers.length === 0 && (
-          <tr>
-            <td colspan={5} class="px-4 py-10 text-center text-yanci-primary/50">
-              No subscribers yet. The homepage subscribe form writes here.
-            </td>
-          </tr>
-        )}
-        {[...subscribers].reverse().map((s) => (
-          <tr class="hover:bg-white/60">
-            <td class="px-4 py-3 font-medium text-yanci-dark">{String(s.email ?? '—')}</td>
-            <td class="hidden px-4 py-3 text-yanci-dark/70 sm:table-cell">{String(s.name ?? '—')}</td>
-            <td class="px-4 py-3">
-              <span class="rounded-full px-2 py-0.5 text-xs font-bold uppercase {String(s.status ?? 'subscribed') === 'unsubscribed' ? 'bg-gray-200 text-gray-600' : 'bg-emerald-100 text-emerald-700'}">
-                {String(s.status ?? 'subscribed')}
-              </span>
-            </td>
-            <td class="hidden px-4 py-3 text-yanci-dark/50 md:table-cell">
-              {s.subscribed_at || s.$createdAt ? day.format(new Date(String(s.subscribed_at ?? s.$createdAt))) : '—'}
-            </td>
-            <td class="whitespace-nowrap px-4 py-3 text-right">
-              <AdminCollectionDeleteButton collection="newsletter" id={String(s.$id)} label="Remove" />
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-  <p class="mt-2 text-xs text-yanci-primary/50">
-    Showing up to 2,000 of {subscribers.length} subscribers.
-  </p>
 </AdminLayout>

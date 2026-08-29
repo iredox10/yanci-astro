@@ -1,29 +1,18 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import AdminCrud from '../../components/admin/AdminCrud.astro';
+import AdminHighlightsClient from '../../components/admin/AdminHighlightsClient';
 import { adminListCollection } from '@lib/admin-collections';
 
 export const prerender = false;
 
-const docs = await adminListCollection('highlights');
+let docs: any[] = [];
+try {
+  docs = await adminListCollection('highlights', 200);
+} catch {}
 ---
 
 <AdminLayout title="Highlights" active="highlights">
-  <AdminCrud
-    collection="highlights"
-    title="Homepage highlights"
-    description="The three panel cards shown on the homepage. Order 0, 1, 2 left to right."
-    docs={docs}
-    fields={[
-      { key: 'tag', label: 'Tag', placeholder: 'Kasuwanci' },
-      { key: 'title', label: 'Title', placeholder: 'Kasuwar hannayen jari…' },
-      { key: 'copy', label: 'Copy', type: 'textarea', placeholder: 'Short summary text' },
-      { key: 'icon', label: 'Icon', options: ['trend', 'radio', 'innovation'], type: 'select' },
-      { key: 'accent', label: 'Accent colour', placeholder: '#10b981' },
-      { key: 'gradient', label: 'Gradient classes', placeholder: 'from-emerald-500/20 to-teal-500/20' },
-      { key: 'link', label: 'Link (optional)', placeholder: '/article/abc' },
-      { key: 'order', label: 'Order', type: 'number' },
-      { key: 'active', label: 'Active', type: 'checkbox' },
-    ]}
-  />
+  <div class="-m-4 md:-m-8">
+    <AdminHighlightsClient client:load initialHighlightsData={docs} />
+  </div>
 </AdminLayout>

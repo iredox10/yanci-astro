@@ -1,157 +1,33 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
+import AdminCommentsClient from '../../components/admin/AdminCommentsClient';
 import { getAllComments, getArticles } from '@lib/appwrite-server';
 
 export const prerender = false;
 
-const statusParam = (Astro.url.searchParams.get('status') ?? '').toLowerCase();
-const filterStatus = ['pending', 'approved', 'rejected'].includes(statusParam) ? statusParam : '';
+let comments: any[] = [];
+let articles: any[] = [];
+try {
+  // fetch all statuses to show total like original sample (not filtered)
+  comments = await getAllComments('', 200);
+} catch {}
+try {
+  articles = await getArticles(200);
+} catch {}
 
-const comments = await getAllComments(filterStatus);
-const articles = await getArticles(200);
+// Enrich comments with articleTitle like current Astro did
 const articleTitle = new Map<string, string>();
-for (const a of articles) {
-  if (a.$id) articleTitle.set(a.$id, a.headline);
+for (const a of articles as any[]) {
+  if (a.$id) articleTitle.set(a.$id, a.headline ?? a.title ?? String(a.$id));
 }
-
-const counts = {
-  pending: (await getAllComments('pending')).length,
-  approved: (await getAllComments('approved')).length,
-  rejected: (await getAllComments('rejected')).length,
-};
-const total = counts.pending + counts.approved + counts.rejected;
-const day = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-
-const STATUS_STYLE: Record<string, string> = {
-  pending: 'bg-amber-100 text-amber-700',
-  approved: 'bg-emerald-100 text-emerald-700',
-  rejected: 'bg-red-100 text-red-700',
-};
+const enriched = comments.map((c: any) => ({
+  ...c,
+  articleTitle: c.articleId ? (articleTitle.get(String(c.articleId)) ?? String(c.articleId)) : '—',
+}));
 ---
 
 <AdminLayout title="Comments" active="comments">
-  <div class="flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h1 class="font-serif text-2xl font-bold text-yanci-primary">Comment moderation</h1>
-      <p class="mt-1 text-sm text-yanci-primary/60">
-        {total} total · {counts.pending} pending · {counts.approved} approved · {counts.rejected} rejected
-      </p>
-    </div>
-    <div class="flex gap-1">
-      {[{ id: '', label: `Duka (${total})` }, { id: 'pending', label: `Pending (${counts.pending})` }, { id: 'approved', label: `Approved (${counts.approved})` }, { id: 'rejected', label: `Rejected (${counts.rejected})` }].map((tab) => (
-        <a
-          href={tab.id ? `/admin/comments?status=${tab.id}` : '/admin/comments'}
-          class:list={[
-            'px-3 py-1.5 text-sm font-medium transition-colors',
-            filterStatus === tab.id
-              ? 'bg-yanci-primary text-yanci-paper'
-              : 'text-yanci-primary/70 hover:bg-yanci-primary/10',
-          ]}
-        >
-          {tab.label}
-        </a>
-      ))}
-    </div>
+  <div class="-m-4 md:-m-8">
+    <AdminCommentsClient client:load initialComments={enriched} />
   </div>
-
-  <div class="mt-5 overflow-hidden border border-yanci-primary/15 bg-white/60">
-    <table class="w-full text-left text-sm">
-      <thead class="bg-yanci-primary/5 text-xs uppercase tracking-wide text-yanci-primary/60">
-        <tr>
-          <th class="px-4 py-2.5 font-semibold">Comment</th>
-          <th class="hidden px-4 py-2.5 font-semibold sm:table-cell">Article</th>
-          <th class="px-4 py-2.5 font-semibold">Status</th>
-          <th class="hidden px-4 py-2.5 font-semibold md:table-cell">Posted</th>
-          <th class="px-4 py-2.5 text-right font-semibold">Actions</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-yanci-primary/10">
-        {comments.length === 0 && (
-          <tr>
-            <td colspan={5} class="px-4 py-10 text-center text-yanci-primary/50">
-              Babu comments a wannan filter.
-            </td>
-          </tr>
-        )}
-        {comments.map((c) => (
-          <tr data-comment-id={c.$id} class="hover:bg-white/60">
-            <td class="max-w-md px-4 py-3">
-              <p class="text-xs font-bold text-yanci-primary/70">{c.name} {c.likes > 0 ? `· 👍 ${c.likes}` : ''}</p>
-              <p class="mt-1 line-clamp-3 text-yanci-dark/80">{c.body}</p>
-            </td>
-            <td class="hidden max-w-xs px-4 py-3 text-yanci-dark/60 sm:table-cell">
-              <span class="line-clamp-2 text-xs">{c.articleId ? (articleTitle.get(c.articleId) ?? c.articleId) : '—'}</span>
-            </td>
-            <td class="px-4 py-3">
-              <span class={`rounded-full px-2 py-0.5 text-xs font-bold uppercase ${STATUS_STYLE[c.status ?? 'pending'] ?? STATUS_STYLE.pending}`}>
-                {c.status ?? 'pending'}
-              </span>
-            </td>
-            <td class="hidden px-4 py-3 text-yanci-dark/50 md:table-cell">
-              {c.$createdAt ? day.format(new Date(c.$createdAt)) : '—'}
-            </td>
-            <td class="whitespace-nowrap px-4 py-3 text-right">
-              <div class="flex items-center justify-end gap-1" data-comment-actions>
-                <button type="button" data-action="approved" disabled={c.status === 'approved'} class="rounded-sm border border-emerald-600/40 px-2 py-1 text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-600 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-emerald-700">Approve</button>
-                <button type="button" data-action="rejected" disabled={c.status === 'rejected'} class="rounded-sm border border-red-600/40 px-2 py-1 text-xs font-bold text-red-700 transition-colors hover:bg-red-600 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-red-700">Reject</button>
-                <button type="button" data-action="delete" class="rounded-sm border border-yanci-primary/30 px-2 py-1 text-xs font-bold text-yanci-primary/70 transition-colors hover:bg-yanci-primary hover:text-yanci-paper">Delete</button>
-              </div>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-  <p class="mt-2 text-xs text-yanci-primary/50">
-    New reader comments start as pending and only appear publicly once approved.
-  </p>
 </AdminLayout>
-
-<script>
-  async function act(id: string, action: 'approved' | 'rejected' | 'delete'): Promise<boolean> {
-    try {
-      const res = await fetch('/api/admin/comments', {
-        method: action === 'delete' ? 'DELETE' : 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
-        body: JSON.stringify(action === 'delete' ? { id } : { id, status: action }),
-      });
-      const data = await res.json();
-      return res.ok && data.ok;
-    } catch {
-      return false;
-    }
-  }
-
-  document.querySelectorAll<HTMLElement>('[data-comment-id]').forEach((row) => {
-    const id = row.dataset.commentId ?? '';
-    const actions = row.querySelector<HTMLElement>('[data-comment-actions]');
-    actions?.addEventListener('click', async (e) => {
-      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-action]');
-      if (!btn) return;
-      const action = btn.dataset.action as 'approved' | 'rejected' | 'delete';
-      if (action === 'delete' && !window.confirm('Ka tabbatar kana son goge wannan sharhin?')) return;
-      btn.disabled = true;
-      const ok = await act(id, action);
-      if (ok) {
-        if (action === 'delete') {
-          row.remove();
-        } else {
-          row.querySelectorAll<HTMLButtonElement>('[data-action]').forEach((b) => {
-            const bAction = b.dataset.action as string;
-            b.disabled = bAction === action;
-          });
-          const badge = row.querySelector<HTMLElement>('td:nth-child(3) span');
-          if (badge) {
-            badge.className = `rounded-full px-2 py-0.5 text-xs font-bold uppercase ${
-              action === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-            }`;
-            badge.textContent = action;
-          }
-        }
-      } else {
-        btn.disabled = false;
-        window.alert('An kasa aikawa — ka sake gwadawa');
-      }
-    });
-  });
-</script>

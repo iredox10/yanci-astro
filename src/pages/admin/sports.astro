@@ -1,23 +1,53 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import AdminCrud from '../../components/admin/AdminCrud.astro';
+import AdminSportsClient from '../../components/admin/AdminSportsClient';
 import { adminListCollection } from '@lib/admin-collections';
 
 export const prerender = false;
 
-const docs = await adminListCollection('sports');
+let initialData: any = null;
+try {
+  const docs: any[] = await adminListCollection('sports', 1);
+  const doc = docs?.[0];
+  if (doc) {
+    const parse = (raw: unknown) => {
+      if (Array.isArray(raw)) return raw;
+      if (typeof raw === 'string') {
+        try { const p = JSON.parse(raw); return Array.isArray(p) ? p : []; } catch { return []; }
+      }
+      return [];
+    };
+    const parseObj = (raw: unknown) => {
+      if (raw && typeof raw === 'object') return raw as any;
+      if (typeof raw === 'string') {
+        try { const p = JSON.parse(raw); return p && typeof p === 'object' ? p : null; } catch { return null; }
+      }
+      return null;
+    };
+    initialData = {
+      $id: doc.$id,
+      liveMatches: parse((doc as any).liveMatches),
+      standings: parse((doc as any).standings),
+      fixtures: parse((doc as any).fixtures),
+      playerOfWeek: parseObj((doc as any).playerOfWeek) ?? parseObj((doc as any).player_of_week) ?? {
+        name: 'Ahmed Musa',
+        team: 'Yanci Stars',
+        initials: 'AM',
+        goals: 5,
+        assists: 3,
+        rating: 9.2,
+      },
+    };
+    // fallback to defaults if empty arrays and no previous data
+    if (initialData.liveMatches.length === 0 && initialData.standings.length === 0 && initialData.fixtures.length === 0) {
+      initialData = null;
+    }
+  }
+} catch {}
 ---
 
 <AdminLayout title="Sports" active="sports">
-  <AdminCrud
-    collection="sports"
-    title="Sports dashboard data"
-    description="JSON blobs that feed the live match, standings and fixtures widgets. One document keeps all three."
-    docs={docs}
-    fields={[
-      { key: 'liveMatches', label: 'Live matches', type: 'json', placeholder: '[{ "id": 1, "league": "NPFL", "homeTeam": "Kano Pillars", "awayTeam": "Enyimba", "homeLogo": "KP", "awayLogo": "EN", "homeScore": 2, "awayScore": 1, "minute": "67\'", "isLive": true, "events": [{ "minute": "12\'", "player": "Ibrahim Mustafa", "team": "home", "score": "1-0" }], "streamUrl": "" }]' },
-      { key: 'standings', label: 'Standings', type: 'json', placeholder: '[{ "pos": 1, "team": "Kano Pillars", "p": 24, "gd": 18, "pts": 52 }]' },
-      { key: 'fixtures', label: 'Fixtures', type: 'json', placeholder: '[{ "id": 1, "league": "NPFL", "home": "Kano Pillars", "away": "Shooters Stars", "date": "Sat", "time": "16:00", "stadium": "Sani Abacha Stadium" }]' },
-    ]}
-  />
+  <div class="-m-4 md:-m-8">
+    <AdminSportsClient client:load initialData={initialData} />
+  </div>
 </AdminLayout>
