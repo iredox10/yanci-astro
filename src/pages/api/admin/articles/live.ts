@@ -69,16 +69,23 @@ export const POST: APIRoute = async ({ request }) => {
     return json({ ok: false, message: 'articleId and update required' }, 422);
   }
 
-  const update = {
+  const rawImages = Array.isArray(raw.images) ? (raw.images as unknown[]).map((v) => sanitizeImageUrl(String(v))).filter((v): v is string => Boolean(v)).slice(0, 8) : undefined;
+  const rawImage = sanitizeImageUrl(String(raw.image ?? '')) ?? (rawImages?.[0] as string | undefined);
+  const type = ['key-event', 'update', 'repo'].includes(String(raw.type)) ? String(raw.type) : (raw.isKeyEvent ? 'key-event' : 'update');
+  const update: Record<string, unknown> = {
     id: sanitizePlainText(String(raw.id ?? `u${Date.now()}`), 40),
-    timestamp: typeof raw.timestamp === 'string' ? raw.timestamp.slice(0, 40) : new Date().toISOString(),
+    timestamp: typeof raw.timestamp === 'string' ? raw.timestamp.slice(0, 40) : typeof raw.timestamp === 'number' ? String(raw.timestamp) : new Date().toISOString(),
     time: sanitizePlainText(String(raw.time ?? ''), 40),
     title: sanitizePlainText(String(raw.title ?? ''), 300),
     content: sanitizeRichText(String(raw.content ?? '')),
-    type: ['key-event', 'update', 'repo'].includes(String(raw.type)) ? String(raw.type) : 'update',
-    pinned: Boolean(raw.pinned),
+    type,
+    pinned: Boolean(raw.pinned ?? raw.isPinned),
+    isPinned: Boolean(raw.isPinned ?? raw.pinned),
+    isKeyEvent: Boolean(raw.isKeyEvent ?? (String(raw.type) === 'key-event')),
+    isSummary: Boolean(raw.isSummary),
+    images: rawImages,
+    image: rawImage ?? undefined,
     author: sanitizePlainText(String(raw.author ?? auth.user.name ?? 'Edita'), 120),
-    image: sanitizeImageUrl(String(raw.image ?? '')) ?? undefined,
   };
   if (!update.title && !update.content) {
     return json({ ok: false, message: 'Update needs a title or content' }, 422);

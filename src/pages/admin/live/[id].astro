@@ -1,0 +1,23 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import AdminLiveConsole from '../../../components/admin/AdminLiveConsole';
+import { getArticleById } from '@lib/appwrite-server';
+import { requireUser } from '@lib/auth';
+
+export const prerender = false;
+
+const id = Astro.params.id;
+if (!id) return Astro.redirect('/admin/live');
+
+const article = id ? await getArticleById(id) : null;
+if (!article) return Astro.redirect('/admin/live');
+
+const auth = await requireUser(Astro.request);
+const userName = auth.ok ? auth.user.name : null;
+---
+
+<AdminLayout title="Live Console" active="live">
+  <div class="-m-4 md:-m-8 flex flex-col min-h-[calc(100vh-4rem)]">
+    <AdminLiveConsole client:load article={article as unknown as any} userName={userName} />
+  </div>
+</AdminLayout>
