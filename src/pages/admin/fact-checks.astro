@@ -1,29 +1,479 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import AdminCrud from '../../components/admin/AdminCrud.astro';
 import { adminListCollection } from '@lib/admin-collections';
+import { PARTIES } from '../../data/electionData';
+import { createElement, type ComponentType } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import {
+  FaShieldHalved,
+  FaPlus,
+  FaTrash,
+  FaPen,
+  FaArrowLeft,
+  FaXmark,
+  FaCircleCheck,
+  FaCircleXmark,
+  FaTriangleExclamation,
+  FaCircleQuestion,
+} from 'react-icons/fa6';
 
 export const prerender = false;
 
-const docs = await adminListCollection('factchecks');
+const [electionsRaw, factChecksRaw, candidatesRaw] = await Promise.all([
+  adminListCollection('elections'),
+  adminListCollection('factchecks'),
+  adminListCollection('candidates'),
+]);
+
+type Doc = Record<string, any>;
+const elections: Doc[] = (electionsRaw as Doc[]).map((d)=>({ ...d, id: d.$id ?? d.id }));
+const factChecks: Doc[] = (factChecksRaw as Doc[]).map((d)=>({ ...d, id: d.$id ?? d.id, $id: d.$id }));
+const candidates: Doc[] = (candidatesRaw as Doc[]) as Doc[];
+
+const election = elections.find((e)=> e.status==='active' && e.published!==false) ?? elections[0] ?? null;
+const electionFactChecks = election ? factChecks.filter((fc)=> !fc.electionId || fc.electionId===election.id) : factChecks;
+
+type IconCmp = ComponentType<{ className?: string }>;
+const ic = (Icon: IconCmp, cls='w-4 h-4') => renderToStaticMarkup(createElement(Icon,{className:cls}));
+
+function getParty(id: string) {
+  return PARTIES.find((p)=> p.id===id) || PARTIES[0];
+}
+
+const VERDICT_OPTIONS: Array<{value:string; label:string; color:string; Icon:IconCmp}> = [
+  { value: 'true', label: 'Gaskiya', color: 'green', Icon: FaCircleCheck },
+  { value: 'false', label: 'Ƙarya', color: 'red', Icon: FaCircleXmark },
+  { value: 'misleading', label: 'Ba Gaskiya Ba', color: 'amber', Icon: FaTriangleExclamation },
+  { value: 'unverified', label: 'Ba a Taba Ba', color: 'gray', Icon: FaCircleQuestion },
+];
+
+const verdictCounts: Record<string, number> = { all: electionFactChecks.length };
+for (const fc of electionFactChecks) {
+  const v = fc.verdict || 'unverified';
+  verdictCounts[v] = (verdictCounts[v] || 0) + 1;
+}
+
+const factChecksJson = JSON.stringify(electionFactChecks.map((fc)=>({
+  id: fc.id,
+  claim: fc.claim ?? '',
+  claimant: fc.claimant ?? '',
+  claimantParty: fc.claimantParty ?? 'apc',
+  verdict: fc.verdict ?? 'unverified',
+  analysis: fc.analysis ?? '',
+  source: fc.source ?? '',
+  date: fc.date ? String(fc.date).slice(0,10) : '',
+  electionId: fc.electionId ?? election?.id ?? '',
+})));
+
+const partiesJson = JSON.stringify(PARTIES);
+
+const electionIdForForm = election?.id ?? '';
 ---
 
-<AdminLayout title="Fact checks" active="fact-checks">
-  <AdminCrud
-    collection="fact-checks"
-    title="Fact checks"
-    description="Claim-by-claim verdicts shown on the elections hub and fact-check pages."
-    docs={docs}
-    fields={[
-      { key: 'electionId', label: 'Election ID', placeholder: 'election-2027' },
-      { key: 'claim', label: 'Claim', type: 'textarea', placeholder: 'The claim being checked…' },
-      { key: 'claimant', label: 'Claimant', placeholder: 'Ahmadu Bello Musa' },
-      { key: 'claimantParty', label: 'Claimant party', options: ['apc', 'pdp', 'nnpp', 'lpp', 'apga', 'independent'], type: 'select' },
-      { key: 'verdict', label: 'Verdict', options: ['true', 'mostly_true', 'misleading', 'false', 'unverified'], type: 'select' },
-      { key: 'analysis', label: 'Analysis', type: 'textarea', placeholder: 'Why the claim is right or wrong…' },
-      { key: 'source', label: 'Source', placeholder: 'NBS Q4 2026 Report' },
-      { key: 'date', label: 'Date', placeholder: '2027-01-15' },
-      { key: 'relatedArticleId', label: 'Related article ID (optional)', placeholder: '69e…' },
-    ]}
-  />
+<AdminLayout title="Binciken Gaskiya" active="fact-checks">
+  <div class="flex-1 flex flex-col min-w-0 overflow-y-auto p-6 md:p-8 -m-4 md:-m-8">
+    {/* Header */}
+    <div class="flex items-center justify-between mb-8">
+      <div class="flex items-center gap-4">
+        <a href="/admin/elections" class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+          <span set:html={ic(FaArrowLeft, 'text-gray-500 w-4 h-4')} />
+        </a>
+        <div>
+          <h1 class="text-2xl font-bold text-gray-900 flex items-center gap-3">
+            <span set:html={ic(FaShieldHalved, 'text-[#0f3036] w-6 h-6')} />
+            Binciken Gaskiya — {election ? election.name : 'Duka'}
+          </h1>
+          <p class="text-sm text-gray-500 mt-1">{electionFactChecks.length} bincike</p>
+        </div>
+      </div>
+      <button
+        id="btn-create-fc"
+        class="flex items-center gap-2 px-4 py-2.5 bg-[#0f3036] text-white rounded-lg font-bold text-sm hover:bg-[#1a454c] transition-colors cursor-pointer"
+      >
+        <span set:html={ic(FaPlus, 'w-4 h-4')} /> Sabon Bincike
+      </button>
+    </div>
+
+    {/* Verdict Stats */}
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6" id="verdict-stats">
+      <button
+        data-verdict-filter="true"
+        class="p-3 rounded-xl border-2 text-center transition-all bg-white border-gray-100 hover:border-gray-300 cursor-pointer"
+        data-color="green"
+      >
+        <span class="flex justify-center mb-1" set:html={ic(FaCircleCheck, 'w-5 h-5 mx-auto mb-1 text-green-500')} />
+        <div class="text-lg font-black">{verdictCounts['true'] || 0}</div>
+        <div class="text-[10px] font-bold text-green-700">Gaskiya</div>
+      </button>
+      <button
+        data-verdict-filter="false"
+        class="p-3 rounded-xl border-2 text-center transition-all bg-white border-gray-100 hover:border-gray-300 cursor-pointer"
+        data-color="red"
+      >
+        <span class="flex justify-center mb-1" set:html={ic(FaCircleXmark, 'w-5 h-5 mx-auto mb-1 text-red-500')} />
+        <div class="text-lg font-black">{verdictCounts['false'] || 0}</div>
+        <div class="text-[10px] font-bold text-red-700">Ƙarya</div>
+      </button>
+      <button
+        data-verdict-filter="misleading"
+        class="p-3 rounded-xl border-2 text-center transition-all bg-white border-gray-100 hover:border-gray-300 cursor-pointer"
+        data-color="amber"
+      >
+        <span class="flex justify-center mb-1" set:html={ic(FaTriangleExclamation, 'w-5 h-5 mx-auto mb-1 text-amber-500')} />
+        <div class="text-lg font-black">{verdictCounts['misleading'] || 0}</div>
+        <div class="text-[10px] font-bold text-amber-700">Ba Gaskiya Ba</div>
+      </button>
+      <button
+        data-verdict-filter="unverified"
+        class="p-3 rounded-xl border-2 text-center transition-all bg-white border-gray-100 hover:border-gray-300 cursor-pointer"
+        data-color="gray"
+      >
+        <span class="flex justify-center mb-1" set:html={ic(FaCircleQuestion, 'w-5 h-5 mx-auto mb-1 text-gray-500')} />
+        <div class="text-lg font-black">{verdictCounts['unverified'] || 0}</div>
+        <div class="text-[10px] font-bold text-gray-700">Ba a Taba Ba</div>
+      </button>
+      <button
+        data-verdict-filter="all"
+        class="p-3 rounded-xl border-2 text-center transition-all bg-[#0f3036] text-white border-[#0f3036] cursor-pointer"
+      >
+        <div class="text-lg font-black">{verdictCounts.all}</div>
+        <div class="text-[10px] font-bold text-gray-500">Duka</div>
+      </button>
+    </div>
+
+    {/* Fact Check List */}
+    <div class="space-y-4" id="factcheck-list">
+      {electionFactChecks.length === 0 ? (
+        <div class="bg-white rounded-xl p-12 text-center border border-gray-100">
+          <span class="flex justify-center mb-4" set:html={ic(FaShieldHalved, 'w-12 h-12 mx-auto text-gray-200')} />
+          <p class="text-gray-500 font-medium">Babu binciken gaskiya tukuna.</p>
+          <button id="btn-empty-fc" class="mt-4 text-sm text-[#0f3036] font-bold hover:underline cursor-pointer">
+            + Ƙara bincike na farko
+          </button>
+        </div>
+      ) : (
+        electionFactChecks.map((fc) => {
+          const verdictOpt = VERDICT_OPTIONS.find((v)=> v.value===fc.verdict) || VERDICT_OPTIONS[3];
+          const party = getParty(fc.claimantParty || 'apc');
+          const VerdictIcon: IconCmp = verdictOpt.Icon;
+          const color = verdictOpt.color;
+          const badgeCls = color==='green' ? 'bg-green-100 text-green-800' : color==='red' ? 'bg-red-100 text-red-800' : color==='amber' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-800';
+          return (
+            <div data-fc-card data-verdict={fc.verdict} class="bg-white rounded-xl border border-gray-100 shadow-sm p-6 hover:shadow-md transition-all">
+              <div class="flex items-start justify-between">
+                <div class="flex-1">
+                  <div class="flex items-center gap-3 mb-3">
+                    <span class={`text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5 ${badgeCls}`}>
+                      <span set:html={ic(VerdictIcon, 'w-3 h-3')} /> {verdictOpt.label}
+                    </span>
+                    <span class="text-xs text-gray-400">{fc.date ? String(fc.date).slice(0,10) : ''}</span>
+                  </div>
+                  <blockquote class="text-base font-serif italic text-gray-800 mb-3 pl-4 border-l-2 border-gray-200">
+                    "{fc.claim}"
+                  </blockquote>
+                  <div class="flex items-center gap-2 mb-3">
+                    <div class="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold" style={`background-color:${party.color}`}>
+                      {(fc.claimant || 'C')[0]}
+                    </div>
+                    <span class="text-sm font-bold">{fc.claimant}</span>
+                    <span class="text-xs text-gray-400">({party.name})</span>
+                  </div>
+                  <p class="text-sm text-gray-600 leading-relaxed mb-2">{fc.analysis}</p>
+                  <p class="text-xs text-gray-400">Tushen: {fc.source}</p>
+                </div>
+                <div class="flex gap-1 ml-4">
+                  <button data-edit-fc={fc.id} class="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-600 cursor-pointer">
+                    <span set:html={ic(FaPen, 'w-4 h-4')} />
+                  </button>
+                  <button data-delete-fc={fc.id} class="p-2 hover:bg-red-50 rounded-lg transition-colors text-gray-400 hover:text-red-600 cursor-pointer">
+                    <span set:html={ic(FaTrash, 'w-4 h-4')} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+
+    <!-- Modal -->
+    <div id="fc-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" id="fc-modal-panel">
+        <div class="p-6 border-b border-gray-100 flex items-center justify-between">
+          <h2 id="fc-modal-title" class="text-xl font-bold">Sabon Binciken Gaskiya</h2>
+          <button id="fc-modal-close" class="p-2 hover:bg-gray-100 rounded-lg cursor-pointer">
+            <span set:html={ic(FaXmark, 'w-5 h-5 text-gray-400')} />
+          </button>
+        </div>
+        <form id="fc-form" class="p-6 space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Iƙirari</label>
+            <textarea name="claim" required rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#0f3036]/20 focus:border-[#0f3036] resize-none" placeholder='"..."'></textarea>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Mai Iƙirari</label>
+              <input name="claimant" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#0f3036]/20 focus:border-[#0f3036]" />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Jam'iyya</label>
+              <select name="claimantParty" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#0f3036]/20 focus:border-[#0f3036]">
+                {PARTIES.map((p)=> <option value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Hukunci</label>
+            <div class="grid grid-cols-4 gap-3" id="verdict-choices">
+              <button
+                type="button"
+                data-verdict-choice="true"
+                class="p-3 rounded-xl border-2 text-center transition-all border-gray-200 hover:border-gray-400 cursor-pointer"
+                data-color="green"
+              >
+                <span class="flex justify-center mb-1" set:html={ic(FaCircleCheck, 'w-5 h-5 mx-auto mb-1 text-green-500')} />
+                <div class="text-xs font-bold">Gaskiya</div>
+              </button>
+              <button
+                type="button"
+                data-verdict-choice="false"
+                class="p-3 rounded-xl border-2 text-center transition-all border-gray-200 hover:border-gray-400 cursor-pointer"
+                data-color="red"
+              >
+                <span class="flex justify-center mb-1" set:html={ic(FaCircleXmark, 'w-5 h-5 mx-auto mb-1 text-red-500')} />
+                <div class="text-xs font-bold">Ƙarya</div>
+              </button>
+              <button
+                type="button"
+                data-verdict-choice="misleading"
+                class="p-3 rounded-xl border-2 text-center transition-all border-gray-200 hover:border-gray-400 cursor-pointer"
+                data-color="amber"
+              >
+                <span class="flex justify-center mb-1" set:html={ic(FaTriangleExclamation, 'w-5 h-5 mx-auto mb-1 text-amber-500')} />
+                <div class="text-xs font-bold">Ba Gaskiya Ba</div>
+              </button>
+              <button
+                type="button"
+                data-verdict-choice="unverified"
+                class="p-3 rounded-xl border-2 text-center transition-all border-gray-200 hover:border-gray-400 cursor-pointer"
+                data-color="gray"
+              >
+                <span class="flex justify-center mb-1" set:html={ic(FaCircleQuestion, 'w-5 h-5 mx-auto mb-1 text-gray-500')} />
+                <div class="text-xs font-bold">Ba a Taba Ba</div>
+              </button>
+            </div>
+            <input type="hidden" name="verdict" value="unverified" id="fc-verdict-input" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Bincike</label>
+            <textarea name="analysis" required rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#0f3036]/20 focus:border-[#0f3036] resize-none"></textarea>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Tushen</label>
+              <input name="source" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#0f3036]/20 focus:border-[#0f3036]" />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Ranar</label>
+              <input type="date" name="date" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#0f3036]/20 focus:border-[#0f3036]" />
+            </div>
+          </div>
+          <div class="flex justify-end gap-3 pt-4">
+            <button type="button" id="fc-cancel" class="px-4 py-2 text-sm font-bold text-gray-600 hover:text-gray-800 cursor-pointer">Soke</button>
+            <button type="submit" id="fc-submit" class="px-6 py-2 bg-[#0f3036] text-white text-sm font-bold rounded-lg hover:bg-[#1a454c] transition-colors cursor-pointer">
+              Ƙirƙiri Bincike
+            </button>
+          </div>
+          <p id="fc-msg" class="text-xs text-red-600 font-bold hidden"></p>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script type="application/json" id="factchecks-data" set:html={factChecksJson} />
+  <script type="application/json" id="parties-data" set:html={partiesJson} />
+  <script type="application/json" id="election-id-data" set:html={JSON.stringify(electionIdForForm)} />
+
+  <script is:inline>
+    (() => {
+      const modal = document.getElementById('fc-modal');
+      const panel = document.getElementById('fc-modal-panel');
+      const form = document.getElementById('fc-form');
+      const titleEl = document.getElementById('fc-modal-title');
+      const submitBtn = document.getElementById('fc-submit');
+      const msgEl = document.getElementById('fc-msg');
+      const verdictInput = document.getElementById('fc-verdict-input');
+      const createBtn = document.getElementById('btn-create-fc');
+      const emptyBtn = document.getElementById('btn-empty-fc');
+      const closeBtn = document.getElementById('fc-modal-close');
+      const cancelBtn = document.getElementById('fc-cancel');
+      const dataEl = document.getElementById('factchecks-data');
+      const electionIdEl = document.getElementById('election-id-data');
+      let editingId = null;
+      let filterVerdict = 'all';
+      let factChecks = [];
+      try { factChecks = JSON.parse(dataEl.textContent||'[]'); } catch {}
+      const electionId = JSON.parse(electionIdEl.textContent||'""');
+
+      function showMsg(t){ if(!msgEl) return; msgEl.textContent=t; msgEl.classList.remove('hidden'); }
+      function hideMsg(){ if(msgEl){ msgEl.textContent=''; msgEl.classList.add('hidden'); } }
+
+      function updateVerdictButtons(selected){
+        document.querySelectorAll('[data-verdict-choice]').forEach(btn=>{
+          const val = btn.getAttribute('data-verdict-choice');
+          const color = btn.getAttribute('data-color');
+          if(val===selected){
+            if(color==='green') btn.className = 'p-3 rounded-xl border-2 text-center transition-all bg-green-50 border-green-400 cursor-pointer';
+            else if(color==='red') btn.className = 'p-3 rounded-xl border-2 text-center transition-all bg-red-50 border-red-400 cursor-pointer';
+            else if(color==='amber') btn.className = 'p-3 rounded-xl border-2 text-center transition-all bg-amber-50 border-amber-400 cursor-pointer';
+            else if(color==='gray') btn.className = 'p-3 rounded-xl border-2 text-center transition-all bg-gray-50 border-gray-400 cursor-pointer';
+          } else {
+            btn.className = 'p-3 rounded-xl border-2 text-center transition-all border-gray-200 hover:border-gray-400 cursor-pointer';
+          }
+        });
+        if(verdictInput) verdictInput.value = selected;
+      }
+
+      function openCreate(){
+        editingId=null;
+        if(titleEl) titleEl.textContent='Sabon Binciken Gaskiya';
+        if(submitBtn) submitBtn.textContent='Ƙirƙiri Bincike';
+        form.reset();
+        const today = new Date().toISOString().split('T')[0];
+        const dateInput = form.elements.namedItem('date');
+        if(dateInput) dateInput.value = today;
+        updateVerdictButtons('unverified');
+        hideMsg();
+        modal.classList.remove('hidden');
+        document.body.style.overflow='hidden';
+      }
+
+      function openEdit(id){
+        const fc = factChecks.find(f=>f.id===id || f.$id===id);
+        if(!fc) return;
+        editingId = fc.id;
+        if(titleEl) titleEl.textContent='Gyara Bincike';
+        if(submitBtn) submitBtn.textContent='Ajiye Canje-canje';
+        hideMsg();
+        const fields = ['claim','claimant','claimantParty','analysis','source','date'];
+        for(const k of fields){
+          const el = form.elements.namedItem(k);
+          if(el) el.value = fc[k] ?? '';
+        }
+        updateVerdictButtons(fc.verdict||'unverified');
+        modal.classList.remove('hidden');
+        document.body.style.overflow='hidden';
+      }
+
+      function closeModal(){
+        modal.classList.add('hidden');
+        document.body.style.overflow='';
+        editingId=null;
+        hideMsg();
+      }
+
+      function applyFilter(verdict){
+        filterVerdict = verdict;
+        // update stats buttons
+        document.querySelectorAll('[data-verdict-filter]').forEach(btn=>{
+          const val = btn.getAttribute('data-verdict-filter');
+          const color = btn.getAttribute('data-color');
+          if(val===verdict){
+            if(val==='all'){
+              btn.className='p-3 rounded-xl border-2 text-center transition-all bg-[#0f3036] text-white border-[#0f3036] cursor-pointer';
+            } else {
+              if(color==='green') btn.className='p-3 rounded-xl border-2 text-center transition-all bg-green-50 border-green-400 cursor-pointer';
+              else if(color==='red') btn.className='p-3 rounded-xl border-2 text-center transition-all bg-red-50 border-red-400 cursor-pointer';
+              else if(color==='amber') btn.className='p-3 rounded-xl border-2 text-center transition-all bg-amber-50 border-amber-400 cursor-pointer';
+              else if(color==='gray') btn.className='p-3 rounded-xl border-2 text-center transition-all bg-gray-50 border-gray-400 cursor-pointer';
+            }
+          } else {
+            btn.className='p-3 rounded-xl border-2 text-center transition-all bg-white border-gray-100 hover:border-gray-300 cursor-pointer';
+          }
+        });
+        document.querySelectorAll('[data-fc-card]').forEach(card=>{
+          const v = card.getAttribute('data-verdict');
+          if(verdict==='all' || v===verdict) card.classList.remove('hidden');
+          else card.classList.add('hidden');
+        });
+      }
+
+      createBtn && createBtn.addEventListener('click', openCreate);
+      emptyBtn && emptyBtn.addEventListener('click', openCreate);
+      closeBtn && closeBtn.addEventListener('click', closeModal);
+      cancelBtn && cancelBtn.addEventListener('click', closeModal);
+      modal && modal.addEventListener('click', (e)=>{ if(e.target===modal) closeModal(); });
+      panel && panel.addEventListener('click', (e)=> e.stopPropagation());
+
+      document.querySelectorAll('[data-verdict-filter]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const val = btn.getAttribute('data-verdict-filter');
+          // toggle: if already selected, go to all unless already all
+          if(filterVerdict===val && val!=='all') applyFilter('all');
+          else applyFilter(val);
+        });
+      });
+
+      document.querySelectorAll('[data-verdict-choice]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const val = btn.getAttribute('data-verdict-choice');
+          updateVerdictButtons(val);
+        });
+      });
+
+      document.querySelectorAll('[data-edit-fc]').forEach(btn=>{
+        btn.addEventListener('click', ()=> openEdit(btn.getAttribute('data-edit-fc')));
+      });
+
+      document.querySelectorAll('[data-delete-fc]').forEach(btn=>{
+        btn.addEventListener('click', async ()=>{
+          const id = btn.getAttribute('data-delete-fc');
+          if(!confirm('Ka tabbata kana son share wannan binciken gaskiya?')) return;
+          btn.disabled=true;
+          try{
+            const res = await fetch(`/api/admin/fact-checks/${id}`, { method:'DELETE' });
+            const data = await res.json().catch(()=>({}));
+            if(!res.ok) throw new Error(data.message||'Delete failed');
+            window.location.reload();
+          }catch(err){
+            alert(err.message||'Delete failed');
+            btn.disabled=false;
+          }
+        });
+      });
+
+      form && form.addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        hideMsg();
+        const fd = new FormData(form);
+        const data = {
+          claim: String(fd.get('claim')||''),
+          claimant: String(fd.get('claimant')||''),
+          claimantParty: String(fd.get('claimantParty')||'apc'),
+          verdict: String(fd.get('verdict')||'unverified'),
+          analysis: String(fd.get('analysis')||''),
+          source: String(fd.get('source')||''),
+          date: String(fd.get('date')||''),
+          electionId: electionId,
+        };
+        if(!data.claim || !data.claimant || !data.analysis){ showMsg('Iƙirari, Mai Iƙirari da Bincike suna da mahimmanci.'); return; }
+        submitBtn.disabled=true;
+        submitBtn.textContent='Ana ajiyewa...';
+        try{
+          const url = `/api/admin/fact-checks/${editingId || 'new'}`;
+          const method = editingId ? 'PUT' : 'POST';
+          const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
+          const json = await res.json().catch(()=>({}));
+          if(!res.ok) throw new Error(json.message||'Save failed');
+          window.location.reload();
+        }catch(err){
+          showMsg(err.message||'Save failed');
+          submitBtn.disabled=false;
+          submitBtn.textContent = editingId ? 'Ajiye Canje-canje' : 'Ƙirƙiri Bincike';
+        }
+      });
+
+      document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modal && !modal.classList.contains('hidden')) closeModal(); });
+    })();
+  </script>
 </AdminLayout>

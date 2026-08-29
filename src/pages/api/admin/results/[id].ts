@@ -15,6 +15,8 @@ const fields: FieldSpec[] = [
   { key: 'accreditedVoters', type: 'number' },
   { key: 'validVotes', type: 'number' },
   { key: 'rejectedVotes', type: 'number' },
+  { key: 'totalVotesCast', type: 'number' },
+  { key: 'verified', type: 'boolean' },
 ];
 
 export const { POST, PUT, DELETE } = makeCrudHandler('results', fields, 'editor');

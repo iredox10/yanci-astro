@@ -1,0 +1,1016 @@
+---
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import { adminListCollection } from '@lib/admin-collections';
+import { PARTIES, STATE_RESULTS as SEED_STATE_RESULTS, computeNationalTotals, CANDIDATES as SEED_CANDIDATES } from '../../../../data/electionData';
+import { createElement, type ComponentType } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import {
+  FaChartColumn, FaFloppyDisk, FaArrowLeft,
+  FaFilter, FaCircleCheck, FaTriangleExclamation,
+  FaCircleXmark, FaRotate, FaCirclePlus, FaArrowUpRightFromSquare,
+  FaDownload, FaDatabase,
+} from 'react-icons/fa6';
+
+export const prerender = false;
+
+const { id } = Astro.params;
+
+type Doc = Record<string, any>;
+const [electionsRaw, candidatesRaw, resultsRaw] = await Promise.all([
+  adminListCollection('elections'),
+  adminListCollection('candidates'),
+  adminListCollection('results'),
+]);
+
+const elections: Doc[] = (electionsRaw as Doc[]).map((d)=>({ ...d, id: d.$id ?? d.id }));
+const candidatesDocs: Doc[] = (candidatesRaw as Doc[]).map((d)=>({ ...d, id: d.$id ?? d.id, $id: d.$id }));
+const resultsDocs: Doc[] = (resultsRaw as Doc[]).map((d)=>{
+  const doc:any = { ...d, id: d.$id ?? d.id, $id: d.$id };
+  // Parse json fields if stored as stringified json
+  try { if (typeof doc.candidateVotes === 'string') doc.candidateVotes = JSON.parse(doc.candidateVotes); } catch {}
+  try { if (typeof doc.met25Threshold === 'string') doc.met25Threshold = JSON.parse(doc.met25Threshold); } catch {}
+  try { if (typeof doc.senate === 'string') doc.senate = JSON.parse(doc.senate); } catch {}
+  return doc;
+});
+
+const election = elections.find((e)=> e.id===id) ?? elections[0] ?? null;
+
+let electionCandidates: Doc[] = [];
+if (election) {
+  const filtered = candidatesDocs.filter((c)=> c.electionId===election.id || c.position==='president');
+  if (filtered.length > 0) electionCandidates = filtered;
+  else electionCandidates = (SEED_CANDIDATES as any[]).map((c)=>({ ...c, electionId: election.id }));
+} else {
+  electionCandidates = (SEED_CANDIDATES as any[]);
+}
+
+const NIGERIAN_STATES = [
+  'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa', 'Benue', 'Borno',
+  'Cross River', 'Delta', 'Ebonyi', 'Edo', 'Ekiti', 'Enugu', 'FCT', 'Gombe', 'Imo',
+  'Jigawa', 'Kaduna', 'Kano', 'Katsina', 'Kebbi', 'Kogi', 'Kwara', 'Lagos', 'Nasarawa',
+  'Niger', 'Ogun', 'Ondo', 'Osun', 'Oyo', 'Plateau', 'Rivers', 'Sokoto', 'Taraba',
+  'Yobe', 'Zamfara',
+];
+
+const REGIONS = ['Duka', 'North West', 'North East', 'North Central', 'South West', 'South East', 'South South'];
+
+const STATE_REGION_MAP: Record<string,string> = {
+  'Abia': 'South East', 'Adamawa': 'North East', 'Akwa Ibom': 'South South', 'Anambra': 'South East',
+  'Bauchi': 'North East', 'Bayelsa': 'South South', 'Benue': 'North Central', 'Borno': 'North East',
+  'Cross River': 'South South', 'Delta': 'South South', 'Ebonyi': 'South East', 'Edo': 'South South',
+  'Ekiti': 'South West', 'Enugu': 'South East', 'FCT': 'North Central', 'Gombe': 'North East',
+  'Imo': 'South East', 'Jigawa': 'North West', 'Kaduna': 'North West', 'Kano': 'North West',
+  'Katsina': 'North West', 'Kebbi': 'North West', 'Kogi': 'North Central', 'Kwara': 'North Central',
+  'Lagos': 'South West', 'Nasarawa': 'North Central', 'Niger': 'North Central', 'Ogun': 'South West',
+  'Ondo': 'South West', 'Osun': 'South West', 'Oyo': 'South West', 'Plateau': 'North Central',
+  'Rivers': 'South South', 'Sokoto': 'North West', 'Taraba': 'North East', 'Yobe': 'North East',
+  'Zamfara': 'North West',
+};
+
+function getParty(pid: string) {
+  return PARTIES.find((p)=> p.id===pid) || PARTIES[0];
+}
+function getCandidate(cid: string) {
+  return (SEED_CANDIDATES as any[]).find((c)=> c.id===cid) || electionCandidates.find((c)=> c.id===cid) || null;
+}
+function formatNumber(n:any) {
+  if (n == null || n === 0 && n !== 0) return '—';
+  if (n === 0) return '0';
+  if (typeof n === 'number') return n.toLocaleString('en-NG');
+  if (n == null) return '—';
+  return String(n);
+}
+
+function emptyStateResult(state: string) {
+  return {
+    state,
+    region: STATE_REGION_MAP[state] || '',
+    registeredVoters: 0,
+    accreditedVoters: 0,
+    validVotes: 0,
+    rejectedVotes: 0,
+    totalVotesCast: 0,
+    candidateVotes: {} as Record<string, number>,
+    met25Threshold: [] as string[],
+    winner: null as string | null,
+    governor: null as string | null,
+    senate: {} as Record<string, number>,
+    verified: false,
+  };
+}
+
+// Build stateResults: merge seed with Appwrite overrides filtered by election
+const seedMap: Record<string, any> = {};
+(SEED_STATE_RESULTS as any[]).forEach((sr)=> { seedMap[sr.state] = { ...sr, verified: (sr as any).verified || false }; });
+resultsDocs.forEach((r)=>{
+  if (r.state && seedMap[r.state]) {
+    // Only merge if matching electionId (or if no electionId)
+    if (!r.electionId || !election || r.electionId===election.id) {
+      Object.assign(seedMap[r.state], r);
+    }
+  } else if (r.state && !seedMap[r.state]) {
+    // state not in seed but has Appwrite data
+    seedMap[r.state] = { ...emptyStateResult(r.state), ...r };
+  }
+});
+const stateResults = NIGERIAN_STATES.map((state)=>{
+  if (seedMap[state]) return seedMap[state];
+  return emptyStateResult(state);
+});
+
+// Compute national totals via helper (seed-based)
+const nationalTotals = computeNationalTotals(electionCandidates.map((c)=> c.id));
+
+// Prepare client JSON
+const stateResultsJson = JSON.stringify(stateResults);
+const electionCandidatesJson = JSON.stringify(electionCandidates.map((c)=>({
+  id: c.id,
+  name: c.name,
+  party: c.party,
+  position: c.position,
+})));
+const partiesJson = JSON.stringify(PARTIES);
+const seedStateResultsJson = JSON.stringify(SEED_STATE_RESULTS);
+const resultsDocsJson = JSON.stringify(resultsDocs);
+const electionJson = JSON.stringify(election ? { id: election.id, name: election.name } : null);
+
+type IconCmp = ComponentType<{ className?: string }>;
+const ic = (Icon: IconCmp, cls='w-4 h-4') => renderToStaticMarkup(createElement(Icon,{className:cls}));
+
+function turnoutPct(accredited:any, registered:any){
+  if(!registered) return '0';
+  return ((accredited/registered)*100).toFixed(1);
+}
+
+// For server render we show Duka filtered
+const filteredStates = stateResults;
+let reg=0, accred=0, valid=0, rejected=0;
+filteredStates.forEach((s:any)=>{
+  reg += s.registeredVoters||0;
+  accred += s.accreditedVoters||0;
+  valid += s.validVotes||0;
+  rejected += s.rejectedVotes||0;
+});
+const regionTotals = {
+  registeredVoters: reg,
+  accreditedVoters: accred,
+  validVotes: valid,
+  rejectedVotes: rejected,
+  turnoutPct: reg>0 ? ((accred/reg)*100).toFixed(1) : 0,
+  statesReported: filteredStates.filter((s:any)=> s.validVotes>0).length,
+};
+---
+
+<AdminLayout title={`Sakamako — ${election ? election.name : ''}`} active="elections">
+  <div class="flex-1 flex flex-col min-w-0 overflow-y-auto p-6 md:p-8 -m-4 md:-m-8">
+    { !election ? (
+      <div class="flex-1 flex items-center justify-center">
+        <div class="text-center">
+          <p class="text-gray-500">Zaben ba a samu ba.</p>
+          <a href="/admin/elections" class="text-[#0f3036] font-bold text-sm mt-2 inline-block">← Komawa</a>
+        </div>
+      </div>
+    ) : (
+      <>
+        <!-- Header -->
+        <div class="flex items-start justify-between mb-6">
+          <div class="flex items-center gap-4">
+            <a href="/admin/elections" class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+              <span set:html={ic(FaArrowLeft, 'text-gray-500 w-4 h-4')} />
+            </a>
+            <div>
+              <h1 class="text-2xl font-bold text-gray-900 flex items-center gap-3">
+                <span set:html={ic(FaChartColumn, 'text-[#0f3036] w-6 h-6')} />
+                Sakamako — {election.name}
+              </h1>
+              <p class="text-sm text-gray-500 mt-1">
+                Shigar da sakamako kowace jiha — masu rajista, waɗanda suka kada kuri'a, kuri'u ingantattu, da kuri'un 'yan takara.
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <a
+              href="/zabe/sakamako"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-bold hover:bg-blue-100 transition-colors"
+            >
+              <span set:html={ic(FaArrowUpRightFromSquare, 'w-4 h-4')} /> Duba
+            </a>
+            <button
+              id="btn-export-csv"
+              class="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors cursor-pointer"
+            >
+              <span set:html={ic(FaDownload, 'w-4 h-4')} /> Export
+            </button>
+            <button
+              id="btn-seed-all"
+              class="flex items-center gap-2 px-3 py-2 bg-amber-50 text-amber-700 rounded-lg text-sm font-bold hover:bg-amber-100 transition-colors cursor-pointer"
+            >
+              <span set:html={ic(FaDatabase, 'w-4 h-4')} /> Cika Duka
+            </button>
+          </div>
+        </div>
+
+        <!-- Save Message -->
+        <div id="save-message" class="mb-4 p-3 rounded-lg text-sm font-bold flex items-center gap-2 hidden"></div>
+
+        <!-- National Summary Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+          <div class="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Masu Rajista</div>
+            <div class="text-xl font-black">{(nationalTotals.registeredVoters||0).toLocaleString('en-NG')}</div>
+          </div>
+          <div class="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Waɗanda suka Kada</div>
+            <div class="text-xl font-black">{(nationalTotals.accreditedVoters||0).toLocaleString('en-NG')}</div>
+            <div class="text-xs text-gray-500">{nationalTotals.turnout.toFixed(1)}% halarta</div>
+          </div>
+          <div class="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Kuri'u Ingantattu</div>
+            <div class="text-xl font-black">{(nationalTotals.validVotes||0).toLocaleString('en-NG')}</div>
+          </div>
+          <div class="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Kuri'un da aka Ki</div>
+            <div class="text-xl font-black text-red-600">{(nationalTotals.rejectedVotes||0).toLocaleString('en-NG')}</div>
+          </div>
+          <div class="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Jihohi sun Ruwaito</div>
+            <div class="text-xl font-black">{regionTotals.statesReported}/{filteredStates.length}</div>
+          </div>
+        </div>
+
+        <!-- Candidate Vote Totals -->
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mb-6">
+          <h3 class="font-bold text-sm uppercase tracking-wider text-gray-500 mb-4">Jimlar Kuri'u na Ƙasa</h3>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {electionCandidates.map((c:any) => {
+              const party = getParty(c.party);
+              const votes = (nationalTotals.candidateVotes as any)[c.id] || 0;
+              const pct = (nationalTotals.candidatePercentages as any)[c.id] || 0;
+              const statesWon = (nationalTotals.statesWon as any)[c.id] || 0;
+              const states25 = (nationalTotals.statesMet25 as any)[c.id] || 0;
+              return (
+                <div class="p-4 rounded-lg" style={`background-color:${party.color}10`}>
+                  <div class="flex items-center gap-2 mb-2">
+                    <div class="w-3 h-3 rounded-full" style={`background-color:${party.color}`} />
+                    <span class="font-bold text-sm">{c.name}</span>
+                  </div>
+                  <div class="text-2xl font-black" style={`color:${party.color}`}>
+                    {votes.toLocaleString('en-NG')}
+                  </div>
+                  <div class="text-sm font-bold" style={`color:${party.color}`}>{pct.toFixed(1)}%</div>
+                  <div class="text-xs text-gray-500 mt-1">
+                    Jihohi {statesWon} | 25% a {states25}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <!-- Region Filter + Search -->
+        <div class="flex flex-col md:flex-row gap-4 mb-6">
+          <div class="flex items-center gap-2 overflow-x-auto no-scrollbar" id="region-filters">
+            <span set:html={ic(FaFilter, 'text-gray-400 w-4 h-4 shrink-0')} />
+            {REGIONS.map((region)=> (
+              <button
+                data-region={region}
+                class={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-colors cursor-pointer ${region==='Duka' ? 'bg-[#0f3036] text-white' : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-400'}`}
+              >
+                {region}
+              </button>
+            ))}
+          </div>
+          <input
+            id="search-state"
+            type="text"
+            placeholder="Nemi jiha..."
+            class="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0f3036]/20 focus:border-[#0f3036]"
+          />
+        </div>
+
+        <!-- State Results Table -->
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm mb-6">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm" style="min-width:1100px">
+              <thead class="sticky top-0 bg-gray-50 z-10">
+                <tr class="bg-gray-50 border-b border-gray-100">
+                  <th class="text-left px-3 py-3 font-bold text-[10px] uppercase tracking-wider text-gray-500 sticky left-0 bg-gray-50 z-20 min-w-[100px]">
+                    Jiha
+                  </th>
+                  <th class="text-right px-3 py-3 font-bold text-[10px] uppercase tracking-wider text-gray-500 min-w-[80px]">
+                    Masu Rajista
+                  </th>
+                  <th class="text-right px-3 py-3 font-bold text-[10px] uppercase tracking-wider text-gray-500 min-w-[80px]">
+                    Su ka Kada
+                  </th>
+                  <th class="text-right px-3 py-3 font-bold text-[10px] uppercase tracking-wider text-gray-500 min-w-[60px]">
+                    Halarta
+                  </th>
+                  <th class="text-right px-3 py-3 font-bold text-[10px] uppercase tracking-wider text-gray-500 min-w-[80px]">
+                    Ingantattu
+                  </th>
+                  <th class="text-right px-3 py-3 font-bold text-[10px] uppercase tracking-wider text-gray-500 min-w-[60px]">
+                    An Ki
+                  </th>
+                  {electionCandidates.map((c:any) => {
+                    const party = getParty(c.party);
+                    return (
+                      <th class="text-right px-3 py-3 font-bold text-[10px] uppercase tracking-wider min-w-[70px]" style={`color:${party.color}`}>
+                        {party.name}
+                      </th>
+                    );
+                  })}
+                  <th class="text-center px-3 py-3 font-bold text-[10px] uppercase tracking-wider text-gray-500 min-w-[60px]">
+                    Wanda ya Ci
+                  </th>
+                  <th class="text-center px-3 py-3 font-bold text-[10px] uppercase tracking-wider text-gray-500 min-w-[65px] sticky right-0 bg-gray-50 z-20">
+                    Aiki
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="state-tbody">
+                {stateResults.map((stateData:any) => {
+                  const turnout = stateData.registeredVoters > 0
+                    ? ((stateData.accreditedVoters / stateData.registeredVoters) * 100).toFixed(1)
+                    : '0.0';
+                  const winner = stateData.winner ? getCandidate(stateData.winner) : null;
+                  const winnerParty = winner ? getParty((winner as any).party) : null;
+                  return (
+                    <tr data-state={stateData.state} data-region={stateData.region} class="border-b border-gray-50 hover:bg-gray-50/50">
+                      <td class="px-3 py-2.5 font-bold sticky left-0 bg-white z-10">
+                        <div class="flex items-center gap-1.5">
+                          <button
+                            data-expand-state={stateData.state}
+                            class="flex items-center gap-1 hover:text-[#0f3036] transition-colors cursor-pointer"
+                          >
+                            ▸ {stateData.state}
+                          </button>
+                          {stateData.verified && <span set:html={ic(FaCircleCheck, 'w-3.5 h-3.5 text-green-600')} title="Tabbatar" />}
+                        </div>
+                      </td>
+                      <td class="px-3 py-2.5 text-right font-mono text-xs">{stateData.registeredVoters ? stateData.registeredVoters.toLocaleString('en-NG') : '—'}</td>
+                      <td class="px-3 py-2.5 text-right font-mono text-xs">{stateData.accreditedVoters ? stateData.accreditedVoters.toLocaleString('en-NG') : '—'}</td>
+                      <td class="px-3 py-2.5 text-center">
+                        <span class={`text-xs font-bold px-1.5 py-0.5 rounded ${parseFloat(turnout) > 40 ? 'bg-green-100 text-green-700' : parseFloat(turnout) > 30 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                          {turnout}%
+                        </span>
+                      </td>
+                      <td class="px-3 py-2.5 text-right font-mono text-xs">{stateData.validVotes ? stateData.validVotes.toLocaleString('en-NG') : '—'}</td>
+                      <td class="px-3 py-2.5 text-right font-mono text-xs text-red-500">{stateData.rejectedVotes ? stateData.rejectedVotes.toLocaleString('en-NG') : '—'}</td>
+                      {electionCandidates.map((c:any) => {
+                        const votes = stateData.candidateVotes?.[c.id] || 0;
+                        const party = getParty(c.party);
+                        const pct = stateData.validVotes > 0 ? ((votes / stateData.validVotes) * 100).toFixed(1) : '0.0';
+                        const isWinner = stateData.winner === c.id;
+                        return (
+                          <td class="px-3 py-2.5 text-right">
+                            <div class={`font-mono text-xs ${isWinner ? 'font-black' : 'text-gray-500'}`} style={isWinner ? `color:${party.color}` : ''}>
+                              {votes > 0 ? votes.toLocaleString('en-NG') : '—'}
+                            </div>
+                            {votes > 0 && (
+                              <div class="text-[9px] text-gray-400">{pct}%</div>
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td class="px-3 py-2.5 text-center">
+                        {winnerParty ? (
+                          <span
+                            class="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                            style={`background-color:${winnerParty.color}20;color:${winnerParty.color}`}
+                          >
+                            {winnerParty.name}
+                          </span>
+                        ) : (
+                          <span class="text-xs text-gray-300">—</span>
+                        )}
+                      </td>
+                      <td class="px-3 py-2.5 text-center sticky right-0 bg-white z-10">
+                        <div class="flex items-center justify-center gap-1">
+                          <button
+                            data-edit-state={stateData.state}
+                            class="p-1.5 hover:bg-blue-50 rounded transition-colors text-gray-400 hover:text-blue-600 cursor-pointer"
+                            title="Gyara"
+                          >
+                            <span set:html={ic(FaCirclePlus, 'w-3.5 h-3.5')} />
+                          </button>
+                          <button
+                            data-reset-state={stateData.state}
+                            class="p-1.5 hover:bg-amber-50 rounded transition-colors text-gray-400 hover:text-amber-600 cursor-pointer"
+                            title="Maido da asali"
+                          >
+                            <span set:html={ic(FaRotate, 'w-3.5 h-3.5')} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div class="px-4 py-2 bg-gray-50 border-t border-gray-100 text-xs text-gray-500 flex items-center justify-between rounded-b-xl">
+            <span id="filter-count">Nuna {stateResults.length} daga cikin jihohi {stateResults.length}</span>
+            <span class="text-gray-400">↔ Gurgura don ganin duka</span>
+          </div>
+        </div>
+
+        <!-- Expanded State Detail -->
+        <div id="expanded-detail" class="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mb-6 hidden">
+          <div class="flex items-center justify-between mb-4">
+            <h3 id="expanded-title" class="font-bold text-lg"></h3>
+            <button id="expanded-close" class="text-gray-400 hover:text-gray-600 cursor-pointer">
+              <span set:html={ic(FaCircleXmark, 'w-5 h-5')} />
+            </button>
+          </div>
+          <div id="expanded-stats" class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6"></div>
+          <div id="expanded-breakdown" class="space-y-3"></div>
+          <div id="expanded-threshold" class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg hidden">
+            <p id="expanded-threshold-text" class="text-xs text-amber-700"></p>
+          </div>
+        </div>
+
+        <!-- Edit Modal -->
+        <div id="edit-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden">
+          <div id="edit-modal-panel" class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
+              <div>
+                <h2 id="edit-modal-title" class="text-xl font-bold">Gyara Sakamako — </h2>
+                <p class="text-xs text-gray-500 mt-1">Shigar da bayanan zabe kamar yadda INEC ta sanar</p>
+              </div>
+              <button id="edit-modal-close" class="p-2 hover:bg-gray-100 rounded-lg cursor-pointer">
+                <span set:html={ic(FaCircleXmark, 'w-5 h-5 text-gray-400')} />
+              </button>
+            </div>
+
+            <div class="p-6 space-y-6">
+              <!-- Voter Stats -->
+              <div>
+                <h3 class="text-sm font-bold uppercase tracking-wider text-gray-500 mb-3">Bayanan Masu Zabe</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <label class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Masu Rajista</label>
+                    <input type="number" id="edit-registered" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-[#0f3036]/20 focus:border-[#0f3036]" />
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Waɗanda suka Kada</label>
+                    <input type="number" id="edit-accredited" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-[#0f3036]/20 focus:border-[#0f3036]" />
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Kuri'u Ingantattu</label>
+                    <input type="number" id="edit-valid" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-[#0f3036]/20 focus:border-[#0f3036]" />
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Kuri'un da aka Ki</label>
+                    <input type="number" id="edit-rejected" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-[#0f3036]/20 focus:border-[#0f3036]" />
+                  </div>
+                </div>
+                <p id="edit-turnout" class="text-xs text-gray-500 mt-2 hidden"></p>
+              </div>
+
+              <!-- Candidate Votes -->
+              <div>
+                <h3 class="text-sm font-bold uppercase tracking-wider text-gray-500 mb-3">Kuri'un 'Yan Takara</h3>
+                <div id="edit-candidate-votes" class="space-y-3"></div>
+              </div>
+
+              <!-- Governor -->
+              <div>
+                <h3 class="text-sm font-bold uppercase tracking-wider text-gray-500 mb-3">Gwamna (zaɓi)</h3>
+                <select
+                  id="edit-governor"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#0f3036]/20 focus:border-[#0f3036]"
+                >
+                  <option value="">— Babu —</option>
+                  {PARTIES.map((p)=> <option value={p.id}>{p.name} — {p.fullName}</option>)}
+                </select>
+              </div>
+
+              <!-- Verified Toggle -->
+              <div class="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+                <label class="flex items-center gap-3 cursor-pointer flex-1">
+                  <input type="checkbox" id="edit-verified" class="w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500" />
+                  <div>
+                    <span class="text-sm font-bold text-gray-700">Tabbatar da Sakamako</span>
+                    <p class="text-xs text-gray-500">Alama yana nuna cewa an tabbatar da wannan sakamako daga INEC</p>
+                  </div>
+                </label>
+                <span id="edit-verified-icon" class="hidden" set:html={ic(FaCircleCheck, 'w-6 h-6 text-green-600')} />
+              </div>
+
+              <!-- Validation -->
+              <div id="edit-validation" class="p-3 bg-amber-50 border border-amber-200 rounded-lg hidden">
+                <p id="edit-validation-text" class="text-xs text-amber-700"></p>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="p-6 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white">
+              <button id="edit-cancel" class="px-4 py-2 text-sm font-bold text-gray-600 hover:text-gray-800 cursor-pointer">Soke</button>
+              <button
+                id="edit-save"
+                class="flex items-center gap-2 px-6 py-2 bg-[#0f3036] text-white text-sm font-bold rounded-lg hover:bg-[#1a454c] transition-colors cursor-pointer"
+              >
+                <span set:html={ic(FaFloppyDisk, 'w-4 h-4')} />
+                Ajiye Sakamako
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    )}
+  </div>
+
+  <script type="application/json" id="state-results-data" set:html={stateResultsJson} />
+  <script type="application/json" id="election-candidates-data" set:html={electionCandidatesJson} />
+  <script type="application/json" id="parties-data" set:html={partiesJson} />
+  <script type="application/json" id="seed-state-results-data" set:html={seedStateResultsJson} />
+  <script type="application/json" id="results-docs-data" set:html={resultsDocsJson} />
+  <script type="application/json" id="election-data" set:html={electionJson} />
+
+  <script is:inline>
+    (() => {
+      const electionDataEl = document.getElementById('election-data');
+      const stateResultsEl = document.getElementById('state-results-data');
+      const candidatesEl = document.getElementById('election-candidates-data');
+      const partiesEl = document.getElementById('parties-data');
+      const seedEl = document.getElementById('seed-state-results-data');
+      const resultsDocsEl = document.getElementById('results-docs-data');
+
+      let election = null;
+      try { election = JSON.parse(electionDataEl.textContent||'null'); } catch {}
+      let stateResults = [];
+      try { stateResults = JSON.parse(stateResultsEl.textContent||'[]'); } catch {}
+      let electionCandidates = [];
+      try { electionCandidates = JSON.parse(candidatesEl.textContent||'[]'); } catch {}
+      let parties = [];
+      try { parties = JSON.parse(partiesEl.textContent||'[]'); } catch {}
+      let seedResults = [];
+      try { seedResults = JSON.parse(seedEl.textContent||'[]'); } catch {}
+      let resultsDocs = [];
+      try { resultsDocs = JSON.parse(resultsDocsEl.textContent||'[]'); } catch {}
+
+      function getParty(id){ return parties.find((p)=> p.id===id) || parties[0]; }
+      function getCandidate(id){ return electionCandidates.find((c)=> c.id===id) || null; }
+      function formatNumber(n){
+        if(n==null) return '—';
+        return n.toLocaleString('en-NG');
+      }
+
+      const STATE_REGION_MAP = {
+        'Abia': 'South East', 'Adamawa': 'North East', 'Akwa Ibom': 'South South', 'Anambra': 'South East',
+        'Bauchi': 'North East', 'Bayelsa': 'South South', 'Benue': 'North Central', 'Borno': 'North East',
+        'Cross River': 'South South', 'Delta': 'South South', 'Ebonyi': 'South East', 'Edo': 'South South',
+        'Ekiti': 'South West', 'Enugu': 'South East', 'FCT': 'North Central', 'Gombe': 'North East',
+        'Imo': 'South East', 'Jigawa': 'North West', 'Kaduna': 'North West', 'Kano': 'North West',
+        'Katsina': 'North West', 'Kebbi': 'North West', 'Kogi': 'North Central', 'Kwara': 'North Central',
+        'Lagos': 'South West', 'Nasarawa': 'North Central', 'Niger': 'North Central', 'Ogun': 'South West',
+        'Ondo': 'South West', 'Osun': 'South West', 'Oyo': 'South West', 'Plateau': 'North Central',
+        'Rivers': 'South South', 'Sokoto': 'North West', 'Taraba': 'North East', 'Yobe': 'North East',
+        'Zamfara': 'North West',
+      };
+
+      let activeRegion = 'Duka';
+      let searchState = '';
+      let expandedState = null;
+      let editingState = null;
+      let editForm = null;
+      let saving = false;
+
+      const saveMessageEl = document.getElementById('save-message');
+      const regionFilters = document.getElementById('region-filters');
+      const searchInput = document.getElementById('search-state');
+      const tbody = document.getElementById('state-tbody');
+      const filterCount = document.getElementById('filter-count');
+      const expandedDetail = document.getElementById('expanded-detail');
+      const expandedTitle = document.getElementById('expanded-title');
+      const expandedStats = document.getElementById('expanded-stats');
+      const expandedBreakdown = document.getElementById('expanded-breakdown');
+      const expandedThreshold = document.getElementById('expanded-threshold');
+      const expandedThresholdText = document.getElementById('expanded-threshold-text');
+      const expandedClose = document.getElementById('expanded-close');
+
+      // Edit modal elements
+      const editModal = document.getElementById('edit-modal');
+      const editPanel = document.getElementById('edit-modal-panel');
+      const editTitle = document.getElementById('edit-modal-title');
+      const editRegistered = document.getElementById('edit-registered');
+      const editAccredited = document.getElementById('edit-accredited');
+      const editValid = document.getElementById('edit-valid');
+      const editRejected = document.getElementById('edit-rejected');
+      const editTurnout = document.getElementById('edit-turnout');
+      const editCandidateVotes = document.getElementById('edit-candidate-votes');
+      const editGovernor = document.getElementById('edit-governor');
+      const editVerified = document.getElementById('edit-verified');
+      const editVerifiedIcon = document.getElementById('edit-verified-icon');
+      const editValidation = document.getElementById('edit-validation');
+      const editValidationText = document.getElementById('edit-validation-text');
+      const editCancel = document.getElementById('edit-cancel');
+      const editModalClose = document.getElementById('edit-modal-close');
+      const editSave = document.getElementById('edit-save');
+
+      function showSaveMessage(type, text){
+        if(!saveMessageEl) return;
+        saveMessageEl.textContent = text;
+        saveMessageEl.className = `mb-4 p-3 rounded-lg text-sm font-bold flex items-center gap-2 ${type==='success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-blue-50 text-blue-700 border border-blue-200'}`;
+        saveMessageEl.classList.remove('hidden');
+        setTimeout(()=> { saveMessageEl.classList.add('hidden'); }, 3000);
+      }
+
+      function updateRegionButtons(){
+        document.querySelectorAll('[data-region]').forEach(btn=>{
+          const region = btn.getAttribute('data-region');
+          if(region===activeRegion){
+            btn.className = 'px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-colors cursor-pointer bg-[#0f3036] text-white';
+          } else {
+            btn.className = 'px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-colors cursor-pointer bg-white text-gray-600 border border-gray-200 hover:border-gray-400';
+          }
+        });
+      }
+
+      function applyFilter(){
+        let visibleCount = 0;
+        const rows = tbody.querySelectorAll('tr[data-state]');
+        rows.forEach(row=>{
+          const state = row.getAttribute('data-state')||'';
+          const region = row.getAttribute('data-region')||'';
+          let show = true;
+          if(activeRegion!=='Duka' && region!==activeRegion) show=false;
+          if(searchState && !state.toLowerCase().includes(searchState.toLowerCase())) show=false;
+          if(show){ row.classList.remove('hidden'); visibleCount++; } else { row.classList.add('hidden'); }
+        });
+        if(filterCount) filterCount.textContent = `Nuna ${visibleCount} daga cikin jihohi ${stateResults.length}`;
+        // also update summary cards regionTotals? Simplified: not updating national cards, just count
+      }
+
+      // Region filter listeners
+      document.querySelectorAll('[data-region]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const region = btn.getAttribute('data-region');
+          activeRegion = region;
+          updateRegionButtons();
+          applyFilter();
+        });
+      });
+
+      if(searchInput){
+        searchInput.addEventListener('input', (e)=>{
+          searchState = e.target.value;
+          applyFilter();
+        });
+      }
+
+      // Expanded state handling
+      function renderExpanded(stateName){
+        const sd = stateResults.find(s=> s.state===stateName);
+        if(!sd || !expandedDetail) return;
+        const turnout = sd.registeredVoters >0 ? ((sd.accreditedVoters/sd.registeredVoters)*100).toFixed(1) : '0.0';
+        expandedTitle.textContent = sd.state + ' — Cikakkun Bayanai';
+        expandedStats.innerHTML = `
+          <div class="bg-gray-50 rounded-lg p-3">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Masu Rajista</div>
+            <div class="text-lg font-black">${formatNumber(sd.registeredVoters)}</div>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-3">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Waɗanda suka Kada</div>
+            <div class="text-lg font-black">${formatNumber(sd.accreditedVoters)}</div>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-3">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Halarta</div>
+            <div class="text-lg font-black">${turnout}%</div>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-3">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Ingantattu</div>
+            <div class="text-lg font-black">${formatNumber(sd.validVotes)}</div>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-3">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-gray-500">An Ki</div>
+            <div class="text-lg font-black text-red-600">${formatNumber(sd.rejectedVotes)}</div>
+          </div>
+        `;
+        let breakdownHtml = '';
+        electionCandidates.forEach(c=>{
+          const party = getParty(c.party);
+          const votes = sd.candidateVotes?.[c.id] || 0;
+          const pct = sd.validVotes>0 ? ((votes/sd.validVotes)*100).toFixed(1) : '0.0';
+          const isWinner = sd.winner===c.id;
+          const met25 = sd.validVotes>0 && (votes/sd.validVotes)>=0.25;
+          const barWidth = sd.validVotes>0 ? (votes/sd.validVotes)*100 : 0;
+          breakdownHtml += `
+            <div class="p-3 rounded-lg ${isWinner ? 'bg-green-50 border border-green-200' : 'bg-gray-50'}">
+              <div class="flex items-center justify-between mb-1.5">
+                <div class="flex items-center gap-2">
+                  <div class="w-3 h-3 rounded-full" style="background-color:${party.color}"></div>
+                  <span class="font-bold text-sm">${c.name}</span>
+                  ${isWinner ? '<svg class="text-green-600 w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>' : ''}
+                  ${met25 ? '<span class="text-[10px] font-bold bg-green-100 text-green-700 px-1.5 py-0.5 rounded">≥25%</span>' : ''}
+                </div>
+                <div class="text-right">
+                  <span class="font-black" style="color:${party.color}">${formatNumber(votes)}</span>
+                  <span class="text-xs text-gray-500 ml-2">(${pct}%)</span>
+                </div>
+              </div>
+              <div class="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                <div class="h-full rounded-full transition-all" style="width:${barWidth}%;background-color:${party.color}"></div>
+              </div>
+            </div>
+          `;
+        });
+        expandedBreakdown.innerHTML = breakdownHtml;
+        const metLen = (sd.met25Threshold||[]).length;
+        if(expandedThreshold && expandedThresholdText){
+          expandedThresholdText.textContent = `Ƙa'idar 25%: ${metLen} 'yan takara sun wuce 25% a ${sd.state}. ${metLen>=1 ? ' An cika sharadi a wannan jiha.' : ' Babu wanda ya cika sharadi.'}`;
+          expandedThreshold.classList.remove('hidden');
+        }
+        expandedDetail.classList.remove('hidden');
+      }
+
+      document.querySelectorAll('[data-expand-state]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const state = btn.getAttribute('data-expand-state');
+          if(expandedState===state){
+            expandedState=null;
+            expandedDetail.classList.add('hidden');
+            btn.textContent = '▸ ' + state;
+          } else {
+            expandedState=state;
+            document.querySelectorAll('[data-expand-state]').forEach(b=> {
+              const s=b.getAttribute('data-expand-state');
+              b.textContent = (s===state ? '▾ ' : '▸ ') + s;
+            });
+            renderExpanded(state);
+          }
+        });
+      });
+
+      expandedClose && expandedClose.addEventListener('click', ()=>{
+        expandedState=null;
+        expandedDetail.classList.add('hidden');
+        document.querySelectorAll('[data-expand-state]').forEach(b=>{
+          const s=b.getAttribute('data-expand-state');
+          b.textContent = '▸ ' + s;
+        });
+      });
+
+      // Edit modal logic
+      function openEdit(stateName){
+        const sd = stateResults.find(s=> s.state===stateName);
+        if(!sd) return;
+        editingState = stateName;
+        if(editTitle) editTitle.textContent = 'Gyara Sakamako — ' + stateName;
+        editForm = {
+          registeredVoters: sd.registeredVoters||0,
+          accreditedVoters: sd.accreditedVoters||0,
+          validVotes: sd.validVotes||0,
+          rejectedVotes: sd.rejectedVotes||0,
+          candidateVotes: { ...(sd.candidateVotes||{}) },
+          governor: sd.governor||'',
+          verified: sd.verified||false,
+        };
+        if(editRegistered) editRegistered.value = editForm.registeredVoters;
+        if(editAccredited) editAccredited.value = editForm.accreditedVoters;
+        if(editValid) editValid.value = editForm.validVotes;
+        if(editRejected) editRejected.value = editForm.rejectedVotes;
+        if(editGovernor) editGovernor.value = editForm.governor;
+        if(editVerified) {
+          editVerified.checked = !!editForm.verified;
+          if(editVerifiedIcon) editVerifiedIcon.classList.toggle('hidden', !editVerified.checked);
+        }
+        renderCandidateVotesEdit();
+        updateTurnoutAndValidation();
+        editModal.classList.remove('hidden');
+        document.body.style.overflow='hidden';
+      }
+
+      function renderCandidateVotesEdit(){
+        if(!editCandidateVotes) return;
+        let html='';
+        electionCandidates.forEach(c=>{
+          const party = getParty(c.party);
+          const votes = editForm.candidateVotes?.[c.id]||0;
+          const pct = editForm.validVotes>0 ? ((votes/editForm.validVotes)*100).toFixed(1) : '0.0';
+          const met25 = editForm.validVotes>0 && (votes/editForm.validVotes)>=0.25;
+          html += `
+            <div class="flex items-center gap-4 p-3 rounded-lg bg-gray-50">
+              <div class="w-3 h-3 rounded-full shrink-0" style="background-color:${party.color}"></div>
+              <div class="w-32 shrink-0">
+                <div class="font-bold text-sm">${c.name}</div>
+                <div class="text-[10px] text-gray-500">${party.name}</div>
+              </div>
+              <div class="flex-1">
+                <input type="number" data-candidate-id="${c.id}" value="${votes||''}" placeholder="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-[#0f3036]/20 focus:border-[#0f3036] candidate-vote-input" />
+              </div>
+              <div class="w-20 text-right shrink-0">
+                <div class="font-bold text-sm" style="color:${party.color}">${pct}%</div>
+                ${met25 ? '<div class="text-[9px] text-green-600 font-bold">≥25% ✓</div>' : ''}
+              </div>
+            </div>
+          `;
+        });
+        editCandidateVotes.innerHTML = html;
+        // attach listeners
+        editCandidateVotes.querySelectorAll('.candidate-vote-input').forEach(inp=>{
+          inp.addEventListener('input', (e)=>{
+            const cid = e.target.getAttribute('data-candidate-id');
+            editForm.candidateVotes[cid] = parseInt(e.target.value)||0;
+            renderCandidateVotesEdit();
+            updateTurnoutAndValidation();
+          });
+        });
+      }
+
+      function updateTurnoutAndValidation(){
+        if(editTurnout && editForm){
+          if(editForm.accreditedVoters>0 && editForm.registeredVoters>0){
+            editTurnout.textContent = 'Halarta: ' + ((editForm.accreditedVoters/editForm.registeredVoters)*100).toFixed(1) + '%';
+            editTurnout.classList.remove('hidden');
+          } else {
+            editTurnout.classList.add('hidden');
+          }
+        }
+        if(editValidation && editValidationText && editForm){
+          const total = Object.values(editForm.candidateVotes||{}).reduce((a,b)=> a+(b||0),0);
+          const diff = Math.abs(total - (editForm.validVotes||0));
+          if(editForm.validVotes>0 && diff>0){
+            editValidationText.textContent = `⚠️ Jimlar kuri'un 'yan takara (${formatNumber(total)}) ba ta daidai da kuri'u ingantattu (${formatNumber(editForm.validVotes)}). Bambanci: ${formatNumber(diff)}`;
+            editValidation.classList.remove('hidden');
+          } else {
+            editValidation.classList.add('hidden');
+          }
+        }
+        if(editVerifiedIcon && editVerified){
+          editVerifiedIcon.classList.toggle('hidden', !editVerified.checked);
+        }
+      }
+
+      function closeEdit(){
+        editModal.classList.add('hidden');
+        document.body.style.overflow='';
+        editingState=null;
+        editForm=null;
+      }
+
+      [editRegistered, editAccredited, editValid, editRejected].forEach(el=>{
+        if(el) el.addEventListener('input', (e)=>{
+          const id = e.target.id;
+          let val = parseInt(e.target.value)||0;
+          if(id==='edit-registered') editForm.registeredVoters = val;
+          if(id==='edit-accredited') editForm.accreditedVoters = val;
+          if(id==='edit-valid') editForm.validVotes = val;
+          if(id==='edit-rejected') editForm.rejectedVotes = val;
+          renderCandidateVotesEdit();
+          updateTurnoutAndValidation();
+        });
+      });
+      if(editGovernor) editGovernor.addEventListener('change', (e)=>{ editForm.governor = e.target.value; });
+      if(editVerified) editVerified.addEventListener('change', (e)=>{ editForm.verified = e.target.checked; updateTurnoutAndValidation(); });
+
+      document.querySelectorAll('[data-edit-state]').forEach(btn=>{
+        btn.addEventListener('click', ()=> openEdit(btn.getAttribute('data-edit-state')));
+      });
+
+      if(editCancel) editCancel.addEventListener('click', closeEdit);
+      if(editModalClose) editModalClose.addEventListener('click', closeEdit);
+      if(editModal) editModal.addEventListener('click', (e)=>{ if(e.target===editModal) closeEdit(); });
+      if(editPanel) editPanel.addEventListener('click', (e)=> e.stopPropagation());
+
+      if(editSave) editSave.addEventListener('click', async ()=>{
+        if(!editingState || !editForm) return;
+        editSave.disabled=true;
+        editSave.textContent='Ana ajiyewa...';
+        const validVotes = editForm.validVotes||0;
+        const candidateVotes = editForm.candidateVotes||{};
+        let maxVotes=0;
+        let winner=null;
+        const met25=[];
+        Object.entries(candidateVotes).forEach(([cid, votes])=>{
+          if(votes>maxVotes){ maxVotes=votes; winner=cid; }
+          if(validVotes>0 && (votes/validVotes)>=0.25){ met25.push(cid); }
+        });
+        const resultData = {
+          electionId: election?.id,
+          state: editingState,
+          region: STATE_REGION_MAP[editingState]||'',
+          registeredVoters: editForm.registeredVoters,
+          accreditedVoters: editForm.accreditedVoters,
+          validVotes: editForm.validVotes,
+          rejectedVotes: editForm.rejectedVotes,
+          totalVotesCast: (editForm.accreditedVoters||0),
+          candidateVotes,
+          met25Threshold: met25,
+          winner,
+          governor: editForm.governor||null,
+          verified: editForm.verified||false,
+        };
+        try{
+          const existing = resultsDocs.find(r=> r.state===editingState && r.electionId===election?.id);
+          let res;
+          if(existing){
+            res = await fetch(`/api/admin/results/${existing.id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(resultData)});
+          } else {
+            res = await fetch(`/api/admin/results/new`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(resultData)});
+          }
+          const data = await res.json().catch(()=>({}));
+          if(!res.ok) throw new Error(data.message||'Save failed');
+          showSaveMessage('success', `An ajiye sakamakon ${editingState}`);
+          setTimeout(()=> window.location.reload(), 800);
+          closeEdit();
+        }catch(err){
+          alert(err.message||'Save failed');
+          editSave.disabled=false;
+          editSave.innerHTML = '<svg class="w-4 h-4"></svg> Ajiye Sakamako';
+        }
+      });
+
+      // Reset to seed
+      document.querySelectorAll('[data-reset-state]').forEach(btn=>{
+        btn.addEventListener('click', async ()=>{
+          const stateName = btn.getAttribute('data-reset-state');
+          if(!confirm(`Ka tabbata kana son maido da sakamakon ${stateName} zuwa bayanan asali?`)) return;
+          const existing = resultsDocs.find(r=> r.state===stateName && r.electionId===election?.id);
+          if(existing){
+            try{
+              const res = await fetch(`/api/admin/results/${existing.id}`, { method:'DELETE' });
+              const data = await res.json().catch(()=>({}));
+              if(!res.ok) throw new Error(data.message||'Delete failed');
+              showSaveMessage('info', `An maido da ${stateName} zuwa bayanan asali`);
+              setTimeout(()=> window.location.reload(), 800);
+            }catch(err){ alert(err.message||'Delete failed'); }
+          } else {
+            showSaveMessage('info', `An maido da ${stateName} zuwa bayanan asali`);
+          }
+        });
+      });
+
+      // Export CSV
+      const exportBtn = document.getElementById('btn-export-csv');
+      if(exportBtn){
+        exportBtn.addEventListener('click', ()=>{
+          const headers = ['State','Region','Registered Voters','Accredited Voters','Valid Votes','Rejected Votes','Turnout %', ...electionCandidates.map(c=>c.name), 'Winner', 'Governor'];
+          const rows = stateResults.map(s=>{
+            const turnout = s.registeredVoters>0 ? ((s.accreditedVoters/s.registeredVoters)*100).toFixed(1) : 0;
+            const winner = getCandidate(s.winner);
+            return [
+              s.state, s.region, s.registeredVoters, s.accreditedVoters, s.validVotes, s.rejectedVotes, turnout,
+              ...electionCandidates.map(c=> s.candidateVotes?.[c.id]||0),
+              winner?.name||'', s.governor||'',
+            ];
+          });
+          const csv = [headers, ...rows].map(r=> r.join(',')).join('\n');
+          const blob = new Blob([csv], { type:'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href=url;
+          a.download=`election-results-${election.id}-${new Date().toISOString().split('T')[0]}.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+        });
+      }
+
+      // Seed all
+      const seedBtn = document.getElementById('btn-seed-all');
+      if(seedBtn){
+        seedBtn.addEventListener('click', async ()=>{
+          if(!confirm('Ka tabbata kana son cika dukkan jihohi 37 da bayanan asali? Wannan zai maye gurbin duk canje-canjen da aka yi.')) return;
+          seedBtn.disabled=true;
+          seedBtn.textContent='Ana cikawa...';
+          try{
+            const promises = seedResults.map(sr=>{
+              const existing = resultsDocs.find(r=> r.state===sr.state && r.electionId===election?.id);
+              const data = {
+                electionId: election?.id,
+                state: sr.state,
+                region: sr.region,
+                registeredVoters: sr.registeredVoters,
+                accreditedVoters: sr.accreditedVoters,
+                validVotes: sr.validVotes,
+                rejectedVotes: sr.rejectedVotes,
+                totalVotesCast: sr.totalVotesCast,
+                candidateVotes: sr.candidateVotes,
+                met25Threshold: sr.met25Threshold,
+                winner: sr.winner,
+                governor: sr.governor||null,
+                senate: sr.senate||{},
+              };
+              if(existing){
+                return fetch(`/api/admin/results/${existing.id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)}).then(r=>r.json());
+              }
+              return fetch(`/api/admin/results/new`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)}).then(r=>r.json());
+            });
+            await Promise.all(promises);
+            showSaveMessage('success', `An cika dukkan jihohi ${seedResults.length} da bayanan asali`);
+            setTimeout(()=> window.location.reload(), 1200);
+          }catch(err){
+            alert(err.message||'Seed failed');
+            seedBtn.disabled=false;
+            seedBtn.innerHTML = '<svg class="w-4 h-4"></svg> Cika Duka';
+          }
+        });
+      }
+
+      document.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ if(!editModal.classList.contains('hidden')) closeEdit(); if(expandedDetail && !expandedDetail.classList.contains('hidden')){ expandedDetail.classList.add('hidden'); } } });
+    })();
+  </script>
+</AdminLayout>
