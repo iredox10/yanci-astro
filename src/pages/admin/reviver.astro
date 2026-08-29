@@ -27,7 +27,6 @@ const articlesJson = JSON.stringify(articles || []);
 ---
 
 <AdminLayout title="Reviver" active="reviver">
-  <div class="-m-4 md:-m-8">
     <div class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-4">
         <div>
@@ -62,7 +61,6 @@ const articlesJson = JSON.stringify(articles || []);
         <p class="text-sm text-gray-400">Click "Find Dead Articles" to identify articles that need updating.</p>
       </div>
     </div>
-  </div>
 </AdminLayout>
 
 <script is:inline define:vars={{ articlesJson }}>

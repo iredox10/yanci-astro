@@ -19,7 +19,5 @@ const docs = roles.map((r) => ({
 ---
 
 <AdminLayout title="Roles & Permissions" active="users">
-  <div class="-m-4 md:-m-8">
     <AdminRolesClient client:load initialRoles={docs} />
-  </div>
 </AdminLayout>

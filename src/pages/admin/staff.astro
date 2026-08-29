@@ -36,7 +36,5 @@ const articleData = articles.map((a: any) => ({
 
 <AdminLayout title="Ma'aikatan Redaksha" active="users">
   {/* Exact replication of yanci React AdminStaff outer: flex-1 overflow-y-auto p-4 md:p-8 space-y-6 — offset AdminLayout's main padding */}
-  <div class="-m-4 md:-m-8">
     <AdminStaffClient client:load initialStaff={staff} articles={articleData} />
-  </div>
 </AdminLayout>
