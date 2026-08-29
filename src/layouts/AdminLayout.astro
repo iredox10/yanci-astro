@@ -99,6 +99,17 @@ const initial = userName.charAt(0).toUpperCase();
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/icons/yc-mark.svg" />
     <title>{title} — Yanci Admin</title>
+    <style>
+      @media (min-width: 1024px) {
+        #admin-sidebar {
+          position: relative !important;
+          transform: translateX(0) !important;
+        }
+        #admin-overlay {
+          display: none !important;
+        }
+      }
+    </style>
   </head>
   <body class="bg-gray-100 font-sans text-yanci-dark antialiased">
     <div class="flex h-screen overflow-hidden bg-gray-100 font-sans">
@@ -106,7 +117,7 @@ const initial = userName.charAt(0).toUpperCase();
 
       <aside
         id="admin-sidebar"
-        class="fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 -translate-x-full transform flex-col bg-[#0f3036] text-white transition-transform duration-300 lg:static lg:translate-x-0"
+        class="fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 -translate-x-full transform flex-col bg-[#0f3036] text-white transition-transform duration-300 lg:relative lg:translate-x-0"
       >
         <div class="flex items-center justify-between border-b border-white/10 p-6">
           <div>
@@ -197,7 +208,7 @@ const initial = userName.charAt(0).toUpperCase();
           </div>
         </header>
 
-        <main id="admin-main" class="flex min-w-0 flex-1 flex-col overflow-y-auto bg-gray-50">
+        <main id="admin-main" class="flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-gray-50">
           <slot />
         </main>
       </div>
