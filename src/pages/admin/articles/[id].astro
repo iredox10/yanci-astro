@@ -1,63 +1,229 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
-import AdminArticleEditor from '../../../components/admin/AdminArticleEditor';
 import { getArticleById } from '@lib/appwrite-server';
+import { requireUser } from '@lib/auth';
 
 export const prerender = false;
 
+const auth = await requireUser(Astro.request);
+if (!auth.ok) return Astro.redirect('/admin/login?next=/admin/articles');
+
 const id = Astro.params.id;
 if (!id) return Astro.redirect('/admin/articles');
-
-const article = id ? await getArticleById(id) : null;
+const article = await getArticleById(id);
 if (!article) return Astro.redirect('/admin/articles');
 
-// Map to draft shape expected by AdminArticleEditor (mirrors yanci EMPTY_FORM)
-const initial: Record<string, any> = {
-  $id: article.$id,
-  headline: String(article.headline ?? (article as any).ogTitle ?? ''),
-  kicker: String((article as any).kicker ?? ''),
-  subheading: String((article as any).subheading ?? ''),
-  trail: String(article.trail ?? ''),
-  body: String(article.body ?? ''),
-  image: String(article.image ?? ''),
-  imageCaption: String((article as any).imageCaption ?? ''),
-  imageCredit: String((article as any).imageCredit ?? ''),
-  imageAlt: String((article as any).imageAlt ?? ''),
-  imageFocalX: typeof (article as any).imageFocalX === 'number' ? (article as any).imageFocalX : 50,
-  imageFocalY: typeof (article as any).imageFocalY === 'number' ? (article as any).imageFocalY : 50,
-  videoUrl: String((article as any).videoUrl ?? ''),
-  keyFigures: String((article as any).keyFigures ?? ''),
-  series: String((article as any).series ?? ''),
-  pillar: String(article.pillar ?? 'news'),
-  section: String(article.section ?? 'headlines'),
-  format: String((article as any).format ?? 'news'),
-  type: String((article as any).type ?? 'standard'),
-  author: String(article.author ?? ''),
-  coAuthor: String((article as any).coAuthor ?? ''),
-  isLive: Boolean(article.isLive),
-  isSensitive: Boolean((article as any).isSensitive),
-  status: String((article as any).status ?? (article.isLive ? 'published' : 'draft')),
-  publishAt: (article as any).publishAt ? String((article as any).publishAt) : '',
-  slug: String(article.slug ?? ''),
-  metaTitle: String((article as any).metaTitle ?? ''),
-  metaDescription: String((article as any).metaDescription ?? ''),
-  ogTitle: String((article as any).ogTitle ?? ''),
-  ogDescription: String((article as any).ogDescription ?? ''),
-  tags: Array.isArray(article.tags) ? (article.tags as string[]).join(', ') : String((article as any).tags ?? ''),
-  relatedArticles: Array.isArray((article as any).relatedArticles) ? ((article as any).relatedArticles as string[]).join(', ') : String((article as any).relatedArticles ?? ''),
-  corrections: (article as any).corrections ?? [],
-  pullQuotes: (article as any).pullQuotes ?? [],
-  editorialNotes: (article as any).editorialNotes ?? [],
-  is_breaking: Boolean((article as any).is_breaking),
-  breaking_until: (article as any).breaking_until ? String((article as any).breaking_until) : '',
-  breaking_duration: (article as any).breaking_duration ?? null,
-  review_status: (article as any).review_status ?? 'approved',
-  focal_point: (article as any).focal_point ?? undefined,
-};
+const a = article as any;
 ---
 
 <AdminLayout title="Gyara Labari" active="articles">
-  <div class="-m-4 md:-m-8 flex flex-col h-[calc(100vh-4rem)] bg-white">
-    <AdminArticleEditor client:only="react" initial={initial} />
+  <div class="flex-1 overflow-y-auto bg-gray-50">
+    <div class="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 md:px-6">
+      <div class="flex items-center gap-3">
+        <a href="/admin/articles" class="p-2 hover:bg-gray-100 rounded-lg text-gray-600">←</a>
+        <div>
+          <h1 class="font-bold text-gray-900 line-clamp-1">{a.headline || 'Untitled'}</h1>
+          <p class="text-xs text-gray-500">{a.status || 'draft'} • {a.pillar || 'news'} • {a.section || 'headlines'}</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="save-status" class="hidden text-xs text-green-600 font-medium">An ajiye</span>
+        <button id="save-btn" type="button" class="bg-[#0f3036] text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-[#1a454c]">Ajiye</button>
+        <a href={`/article/${a.$id}`} target="_blank" class="hidden sm:inline-flex px-3 py-2 text-sm font-bold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Preview</a>
+      </div>
+    </div>
+
+    <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 p-4 md:p-6">
+      <div class="lg:col-span-2 space-y-6">
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+          <label class="block">
+            <span class="text-xs font-bold uppercase tracking-wider text-gray-700">Headline *</span>
+            <input id="f-headline" type="text" value={a.headline ?? ''} class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+          </label>
+          <div class="grid grid-cols-2 gap-4">
+            <label class="block">
+              <span class="text-xs font-bold uppercase tracking-wider text-gray-700">Kicker</span>
+              <input id="f-kicker" type="text" value={a.kicker ?? ''} class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </label>
+            <label class="block">
+              <span class="text-xs font-bold uppercase tracking-wider text-gray-700">Slug</span>
+              <input id="f-slug" type="text" value={a.slug ?? ''} class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#c59d5f] outline-none font-mono text-xs" />
+            </label>
+          </div>
+          <label class="block">
+            <span class="text-xs font-bold uppercase tracking-wider text-gray-700">Trail</span>
+            <textarea id="f-trail" rows="2" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#c59d5f] outline-none">{a.trail ?? ''}</textarea>
+          </label>
+          <label class="block">
+            <span class="text-xs font-bold uppercase tracking-wider text-gray-700">Body (HTML)</span>
+            <textarea id="f-body" rows="14" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-3 text-sm font-mono focus:ring-2 focus:ring-[#c59d5f] outline-none">{a.body ?? ''}</textarea>
+          </label>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+          <h3 class="font-bold text-gray-800">Media</h3>
+          <label class="block">
+            <span class="text-xs font-bold uppercase tracking-wider text-gray-700">Image URL</span>
+            <input id="f-image" type="url" value={a.image ?? ''} class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+          </label>
+          {a.image && <img src={a.image} alt="" class="w-full h-48 object-cover rounded-lg bg-gray-100" />}
+          <div class="grid grid-cols-2 gap-4">
+            <label class="block">
+              <span class="text-xs font-bold uppercase tracking-wider text-gray-700">Caption</span>
+              <input id="f-imageCaption" type="text" value={a.imageCaption ?? ''} class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </label>
+            <label class="block">
+              <span class="text-xs font-bold uppercase tracking-wider text-gray-700">Credit</span>
+              <input id="f-imageCredit" type="text" value={a.imageCredit ?? ''} class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-6">
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
+          <h3 class="font-bold text-gray-800">Buga</h3>
+          <label class="block">
+            <span class="text-xs font-bold uppercase tracking-wider text-gray-700">Status</span>
+            <select id="f-status" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-[#c59d5f] outline-none">
+              <option value="draft" selected={a.status==='draft'}>Draft</option>
+              <option value="published" selected={a.status==='published' || !a.status}>Published</option>
+              <option value="scheduled" selected={a.status==='scheduled'}>Scheduled</option>
+              <option value="review" selected={a.status==='review'}>Review</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-xs font-bold uppercase tracking-wider text-gray-700">Publish At</span>
+            <input id="f-publishAt" type="datetime-local" value={a.publishAt ? new Date(a.publishAt).toISOString().slice(0,16) : ''} class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+          </label>
+          <label class="flex items-center gap-2 text-sm">
+            <input id="f-isLive" type="checkbox" checked={Boolean(a.isLive)} class="rounded border-gray-300 text-[#0f3036] focus:ring-[#c59d5f]" /> Live
+          </label>
+          <label class="flex items-center gap-2 text-sm">
+            <input id="f-isSensitive" type="checkbox" checked={Boolean(a.isSensitive)} class="rounded border-gray-300 text-[#0f3036] focus:ring-[#c59d5f]" /> Sensitive
+          </label>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
+          <h3 class="font-bold text-gray-800">Rarrabuwa</h3>
+          <label class="block">
+            <span class="text-xs font-bold uppercase tracking-wider text-gray-700">Pillar</span>
+            <select id="f-pillar" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-[#c59d5f] outline-none">
+              <option value="news" selected={a.pillar==='news'}>News</option>
+              <option value="sport" selected={a.pillar==='sport'}>Sport</option>
+              <option value="opinion" selected={a.pillar==='opinion'}>Opinion</option>
+              <option value="culture" selected={a.pillar==='culture'}>Culture</option>
+              <option value="lifestyle" selected={a.pillar==='lifestyle'}>Lifestyle</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-xs font-bold uppercase tracking-wider text-gray-700">Section</span>
+            <input id="f-section" type="text" value={a.section ?? ''} class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+          </label>
+          <label class="block">
+            <span class="text-xs font-bold uppercase tracking-wider text-gray-700">Format</span>
+            <select id="f-format" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-[#c59d5f] outline-none">
+              <option value="news" selected={a.format==='news'}>News</option>
+              <option value="feature" selected={a.format==='feature'}>Feature</option>
+              <option value="opinion" selected={a.format==='opinion'}>Opinion</option>
+              <option value="analysis" selected={a.format==='analysis'}>Analysis</option>
+              <option value="interview" selected={a.format==='interview'}>Interview</option>
+              <option value="breaking" selected={a.format==='breaking'}>Breaking</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-xs font-bold uppercase tracking-wider text-gray-700">Author</span>
+            <input id="f-author" type="text" value={a.author ?? ''} class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+          </label>
+          <label class="block">
+            <span class="text-xs font-bold uppercase tracking-wider text-gray-700">Tags (comma)</span>
+            <input id="f-tags" type="text" value={Array.isArray(a.tags) ? (a.tags as string[]).join(', ') : (a.tags ?? '')} class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+          </label>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
+          <h3 class="font-bold text-gray-800">SEO</h3>
+          <label class="block">
+            <span class="text-xs font-bold uppercase tracking-wider text-gray-700">Meta Title</span>
+            <input id="f-metaTitle" type="text" value={a.metaTitle ?? ''} class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#c59d5f] outline-none" />
+          </label>
+          <label class="block">
+            <span class="text-xs font-bold uppercase tracking-wider text-gray-700">Meta Description</span>
+            <textarea id="f-metaDescription" rows="2" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#c59d5f] outline-none">{a.metaDescription ?? ''}</textarea>
+          </label>
+        </div>
+
+        <div class="flex gap-2">
+          <button id="save-btn2" type="button" class="flex-1 bg-[#0f3036] text-white py-2.5 rounded-lg font-bold hover:bg-[#1a454c]">Ajiye</button>
+          <a href="/admin/articles" class="px-4 py-2.5 rounded-lg font-bold text-gray-600 border border-gray-200 hover:bg-gray-50">Soke</a>
+        </div>
+        <p class="text-xs text-gray-400 text-center">ID: {a.$id} • An ƙirƙira: {a.$createdAt ? new Date(a.$createdAt).toLocaleDateString() : ''}</p>
+      </div>
+    </div>
   </div>
 </AdminLayout>
+
+<script is:inline define:vars={{ id: a.$id }}>
+  const $ = (s) => document.getElementById(s);
+  const getData = () => ({
+    headline: $('f-headline')?.value ?? '',
+    kicker: $('f-kicker')?.value ?? '',
+    trail: $('f-trail')?.value ?? '',
+    body: $('f-body')?.value ?? '',
+    image: $('f-image')?.value ?? '',
+    imageCaption: $('f-imageCaption')?.value ?? '',
+    imageCredit: $('f-imageCredit')?.value ?? '',
+    slug: $('f-slug')?.value ?? '',
+    pillar: $('f-pillar')?.value ?? 'news',
+    section: $('f-section')?.value ?? 'headlines',
+    format: $('f-format')?.value ?? 'news',
+    author: $('f-author')?.value ?? '',
+    status: $('f-status')?.value ?? 'draft',
+    publishAt: $('f-publishAt')?.value ?? '',
+    isLive: $('f-isLive')?.checked ?? false,
+    isSensitive: $('f-isSensitive')?.checked ?? false,
+    metaTitle: $('f-metaTitle')?.value ?? '',
+    metaDescription: $('f-metaDescription')?.value ?? '',
+    tags: ($('f-tags')?.value ?? '').split(',').map(s=>s.trim()).filter(Boolean),
+  });
+
+  async function save() {
+    const btn = document.getElementById('save-btn');
+    const btn2 = document.getElementById('save-btn2');
+    const status = document.getElementById('save-status');
+    const orig = btn ? btn.textContent : '';
+    if (btn) { btn.textContent = 'Ana ajiyewa...'; btn.disabled = true; }
+    if (btn2) { btn2.textContent = 'Ana ajiyewa...'; btn2.disabled = true; }
+    try {
+      const data = getData();
+      if (data.status === 'scheduled' && data.publishAt) {
+        const t = new Date(data.publishAt).getTime();
+        if (Date.now() >= t) data.status = 'published';
+      }
+      const res = await fetch(`/api/admin/articles/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      const out = await res.json().catch(()=>({}));
+      if (!res.ok || out.ok===false) throw new Error(out.message || 'Update failed');
+      if (status) { status.textContent = 'An ajiye ✓'; status.classList.remove('hidden'); setTimeout(()=> status.classList.add('hidden'), 2500); }
+    } catch (e) {
+      alert('Ajiye ya gaza: ' + (e.message || e));
+    } finally {
+      if (btn) { btn.textContent = orig; btn.disabled = false; }
+      if (btn2) { btn2.textContent = 'Ajiye'; btn2.disabled = false; }
+    }
+  }
+
+  document.getElementById('save-btn')?.addEventListener('click', save);
+  document.getElementById('save-btn2')?.addEventListener('click', save);
+  // auto-slug from headline
+  const h = document.getElementById('f-headline');
+  const s = document.getElementById('f-slug');
+  h?.addEventListener('input', () => {
+    if (s && !s.value) {
+      s.value = h.value.toLowerCase().replace(/[^a-z0-9\s-]/g,'').trim().replace(/\s+/g,'-').slice(0,80);
+    }
+  });
+</script>
