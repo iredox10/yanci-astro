@@ -36,7 +36,10 @@ export default defineConfig({
       dedupe: ['react', 'react-dom'],
     },
     optimizeDeps: {
-      include: ['react', 'react-dom', 'react-icons/fa6'],
+      include: ['react', 'react-dom', 'react/jsx-runtime', 'react-icons/fa6'],
+    },
+    ssr: {
+      noExternal: ['react-icons'],
     },
   },
   env: {
