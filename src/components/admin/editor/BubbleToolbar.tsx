@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FaBold, FaItalic, FaHeading, FaQuoteLeft, FaLink, FaWandMagicSparkles, FaFeather } from 'react-icons/fa6';
 
 const FORMATS = [

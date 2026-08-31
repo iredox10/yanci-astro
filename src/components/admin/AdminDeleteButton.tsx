@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 
 export default function AdminDeleteButton({ articleId }: { articleId: string }) {
   const [busy, setBusy] = useState(false);

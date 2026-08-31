@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaStar, FaPlus, FaTrash, FaPen, FaSpinner, FaArrowUp, FaArrowDown, FaXmark } from 'react-icons/fa6';
 
 const STORAGE_KEY = 'yanci_highlights';

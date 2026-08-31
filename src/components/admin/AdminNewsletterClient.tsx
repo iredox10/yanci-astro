@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaNewspaper, FaEnvelope, FaTrash, FaMagnifyingGlass, FaSpinner, FaDownload, FaEye, FaChartLine, FaWandMagicSparkles, FaCopy, FaXmark, FaArrowRight } from 'react-icons/fa6';
 
 const STORAGE_KEY = 'yanci_newsletter_subscribers';

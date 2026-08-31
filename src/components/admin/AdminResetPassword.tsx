@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { FaLock, FaKey, FaCircleCheck } from 'react-icons/fa6';
 
 interface Props {

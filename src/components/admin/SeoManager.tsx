@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 
 export const SEO_KEYS = [

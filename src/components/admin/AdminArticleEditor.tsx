@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { FaExpand, FaCompress } from 'react-icons/fa6';
 import EditorHeader from './editor/EditorHeader';
 import EditorCanvas from './editor/EditorCanvas';

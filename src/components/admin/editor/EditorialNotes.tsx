@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 const LABEL_CLASS = 'text-xs font-semibold uppercase tracking-wide text-yanci-primary/70';
 const INPUT_CLASS =

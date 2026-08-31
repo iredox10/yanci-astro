@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaTrophy, FaFutbol, FaPlus, FaTrash, FaPen, FaXmark, FaSpinner, FaArrowUp, FaArrowDown, FaClock, FaMapLocationDot } from 'react-icons/fa6';
 
 const STORAGE_KEY = 'yanci_sports';

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { FaImage, FaTable, FaYoutube, FaXTwitter, FaMapLocationDot, FaCircleInfo, FaLink, FaNewspaper } from 'react-icons/fa6';
 
 const SLASH_COMMANDS = [

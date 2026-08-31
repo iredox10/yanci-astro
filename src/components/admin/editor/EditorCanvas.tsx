@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { FaCloudArrowUp, FaTrash, FaTriangleExclamation, FaUserGroup } from 'react-icons/fa6';
 import BubbleToolbar from './BubbleToolbar';
 import SlashCommandMenu from './SlashCommandMenu';
