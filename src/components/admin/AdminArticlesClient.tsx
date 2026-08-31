@@ -274,10 +274,8 @@ export default function AdminArticlesClient({ initialArticles, userCategory }: P
   };
 
   const handleDuplicate = async (article: ArticleLike) => {
-    const { id, $id, $createdAt, $updatedAt, ...rest } = article as any;
+    const { id, $id, $createdAt, $updatedAt, $permissions, $collectionId, $databaseId, ...rest } = article as any;
     const copy: any = { ...rest, headline: `[KWAFI] ${article.headline}`, status: 'draft', slug: '' };
-    // Ensure tags is array
-    if (typeof copy.tags === 'string') copy.tags = copy.tags.split(',').map((t: string) => t.trim()).filter(Boolean);
     try {
       const res = await fetch('/api/admin/articles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(copy) });
       const data = await res.json().catch(() => ({}));
