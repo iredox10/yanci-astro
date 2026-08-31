@@ -15,6 +15,6 @@ const userName = auth.ok ? auth.user.name : null;
 
 <AdminLayout title="Live Coverage" active="live">
   <div class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 relative">
-    <AdminLiveManager client:load initialLiveArticles={liveArticles as unknown as any[]} userCategory={userCategory} userName={userName} />
+    <AdminLiveManager client:only="react" initialLiveArticles={liveArticles as unknown as any[]} userCategory={userCategory} userName={userName} />
   </div>
 </AdminLayout>

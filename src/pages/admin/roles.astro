@@ -19,5 +19,5 @@ const docs = roles.map((r) => ({
 ---
 
 <AdminLayout title="Roles & Permissions" active="users">
-    <AdminRolesClient client:load initialRoles={docs} />
+    <AdminRolesClient client:only="react" initialRoles={docs} />
 </AdminLayout>

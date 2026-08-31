@@ -48,6 +48,6 @@ try {
 
 <AdminLayout title="Sports" active="sports">
   <div class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
-    <AdminSportsClient client:load initialData={initialData} />
+    <AdminSportsClient client:only="react" initialData={initialData} />
   </div>
 </AdminLayout>

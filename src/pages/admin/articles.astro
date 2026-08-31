@@ -40,5 +40,5 @@ const serialized = articles.map((a) => ({
 ---
 
 <AdminLayout title="Labarai" active="articles">
-  <AdminArticlesClient client:load initialArticles={serialized} userCategory={userCategory} />
+  <AdminArticlesClient client:only="react" initialArticles={serialized} userCategory={userCategory} />
 </AdminLayout>

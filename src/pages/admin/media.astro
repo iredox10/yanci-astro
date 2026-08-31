@@ -73,6 +73,6 @@ if (!isMediaConfigured() || !bucketId) {
       </div>
     )}
 
-    {!notice && <MediaManager client:load initialFiles={files} />}
+    {!notice && <MediaManager client:only="react" initialFiles={files} />}
   </div>
 </AdminLayout>

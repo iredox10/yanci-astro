@@ -7,6 +7,6 @@ export const prerender = false;
 
 <AdminLayout title="Sabon Labari" active="articles">
   <div class="flex flex-col h-full overflow-hidden relative transition-colors duration-300 bg-white">
-    <AdminArticleEditor client:load />
+    <AdminArticleEditor client:only="react" />
   </div>
 </AdminLayout>

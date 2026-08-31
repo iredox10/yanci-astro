@@ -13,6 +13,6 @@ const canDelete = auth.ok && (auth.user.role === 'super_admin' || auth.user.role
 
 <AdminLayout title="Multimedia" active="multimedia">
   <div class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
-    <VideoManager client:load initialVideos={videos} canDelete={canDelete} />
+    <VideoManager client:only="react" initialVideos={videos} canDelete={canDelete} />
   </div>
 </AdminLayout>

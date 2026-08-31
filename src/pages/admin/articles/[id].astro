@@ -58,6 +58,6 @@ const initial: Record<string, any> = {
 
 <AdminLayout title="Gyara Labari" active="articles">
   <div class="flex flex-col h-full overflow-hidden relative transition-colors duration-300 bg-white">
-    <AdminArticleEditor client:load initial={initial} />
+    <AdminArticleEditor client:only="react" initial={initial} />
   </div>
 </AdminLayout>
