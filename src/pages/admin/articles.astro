@@ -16,7 +16,9 @@ const page = parseInt(url.searchParams.get('page') ?? '1', 10) || 1;
 const ITEMS_PER_PAGE = 20;
 
 let filtered = [...allArticles];
-if (filterStatus !== 'all') filtered = filtered.filter(a => (a.status || 'published') === filterStatus);
+if (filterStatus !== 'all') {
+  filtered = filtered.filter(a => ((a.status as string) || 'published') === filterStatus || (filterStatus === 'review' && a.review_status === 'pending'));
+}
 if (searchQuery) {
   const q = searchQuery.toLowerCase();
   filtered = filtered.filter(a => (a.headline||'').toLowerCase().includes(q) || (a.tags||'').toString().toLowerCase().includes(q));
@@ -31,7 +33,7 @@ const statusCounts = {
   published: allArticles.filter(a => (a.status||'published')==='published').length,
   draft: allArticles.filter(a => (a.status||'published')==='draft').length,
   scheduled: allArticles.filter(a => (a.status||'published')==='scheduled').length,
-  review: allArticles.filter(a => (a.status||'published')==='review').length,
+  review: allArticles.filter(a => ((a.status as string)||'published')==='review' || a.review_status === 'pending').length,
 };
 ---
 
