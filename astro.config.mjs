@@ -18,6 +18,11 @@ setGlobalDispatcher(
   } } }),
 );
 
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 // https://astro.build/config
 export default defineConfig({
   site: 'https://yanci.ng',
@@ -34,9 +39,23 @@ export default defineConfig({
     plugins: [tailwindcss()],
     resolve: {
       dedupe: ['react', 'react-dom'],
+      alias: {
+        'react': path.resolve(__dirname, 'node_modules/react'),
+        'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
+        'react-dom/client': path.resolve(__dirname, 'node_modules/react-dom/client.js'),
+        'react/jsx-runtime': path.resolve(__dirname, 'node_modules/react/jsx-runtime.js'),
+        'react/jsx-dev-runtime': path.resolve(__dirname, 'node_modules/react/jsx-dev-runtime.js'),
+      },
     },
     optimizeDeps: {
-      include: ['react', 'react-dom', 'react/jsx-runtime', 'react-icons/fa6'],
+      include: [
+        'react',
+        'react-dom',
+        'react-dom/client',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+        'react-icons/fa6',
+      ],
     },
     ssr: {
       noExternal: ['react-icons'],
