@@ -1,6 +1,8 @@
 /* Yanci service worker: static shell precache + web push display. */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = `yanci-static-${VERSION}`;
+const isDev = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
+
 const SHELL = [
   '/',
   '/manifest.webmanifest',
@@ -10,6 +12,10 @@ const SHELL = [
 ];
 
 self.addEventListener('install', (event) => {
+  if (isDev) {
+    self.skipWaiting();
+    return;
+  }
   event.waitUntil(
     caches
       .open(CACHE)
@@ -25,10 +31,15 @@ self.addEventListener('activate', (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((key) => key.startsWith('yanci-static-') && key !== CACHE)
+            .filter((key) => isDev || (key.startsWith('yanci-static-') && key !== CACHE))
             .map((key) => caches.delete(key)),
         ),
       )
+      .then(() => {
+        if (isDev) {
+          return self.registration.unregister();
+        }
+      })
       .then(() => self.clients.claim()),
   );
 });
@@ -36,6 +47,9 @@ self.addEventListener('activate', (event) => {
 const STATIC_FILE = /\.(?:css|js|mjs|map|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|webmanifest)$/i;
 
 self.addEventListener('fetch', (event) => {
+  // Never intercept or cache anything in development mode
+  if (isDev) return;
+
   const { request } = event;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);

@@ -111,6 +111,8 @@ export const PUT: APIRoute = async ({ request, params }) => {
   return json({ ok: true });
 };
 
+export const PATCH: APIRoute = PUT;
+
 export const DELETE: APIRoute = async ({ request, params }) => {
   const auth = await requireUser(request);
   if (!auth.ok) return json({ ok: false, message: 'Unauthorized' }, auth.status);

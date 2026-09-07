@@ -2,18 +2,20 @@ import Parser from 'rss-parser';
 import * as cheerio from 'cheerio';
 import { assertSafeFetchUrl } from './ssrf';
 import { sanitizePlainText, sanitizeRichText, sanitizeImageUrl } from './sanitize';
+import { extractArticleWithZyte, fetchRenderedHtmlWithZyte, isZyteConfigured, getLastZyteError } from './zyte';
 
 /**
  * Autofetch sync sidecar. Pulls from configured `autofetch_sources` entries and
  * turns them into DRAFT articles for editor approval. Every outbound URL goes
  * through the SSRF guard; fetched text is sanitized before it can be stored.
+ * If Zyte is configured, it bypasses Cloudflare, anti-bot protections, and executes JavaScript.
  */
 
 export interface AutofetchSource {
   $id?: string;
   name: string;
   url?: string;
-  type?: string; // 'rss' | 'article' | 'homepage'
+  type?: string; // 'rss' | 'article' | 'homepage' | 'scrape' | 'agent'
   isActive?: boolean;
   lastRun?: string;
 }
@@ -38,21 +40,43 @@ export interface FetchResult {
 }
 
 const parser = new Parser();
-const TIMEOUT_MS = 12_000;
+const TIMEOUT_MS = 15_000;
 
 async function safeFetch(raw: string): Promise<string> {
   const check = await assertSafeFetchUrl(raw);
   if (!check.ok) throw new Error(`SSRF guard: ${check.reason}`);
-  const res = await fetch(check.url, {
-    redirect: 'follow',
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-    headers: {
-      'user-agent': 'YanciAutofetch/1.0',
-      accept: 'text/html,application/rss+xml,application/xml;q=0.9,*/*;q=0.8',
-    },
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.text();
+
+  try {
+    const res = await fetch(check.url, {
+      redirect: 'follow',
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      headers: {
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        accept: 'text/html,application/rss+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+    });
+
+    if (!res.ok) {
+      // If blocked by Cloudflare or anti-bot (403, 429, 503), retry through Zyte if configured
+      if ((res.status === 403 || res.status === 429 || res.status === 503) && isZyteConfigured()) {
+        const zyteHtml = await fetchRenderedHtmlWithZyte(raw);
+        if (zyteHtml) return zyteHtml;
+        const zyteErr = getLastZyteError();
+        if (zyteErr) throw new Error(`HTTP ${res.status} (Site anti-bot block; Zyte error: ${zyteErr})`);
+      }
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    return res.text();
+  } catch (err: any) {
+    if (isZyteConfigured() && !String(err?.message || '').includes('Zyte error')) {
+      const zyteHtml = await fetchRenderedHtmlWithZyte(raw);
+      if (zyteHtml) return zyteHtml;
+      const zyteErr = getLastZyteError();
+      if (zyteErr) throw new Error(`${err?.message ?? err} (Zyte error: ${zyteErr})`);
+    }
+    throw err;
+  }
 }
 
 function toDraft(fields: {
@@ -99,6 +123,26 @@ async function fromRss(source: AutofetchSource): Promise<DraftArticle[]> {
 // ─── Single article page ─────────────────────────────────────────────────────
 async function fromArticlePage(source: AutofetchSource): Promise<DraftArticle> {
   const url = source.url!;
+
+  // 1. If Zyte is configured, attempt AI article extraction with anti-bot bypass
+  if (isZyteConfigured()) {
+    try {
+      const zyte = await extractArticleWithZyte(url);
+      if (zyte && zyte.headline && zyte.articleBody) {
+        return toDraft({
+          headline: zyte.headline,
+          trail: zyte.description || zyte.articleBody.slice(0, 400),
+          body: zyte.articleBodyHtml || zyte.articleBody,
+          image: zyte.mainImage?.url,
+          source,
+        });
+      }
+    } catch (err) {
+      console.warn(`[Autofetch] Zyte article extraction failed for ${url}, falling back:`, err);
+    }
+  }
+
+  // 2. Fallback to safeFetch + Cheerio DOM parsing
   const page = await safeFetch(url);
   const $ = cheerio.load(page);
   return extractFromDom(url, source, $);
@@ -113,7 +157,7 @@ function extractFromDom(url: string, source: AutofetchSource, $: cheerio.Cheerio
     $('meta[property="og:image"]').attr('content') ||
     $('meta[name="twitter:image"]').attr('content') ||
     '';
-  const paragraphs = $('main p, .content p, article p, .post-content p')
+  const paragraphs = $('main p, .content p, article p, .post-content p, .article__body p, .entry-content p')
     .map((_, el) => $(el).text().trim())
     .get()
     .filter((t) => t.length > 40)
@@ -127,33 +171,59 @@ function extractFromDom(url: string, source: AutofetchSource, $: cheerio.Cheerio
   });
 }
 
-// ─── Homepage crawl → first credible story link ──────────────────────────────
-async function fromHomepage(source: AutofetchSource): Promise<DraftArticle | null> {
+// ─── Scrape or Homepage crawl → extract candidate story links ─────────────────
+async function fromScrapeSite(source: AutofetchSource, maxStories = 4): Promise<DraftArticle[]> {
   const url = source.url!;
   const page = await safeFetch(url);
   const $ = cheerio.load(page);
 
-  let target = '';
+  const foundLinks: string[] = [];
   $('a[href]').each((_, el) => {
-    if (target) return;
+    if (foundLinks.length >= maxStories * 2) return;
     const href = $(el).attr('href');
     const text = $(el).text().trim();
     if (!href || text.split(/\s+/).length < 3) return;
+
     try {
       const abs = new URL(href, url);
-      if (abs.origin === new URL(url).origin && /^https?:\/\//i.test(abs.href)) target = abs.href;
-    } catch {
-      /* skip malformed */
-    }
+      // Skip social links, anchors, and external domains
+      if (
+        abs.origin === new URL(url).origin &&
+        /^https?:\/\//i.test(abs.href) &&
+        !abs.pathname.includes('/tag/') &&
+        !abs.pathname.includes('/category/') &&
+        !abs.pathname.includes('/author/') &&
+        !foundLinks.includes(abs.href)
+      ) {
+        foundLinks.push(abs.href);
+      }
+    } catch {}
   });
 
-  if (target) {
-    const storyPage = await safeFetch(target);
-    const story = cheerio.load(storyPage);
-    return extractFromDom(target, { ...source, url: target }, story);
+  const drafts: DraftArticle[] = [];
+  for (const storyUrl of foundLinks.slice(0, maxStories)) {
+    try {
+      const draft = await fromArticlePage({ ...source, url: storyUrl });
+      if (draft && draft.headline && draft.body.length > 100) {
+        drafts.push(draft);
+      }
+    } catch {}
   }
-  return extractFromDom(url, source, $);
+
+  if (drafts.length === 0) {
+    // If no individual stories parsed, extract what's on the page
+    drafts.push(extractFromDom(url, source, $));
+  }
+
+  return drafts;
 }
+
+// ─── Homepage crawl → first credible story link ──────────────────────────────
+async function fromHomepage(source: AutofetchSource): Promise<DraftArticle | null> {
+  const stories = await fromScrapeSite(source, 1);
+  return stories[0] ?? null;
+}
+
 export async function runSource(source: AutofetchSource): Promise<FetchResult> {
   try {
     if (!source.url) return { source: source.name, ok: false, drafts: [], error: 'No URL' };
@@ -167,6 +237,9 @@ export async function runSource(source: AutofetchSource): Promise<FetchResult> {
         const draft = await fromHomepage(source);
         return { source: source.name, ok: true, drafts: draft ? [draft] : [] };
       }
+      case 'scrape':
+      case 'agent':
+        return { source: source.name, ok: true, drafts: await fromScrapeSite(source, 3) };
       default:
         return {
           source: source.name,

@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import { ClientRouter } from 'astro:transitions';
 import { createElement, type ComponentType } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
@@ -57,6 +58,7 @@ const NAV: NavEntry[] = [
   { href: '/admin/calendar', label: 'Calendar', Icon: FaCalendarDays },
   { href: '/admin/live', label: 'Live Coverage', Icon: FaTowerBroadcast },
   { href: '/admin/elections', label: 'Elections', Icon: FaCheckToSlot },
+  { href: '/admin/fact-checks', label: 'Fact Checks', Icon: FaShieldHalved },
   { href: '/admin/media', label: 'Media Library', Icon: FaImage },
   { href: '/admin/multimedia', label: 'Multimedia', Icon: FaPhotoFilm },
   { href: '/admin/sports', label: 'Sports', Icon: FaTrophy },
@@ -73,6 +75,7 @@ const NAV: NavEntry[] = [
   { href: '/admin/autofetch', label: 'Auto Fetcher', Icon: FaRobot },
   { href: '/admin/notifications', label: 'Notifications', Icon: FaBell },
   { header: 'Administration' },
+  { href: '/admin/staff', label: 'Staff Directory', Icon: FaUsers },
   { href: '/admin/users', label: 'Users', Icon: FaUsers },
   { href: '/admin/roles', label: 'Roles & Permissions', Icon: FaUserShield },
   { href: '/admin/settings', label: 'Settings', Icon: FaGear },
@@ -99,6 +102,7 @@ const initial = userName.charAt(0).toUpperCase();
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/icons/yc-mark.svg" />
     <title>{title} — Yanci Admin</title>
+    <ClientRouter />
     <style>
       @media (min-width: 1024px) {
         #admin-sidebar {
@@ -215,23 +219,43 @@ const initial = userName.charAt(0).toUpperCase();
     </div>
 
     <script is:inline>
-      const sidebar = document.getElementById('admin-sidebar');
-      const overlay = document.getElementById('admin-overlay');
-      const openBtn = document.getElementById('sidebar-open');
-      const closeBtn = document.getElementById('sidebar-close');
-      function setOpen(open) {
-        if (!sidebar || !overlay) return;
-        sidebar.classList.toggle('-translate-x-full', !open);
-        overlay.classList.toggle('hidden', !open);
-        document.body.style.overflow = open && window.innerWidth < 1024 ? 'hidden' : '';
+      function initSidebar() {
+        const sidebar = document.getElementById('admin-sidebar');
+        const overlay = document.getElementById('admin-overlay');
+        const openBtn = document.getElementById('sidebar-open');
+        const closeBtn = document.getElementById('sidebar-close');
+        function setOpen(open) {
+          if (!sidebar || !overlay) return;
+          sidebar.classList.toggle('-translate-x-full', !open);
+          overlay.classList.toggle('hidden', !open);
+          document.body.style.overflow = open && window.innerWidth < 1024 ? 'hidden' : '';
+        }
+        openBtn?.addEventListener('click', () => setOpen(true));
+        closeBtn?.addEventListener('click', () => setOpen(false));
+        overlay?.addEventListener('click', () => setOpen(false));
+        sidebar?.addEventListener('click', (e) => {
+          const t = e.target;
+          if (t && t.closest && t.closest('a') && window.innerWidth < 1024) setOpen(false);
+        });
       }
-      openBtn?.addEventListener('click', () => setOpen(true));
-      closeBtn?.addEventListener('click', () => setOpen(false));
-      overlay?.addEventListener('click', () => setOpen(false));
-      sidebar?.addEventListener('click', (e) => {
-        const t = e.target;
-        if (t && t.closest && t.closest('a') && window.innerWidth < 1024) setOpen(false);
-      });
+      initSidebar();
+      document.addEventListener('astro:page-load', initSidebar);
     </script>
+    {import.meta.env.DEV && (
+      <script is:inline>
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for (var i = 0; i < registrations.length; i++) {
+              registrations[i].unregister();
+            }
+          });
+        }
+        if ('caches' in window) {
+          caches.keys().then(function(keys) {
+            keys.forEach(function(k) { caches.delete(k); });
+          });
+        }
+      </script>
+    )}
   </body>
 </html>

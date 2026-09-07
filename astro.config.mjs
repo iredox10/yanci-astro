@@ -18,11 +18,6 @@ setGlobalDispatcher(
   } } }),
 );
 
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 // https://astro.build/config
 export default defineConfig({
   site: 'https://yanci.ng',
@@ -32,6 +27,10 @@ export default defineConfig({
     staticHeaders: true,
   }),
   integrations: [react(), sitemap()],
+  prefetch: {
+    prefetchAll: true,
+    defaultStrategy: 'hover',
+  },
   security: {
     checkOrigin: true,
   },
@@ -39,13 +38,6 @@ export default defineConfig({
     plugins: [tailwindcss()],
     resolve: {
       dedupe: ['react', 'react-dom'],
-      alias: {
-        'react': path.resolve(__dirname, 'node_modules/react'),
-        'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
-        'react-dom/client': path.resolve(__dirname, 'node_modules/react-dom/client.js'),
-        'react/jsx-runtime': path.resolve(__dirname, 'node_modules/react/jsx-runtime.js'),
-        'react/jsx-dev-runtime': path.resolve(__dirname, 'node_modules/react/jsx-dev-runtime.js'),
-      },
     },
     optimizeDeps: {
       include: [
@@ -100,6 +92,7 @@ export default defineConfig({
       COHERE_API_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),
       OPENROUTER_API_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),
       DEEPSEEK_API_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),
+      ZYTE_API_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),
     },
   },
 });

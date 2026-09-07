@@ -9,6 +9,7 @@ import {
   FaExpand,
   FaCompress,
   FaGear,
+  FaClockRotateLeft,
 } from 'react-icons/fa6';
 import StatusBadge from './StatusBadge';
 
@@ -27,6 +28,7 @@ interface Props {
   onToggleFullscreen: () => void;
   onToggleSidebar: () => void;
   onAiSuggestions: () => void;
+  onOpenHistory?: () => void;
   setPreviewMode: (m: string) => void;
 }
 
@@ -45,6 +47,7 @@ const EditorHeader = ({
   onToggleFullscreen,
   onToggleSidebar,
   onAiSuggestions,
+  onOpenHistory,
   setPreviewMode,
 }: Props) => {
   const modes = [
@@ -102,6 +105,18 @@ const EditorHeader = ({
           <FaWandMagicSparkles className="w-4 h-4" />
           <span className="hidden lg:inline">{aiLoading ? 'Thinking...' : 'AI'}</span>
         </button>
+
+        {onOpenHistory && (
+          <button
+            onClick={onOpenHistory}
+            className="p-2 text-gray-500 hover:bg-gray-100 hover:text-[#052962] rounded-lg transition-colors flex items-center gap-1.5 text-xs font-semibold"
+            title="Tarihin Gyara (Revision History)"
+            type="button"
+          >
+            <FaClockRotateLeft className="w-4 h-4" />
+            <span className="hidden lg:inline">History</span>
+          </button>
+        )}
 
         <button
           onClick={onToggleFullscreen}

@@ -151,7 +151,7 @@ export default function AdminArticlesClient({ initialArticles, userCategory }: P
     let result = ownedArticles;
 
     if (filterStatus !== 'all') {
-      result = result.filter((a) => (a.status || 'published') === filterStatus);
+      result = result.filter((a) => (a.status || 'published') === filterStatus || (filterStatus === 'review' && a.review_status === 'pending'));
     }
     if (filterReview !== 'all') {
       result = result.filter((a) => (a.review_status || 'approved') === filterReview);

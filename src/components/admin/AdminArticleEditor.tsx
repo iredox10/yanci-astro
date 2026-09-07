@@ -8,6 +8,7 @@ import BlockInserter from './editor/BlockInserter';
 import AiToolsModal from './editor/AiToolsModal';
 import PublishConfirmModal from './editor/PublishConfirmModal';
 import LinkPickerModal from './editor/LinkPickerModal';
+import RevisionHistoryDrawer from './editor/RevisionHistoryDrawer';
 import { PANELS_WITH_HISTORY } from './editor/constants';
 
 const EMPTY_FORM: Record<string, any> = {
@@ -114,6 +115,7 @@ export default function AdminArticleEditor({ initial }: Props) {
   const [previewMode, setPreviewMode] = useState('write');
   const [previewDevice, setPreviewDevice] = useState('desktop');
   const [showAiTools, setShowAiTools] = useState(false);
+  const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<{
     headlines: any[];
     tags: string[];
@@ -897,6 +899,7 @@ export default function AdminArticleEditor({ initial }: Props) {
         onToggleFullscreen={() => setIsFullscreen(!isFullscreen)}
         onToggleSidebar={() => setShowSidebar(!showSidebar)}
         onAiSuggestions={generateAiSuggestions}
+        onOpenHistory={isEditing && id ? () => setShowHistoryDrawer(true) : undefined}
         setPreviewMode={setPreviewMode}
       />
 
@@ -1039,6 +1042,18 @@ export default function AdminArticleEditor({ initial }: Props) {
         onApplyTag={applyAiTag}
         onApplySeo={applyAiSeo}
       />
+
+      {showHistoryDrawer && id && (
+        <RevisionHistoryDrawer
+          articleId={id}
+          onClose={() => setShowHistoryDrawer(false)}
+          onRestore={(snapshot) => {
+            setFormData((prev: Record<string, any>) => ({ ...prev, ...snapshot }));
+            setIsDirty(true);
+            setShowHistoryDrawer(false);
+          }}
+        />
+      )}
 
       <style>{`
         @keyframes bubbleFadeIn {
