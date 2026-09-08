@@ -12,6 +12,10 @@
     "start": "node ./scripts/start.mjs",
     "cron:publish": "node ./scripts/publish-scheduled.mjs",
     "cron:social": "node ./scripts/social-auto-post.mjs --check-recent",
+    "firecrawl:start": "docker compose -f ../firecrawl/docker-compose.yaml up -d",
+    "firecrawl:stop": "docker compose -f ../firecrawl/docker-compose.yaml stop",
+    "firecrawl:status": "docker compose -f ../firecrawl/docker-compose.yaml ps",
+    "firecrawl:logs": "docker compose -f ../firecrawl/docker-compose.yaml logs api --tail 50",
     "astro": "astro"
   },
   "dependencies": {
