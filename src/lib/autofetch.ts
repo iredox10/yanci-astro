@@ -3,12 +3,28 @@ import * as cheerio from 'cheerio';
 import { assertSafeFetchUrl } from './ssrf';
 import { sanitizePlainText, sanitizeRichText, sanitizeImageUrl } from './sanitize';
 import { extractArticleWithZyte, fetchRenderedHtmlWithZyte, isZyteConfigured, getLastZyteError } from './zyte';
+import {
+  scrapeWithFirecrawl,
+  mapWithFirecrawl,
+  isFirecrawlConfigured,
+  getLastFirecrawlError,
+} from './firecrawl';
+
+function markdownToHtml(md: string): string {
+  if (!md) return '<p></p>';
+  return md
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter((block) => block.length > 0 && !block.startsWith('#') && !block.startsWith('!['))
+    .map((block) => `<p>${block.replace(/\n/g, ' ')}</p>`)
+    .join('\n');
+}
 
 /**
  * Autofetch sync sidecar. Pulls from configured `autofetch_sources` entries and
  * turns them into DRAFT articles for editor approval. Every outbound URL goes
  * through the SSRF guard; fetched text is sanitized before it can be stored.
- * If Zyte is configured, it bypasses Cloudflare, anti-bot protections, and executes JavaScript.
+ * If Firecrawl or Zyte is configured, it bypasses Cloudflare, anti-bot protections, and executes JavaScript.
  */
 
 export interface AutofetchSource {
@@ -57,18 +73,35 @@ async function safeFetch(raw: string): Promise<string> {
     });
 
     if (!res.ok) {
-      // If blocked by Cloudflare or anti-bot (403, 429, 503), retry through Zyte if configured
-      if ((res.status === 403 || res.status === 429 || res.status === 503) && isZyteConfigured()) {
-        const zyteHtml = await fetchRenderedHtmlWithZyte(raw);
-        if (zyteHtml) return zyteHtml;
-        const zyteErr = getLastZyteError();
-        if (zyteErr) throw new Error(`HTTP ${res.status} (Site anti-bot block; Zyte error: ${zyteErr})`);
+      // If blocked by Cloudflare or anti-bot (403, 429, 503), retry through Firecrawl or Zyte
+      if (res.status === 403 || res.status === 429 || res.status === 503) {
+        if (isFirecrawlConfigured()) {
+          const fc = await scrapeWithFirecrawl(raw);
+          if (fc && (fc.bodyHtml || fc.bodyMarkdown)) {
+            return fc.bodyHtml || `<html><body><h1>${fc.headline}</h1><div>${markdownToHtml(fc.bodyMarkdown)}</div></body></html>`;
+          }
+          const fcErr = getLastFirecrawlError();
+          if (fcErr) console.warn(`[Autofetch] Firecrawl fallback: ${fcErr}`);
+        }
+
+        if (isZyteConfigured()) {
+          const zyteHtml = await fetchRenderedHtmlWithZyte(raw);
+          if (zyteHtml) return zyteHtml;
+          const zyteErr = getLastZyteError();
+          if (zyteErr) throw new Error(`HTTP ${res.status} (Site anti-bot block; Zyte error: ${zyteErr})`);
+        }
       }
       throw new Error(`HTTP ${res.status}`);
     }
 
     return res.text();
   } catch (err: any) {
+    if (isFirecrawlConfigured() && !String(err?.message || '').includes('Firecrawl error')) {
+      const fc = await scrapeWithFirecrawl(raw);
+      if (fc && (fc.bodyHtml || fc.bodyMarkdown)) {
+        return fc.bodyHtml || `<html><body><h1>${fc.headline}</h1><div>${markdownToHtml(fc.bodyMarkdown)}</div></body></html>`;
+      }
+    }
     if (isZyteConfigured() && !String(err?.message || '').includes('Zyte error')) {
       const zyteHtml = await fetchRenderedHtmlWithZyte(raw);
       if (zyteHtml) return zyteHtml;
@@ -124,7 +157,25 @@ async function fromRss(source: AutofetchSource): Promise<DraftArticle[]> {
 async function fromArticlePage(source: AutofetchSource): Promise<DraftArticle> {
   const url = source.url!;
 
-  // 1. If Zyte is configured, attempt AI article extraction with anti-bot bypass
+  // 1. If Firecrawl is configured, extract clean markdown and lead metadata
+  if (isFirecrawlConfigured()) {
+    try {
+      const fc = await scrapeWithFirecrawl(url);
+      if (fc && fc.headline && (fc.bodyMarkdown || fc.bodyHtml)) {
+        return toDraft({
+          headline: fc.headline,
+          trail: fc.trail || fc.bodyMarkdown.slice(0, 400),
+          body: fc.bodyHtml || markdownToHtml(fc.bodyMarkdown),
+          image: fc.image,
+          source: fc.author ? { ...source, name: fc.author } : source,
+        });
+      }
+    } catch (err) {
+      console.warn(`[Autofetch] Firecrawl article extraction failed for ${url}, falling back:`, err);
+    }
+  }
+
+  // 2. If Zyte is configured, attempt AI article extraction with anti-bot bypass
   if (isZyteConfigured()) {
     try {
       const zyte = await extractArticleWithZyte(url);
@@ -142,7 +193,7 @@ async function fromArticlePage(source: AutofetchSource): Promise<DraftArticle> {
     }
   }
 
-  // 2. Fallback to safeFetch + Cheerio DOM parsing
+  // 3. Fallback to safeFetch + Cheerio DOM parsing
   const page = await safeFetch(url);
   const $ = cheerio.load(page);
   return extractFromDom(url, source, $);
@@ -174,6 +225,49 @@ function extractFromDom(url: string, source: AutofetchSource, $: cheerio.Cheerio
 // ─── Scrape or Homepage crawl → extract candidate story links ─────────────────
 async function fromScrapeSite(source: AutofetchSource, maxStories = 4): Promise<DraftArticle[]> {
   const url = source.url!;
+
+  // 1. If Firecrawl is configured, map site to discover clean article URLs
+  if (isFirecrawlConfigured()) {
+    try {
+      const links = await mapWithFirecrawl(url, 30);
+      const articleLinks = links.filter((link) => {
+        try {
+          const u = new URL(link);
+          const base = new URL(url);
+          return (
+            u.origin === base.origin &&
+            !link.includes('/tag/') &&
+            !link.includes('/category/') &&
+            !link.includes('/author/') &&
+            !link.includes('/page/') &&
+            !link.includes('/privacy') &&
+            !link.includes('/terms') &&
+            link !== url &&
+            link.length > url.length + 5
+          );
+        } catch {
+          return false;
+        }
+      });
+
+      if (articleLinks.length > 0) {
+        const drafts: DraftArticle[] = [];
+        for (const storyUrl of articleLinks.slice(0, maxStories)) {
+          try {
+            const draft = await fromArticlePage({ ...source, url: storyUrl });
+            if (draft && draft.headline && draft.body.length > 100) {
+              drafts.push(draft);
+            }
+          } catch {}
+        }
+        if (drafts.length > 0) return drafts;
+      }
+    } catch (err) {
+      console.warn(`[Autofetch] Firecrawl map failed for ${url}, falling back to DOM crawl:`, err);
+    }
+  }
+
+  // 2. Fallback to safeFetch + Cheerio DOM parsing
   const page = await safeFetch(url);
   const $ = cheerio.load(page);
 
