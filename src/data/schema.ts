@@ -40,6 +40,7 @@ export interface Article {
   review_status?: 'pending' | 'approved' | 'rejected';
   focal_point?: { x: number; y: number } | string;
   saved_count?: number;
+  source_url?: string;
 
   // Unpacked from keyFigures JSON (overflow bag) in the legacy app
   imageCaption?: string;

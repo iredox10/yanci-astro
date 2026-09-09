@@ -21,7 +21,9 @@ try {
   sources = await adminListCollection('autofetch', 200);
 } catch {}
 
-const pendingAiArticles = (articles || []).filter((a) => a.author === 'AI Fetcher' && a.status === 'draft');
+const pendingAiArticles = (articles || []).filter(
+  (a) => (a.author === 'AI Fetcher' || a.author === 'Autofetch') && a.status === 'draft',
+);
 
 const CURATED_FEEDS = [
   { name: 'BBC World News', url: 'http://feeds.bbci.co.uk/news/world/rss.xml', category: 'Global' },
@@ -534,7 +536,8 @@ const sourcesJson = JSON.stringify(sources);
           const chunk = decoder.decode(value, { stream: true });
           if (runLog) runLog.textContent += chunk;
         }
-        if (runLog) runLog.textContent += '\n\n✅ Stream completed.';
+        if (runLog) runLog.textContent += '\n\n✅ Stream completed. Refreshing page in 2 seconds to update Pending AI News table...';
+        setTimeout(() => window.location.reload(), 2000);
       } catch (err) {
         if (runLog) runLog.textContent += '\n❌ Failed to connect to local API endpoint.\n' + (err && err.message ? err.message : err);
       } finally {

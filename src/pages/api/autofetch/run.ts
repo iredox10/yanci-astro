@@ -44,6 +44,13 @@ export const POST: APIRoute = async ({ request }) => {
     let persisted = 0;
     for (const draft of run.drafts) {
       if (await articleExistsByHeadline(draft.headline)) continue;
+
+      const slug = draft.headline
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 150);
+
       const ok = await adminCreateArticle({
         headline: draft.headline,
         trail: draft.trail,
@@ -51,9 +58,13 @@ export const POST: APIRoute = async ({ request }) => {
         image: draft.image,
         author: 'AI Fetcher',
         status: 'draft',
-        section: draft.section,
-        pillar: draft.pillar,
+        type: 'standard',
+        section: draft.section || 'labarai',
+        pillar: draft.pillar || 'news',
         isLive: false,
+        review_status: 'pending',
+        slug: slug || undefined,
+        keyFigures: draft.source_url ? JSON.stringify({ source_url: draft.source_url }) : undefined,
       });
       if (ok) persisted++;
     }

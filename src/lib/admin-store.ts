@@ -67,11 +67,33 @@ export async function adminCreateArticle(data: Record<string, unknown>): Promise
   const env = writable();
   if (!env) return null;
   try {
+    const payload: Record<string, unknown> = {
+      type: 'standard',
+      pillar: 'news',
+      section: 'labarai',
+      isLive: false,
+      status: 'draft',
+      review_status: 'pending',
+      ...data,
+    };
+    if (!payload.type || !['hero', 'standard', 'compact'].includes(String(payload.type))) {
+      payload.type = 'standard';
+    }
+    if (!payload.pillar) {
+      payload.pillar = 'news';
+    }
+    if (!payload.section) {
+      payload.section = 'labarai';
+    }
+    if (typeof payload.isLive !== 'boolean') {
+      payload.isLive = false;
+    }
+
     const doc = await new Databases(env.client).createDocument({
       databaseId: env.databaseId,
       collectionId: env.collection,
       documentId: ID.unique(),
-      data,
+      data: payload,
       permissions: [READ_ANY],
     });
     return doc.$id;

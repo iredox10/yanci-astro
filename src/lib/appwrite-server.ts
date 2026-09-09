@@ -205,6 +205,16 @@ export function toArticle(doc: Record<string, unknown>): Article {
         ? Number(doc.saved_count)
         : undefined;
 
+  let sourceUrl = typeof doc.source_url === 'string' ? doc.source_url : undefined;
+  if (!sourceUrl && typeof doc.keyFigures === 'string') {
+    try {
+      const parsed = JSON.parse(doc.keyFigures);
+      if (parsed && typeof parsed.source_url === 'string') {
+        sourceUrl = parsed.source_url;
+      }
+    } catch {}
+  }
+
   return {
     $id: doc.$id as string,
     ...doc,
@@ -214,6 +224,7 @@ export function toArticle(doc: Record<string, unknown>): Article {
     ...(reviewStatus !== undefined ? { review_status: reviewStatus } : {}),
     ...(focalPoint !== undefined ? { focal_point: focalPoint } : {}),
     ...(savedCount !== undefined ? { saved_count: savedCount } : {}),
+    ...(sourceUrl ? { source_url: sourceUrl } : {}),
   } as unknown as Article;
 }
 
