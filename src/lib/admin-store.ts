@@ -63,19 +63,61 @@ export async function articleExistsByHeadline(headline: string): Promise<boolean
   }
 }
 
-export async function adminCreateArticle(data: Record<string, unknown>): Promise<string | null> {
-  const env = writable();
-  if (!env) return null;
-  try {
-    const payload: Record<string, unknown> = {
-      type: 'standard',
-      pillar: 'news',
-      section: 'labarai',
-      isLive: false,
-      status: 'draft',
-      review_status: 'pending',
-      ...data,
-    };
+const ALLOWED_ARTICLE_KEYS = new Set([
+  'headline',
+  'kicker',
+  'trail',
+  'body',
+  'image',
+  'videoUrl',
+  'keyFigures',
+  'pillar',
+  'section',
+  'type',
+  'author',
+  'isLive',
+  'liveUpdates',
+  'status',
+  'series',
+  'slug',
+  'metaDescription',
+  'publishAt',
+  'metaTitle',
+  'isSensitive',
+  'imageFocalY',
+  'format',
+  'imageFocalX',
+  'is_breaking',
+  'breaking_until',
+]);
+
+let _lastAdminStoreError: string | null = null;
+export function getLastAdminStoreError(): string | null {
+  return _lastAdminStoreError;
+}
+
+function prepareArticlePayload(data: Record<string, unknown>, isCreate = true): Record<string, unknown> {
+  let keyFiguresObj: Record<string, unknown> = {};
+  if (typeof data.keyFigures === 'string' && data.keyFigures) {
+    try {
+      keyFiguresObj = JSON.parse(data.keyFigures);
+    } catch {}
+  }
+
+  const payload: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(data)) {
+    if (value === undefined) continue;
+
+    if (ALLOWED_ARTICLE_KEYS.has(key)) {
+      payload[key] = value;
+    } else {
+      // Attributes not explicitly defined in Appwrite's schema are preserved in keyFigures JSON
+      keyFiguresObj[key] = value;
+    }
+  }
+
+  if (isCreate) {
     if (!payload.type || !['hero', 'standard', 'compact'].includes(String(payload.type))) {
       payload.type = 'standard';
     }
@@ -88,16 +130,35 @@ export async function adminCreateArticle(data: Record<string, unknown>): Promise
     if (typeof payload.isLive !== 'boolean') {
       payload.isLive = false;
     }
+    if (!payload.status) {
+      payload.status = 'draft';
+    }
+  }
+
+  if (Object.keys(keyFiguresObj).length > 0) {
+    payload.keyFigures = JSON.stringify(keyFiguresObj);
+  }
+
+  return payload;
+}
+
+export async function adminCreateArticle(data: Record<string, unknown>): Promise<string | null> {
+  const env = writable();
+  if (!env) return null;
+  try {
+    const cleanPayload = prepareArticlePayload(data, true);
 
     const doc = await new Databases(env.client).createDocument({
       databaseId: env.databaseId,
       collectionId: env.collection,
       documentId: ID.unique(),
-      data: payload,
+      data: cleanPayload,
       permissions: [READ_ANY],
     });
+    _lastAdminStoreError = null;
     return doc.$id;
-  } catch (error) {
+  } catch (error: any) {
+    _lastAdminStoreError = error?.message || String(error);
     console.error('[admin-store] createArticle failed', error);
     return null;
   }
@@ -110,14 +171,17 @@ export async function adminUpdateArticle(
   const env = writable();
   if (!env) return false;
   try {
+    const cleanPayload = prepareArticlePayload(data, false);
     await new Databases(env.client).updateDocument({
       databaseId: env.databaseId,
       collectionId: env.collection,
       documentId: id,
-      data,
+      data: cleanPayload,
     });
+    _lastAdminStoreError = null;
     return true;
-  } catch (error) {
+  } catch (error: any) {
+    _lastAdminStoreError = error?.message || String(error);
     console.error('[admin-store] updateArticle failed', error);
     return false;
   }

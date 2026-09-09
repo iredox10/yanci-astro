@@ -190,7 +190,7 @@ export function toArticle(doc: Record<string, unknown>): Article {
       ? doc.breaking_until
       : undefined;
 
-  const reviewStatus =
+  let reviewStatus =
     typeof doc.review_status === 'string' &&
     ['pending', 'approved', 'rejected'].includes(doc.review_status)
       ? (doc.review_status as 'pending' | 'approved' | 'rejected')
@@ -206,11 +206,20 @@ export function toArticle(doc: Record<string, unknown>): Article {
         : undefined;
 
   let sourceUrl = typeof doc.source_url === 'string' ? doc.source_url : undefined;
-  if (!sourceUrl && typeof doc.keyFigures === 'string') {
+  if (typeof doc.keyFigures === 'string' && doc.keyFigures) {
     try {
       const parsed = JSON.parse(doc.keyFigures);
-      if (parsed && typeof parsed.source_url === 'string') {
-        sourceUrl = parsed.source_url;
+      if (parsed && typeof parsed === 'object') {
+        if (!sourceUrl && typeof parsed.source_url === 'string') {
+          sourceUrl = parsed.source_url;
+        }
+        if (
+          !reviewStatus &&
+          typeof parsed.review_status === 'string' &&
+          ['pending', 'approved', 'rejected'].includes(parsed.review_status)
+        ) {
+          reviewStatus = parsed.review_status as 'pending' | 'approved' | 'rejected';
+        }
       }
     } catch {}
   }
@@ -231,28 +240,48 @@ export function toArticle(doc: Record<string, unknown>): Article {
 /** Serialize article fields for storage in Appwrite. */
 export function serializeArticle(article: Partial<Article>): Record<string, unknown> {
   const out: Record<string, unknown> = { ...article };
+
+  let keyFiguresObj: Record<string, unknown> = {};
+  if (typeof out.keyFigures === 'string' && out.keyFigures) {
+    try {
+      keyFiguresObj = JSON.parse(out.keyFigures);
+    } catch {}
+  }
+
+  if (article.review_status !== undefined) {
+    keyFiguresObj.review_status = article.review_status;
+    delete out.review_status;
+  }
+  if (article.focal_point !== undefined) {
+    keyFiguresObj.focal_point =
+      typeof article.focal_point === 'object' && article.focal_point !== null
+        ? JSON.stringify(article.focal_point)
+        : article.focal_point;
+    delete out.focal_point;
+  }
+  if (article.saved_count !== undefined) {
+    keyFiguresObj.saved_count = Number(article.saved_count);
+    delete out.saved_count;
+  }
+  if (article.source_url !== undefined) {
+    keyFiguresObj.source_url = article.source_url;
+    delete out.source_url;
+  }
+
+  if (Object.keys(keyFiguresObj).length > 0) {
+    out.keyFigures = JSON.stringify(keyFiguresObj);
+  }
+
   if (article.liveUpdates !== undefined) {
     out.liveUpdates = Array.isArray(article.liveUpdates)
       ? article.liveUpdates.map((u) => (typeof u === 'string' ? u : JSON.stringify(u)))
       : undefined;
-  }
-  if (article.focal_point !== undefined) {
-    out.focal_point =
-      typeof article.focal_point === 'object' && article.focal_point !== null
-        ? JSON.stringify(article.focal_point)
-        : article.focal_point;
   }
   if (article.is_breaking !== undefined) {
     out.is_breaking = Boolean(article.is_breaking);
   }
   if (article.breaking_until !== undefined) {
     out.breaking_until = article.breaking_until;
-  }
-  if (article.review_status !== undefined) {
-    out.review_status = article.review_status;
-  }
-  if (article.saved_count !== undefined) {
-    out.saved_count = Number(article.saved_count);
   }
   return out;
 }

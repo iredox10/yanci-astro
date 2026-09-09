@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { requireUser, hasRole } from '@lib/auth';
 import { runSource } from '@lib/autofetch';
-import { adminCreateArticle, articleExistsByHeadline } from '@lib/admin-store';
+import { adminCreateArticle, articleExistsByHeadline, getLastAdminStoreError } from '@lib/admin-store';
 import { autofetchConfigured, listAutofetchSources, touchSourceLastRun } from '@lib/autofetch-store';
 
 export const prerender = false;
@@ -76,7 +76,8 @@ export const POST: APIRoute = async ({ request }) => {
               persisted++;
               log(`   ✅ Saved Draft: "${draft.headline.slice(0, 50)}..."`);
             } else {
-              log(`   ⚠️ Failed to save draft: "${draft.headline.slice(0, 50)}..."`);
+              const err = getLastAdminStoreError();
+              log(`   ⚠️ Failed to save draft: "${draft.headline.slice(0, 50)}..." (${err ?? 'Unknown error'})`);
             }
           }
 
