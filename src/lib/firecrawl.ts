@@ -23,8 +23,26 @@ export function getFirecrawlBaseUrl(): string {
   return url.replace(/\/+$/, '');
 }
 
+function isLoopbackUrl(raw: string): boolean {
+  try {
+    const host = new URL(raw).hostname;
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The self-hosted Firecrawl sidecar only exists on a developer machine. In
+ * production a loopback URL points at the dyno itself and always fails, so it
+ * must not count as configured.
+ */
 export function isFirecrawlConfigured(): boolean {
-  return Boolean(FIRECRAWL_API_URL || FIRECRAWL_API_KEY);
+  if (FIRECRAWL_API_KEY?.trim()) return true;
+  const url = FIRECRAWL_API_URL?.trim();
+  if (!url) return false;
+  if (isLoopbackUrl(url)) return !import.meta.env.PROD;
+  return true;
 }
 
 /**

@@ -10,6 +10,7 @@ import PublishConfirmModal from './editor/PublishConfirmModal';
 import LinkPickerModal from './editor/LinkPickerModal';
 import RevisionHistoryDrawer from './editor/RevisionHistoryDrawer';
 import { PANELS_WITH_HISTORY } from './editor/constants';
+import { uploadMediaFile } from '../../lib/client-media';
 
 const EMPTY_FORM: Record<string, any> = {
   headline: '',
@@ -235,11 +236,7 @@ export default function AdminArticleEditor({ initial }: Props) {
     if (!file) return;
     setUploading(true);
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await fetch('/api/admin/media', { method: 'POST', body: fd });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.url) throw new Error(data.message || 'Upload failed');
+      const data = await uploadMediaFile(file);
       setFormData((prev: Record<string, any>) => ({ ...prev, [field]: data.url }));
       setIsDirty(true);
     } catch (error) {
@@ -831,10 +828,7 @@ export default function AdminArticleEditor({ initial }: Props) {
           if (!file) return;
           setUploading(true);
           try {
-            const fd = new FormData();
-            fd.append('file', file);
-            const res = await fetch('/api/admin/media', { method: 'POST', body: fd });
-            const data = await res.json().catch(() => ({}));
+            const data = await uploadMediaFile(file);
             const fileUrl = data.url;
             if (!fileUrl) throw new Error('Upload failed');
             const caption = window.prompt('Image caption (optional):', '') || '';

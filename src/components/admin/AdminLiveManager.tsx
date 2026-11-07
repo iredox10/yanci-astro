@@ -7,6 +7,7 @@ import {
   FaSpinner,
   FaImage,
 } from 'react-icons/fa6';
+import { uploadMediaFile } from '../../lib/client-media';
 
 interface LiveArticle {
   $id?: string;
@@ -40,11 +41,7 @@ export default function AdminLiveManager({ initialLiveArticles, userCategory, us
     if (!file) return;
     setUploading(true);
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await fetch('/api/admin/media', { method: 'POST', body: fd });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.url) throw new Error(data.message || 'Upload failed');
+      const data = await uploadMediaFile(file);
       setFormData((prev) => ({ ...prev, coverImage: data.url }));
     } catch (error: any) {
       alert('Image upload failed: ' + (error.message || 'Unknown'));

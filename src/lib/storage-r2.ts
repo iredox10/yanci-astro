@@ -4,6 +4,7 @@ import {
   DeleteObjectCommand,
   ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 let s3Client: S3Client | null = null;
 
@@ -12,7 +13,8 @@ export function isR2Configured(): boolean {
     process.env.R2_ACCOUNT_ID &&
       process.env.R2_ACCESS_KEY_ID &&
       process.env.R2_SECRET_ACCESS_KEY &&
-      process.env.R2_BUCKET_NAME,
+      process.env.R2_BUCKET_NAME &&
+      process.env.R2_PUBLIC_URL,
   );
 }
 
@@ -41,13 +43,10 @@ export function getR2Client(): S3Client {
 
 export function getR2PublicUrl(key: string): string {
   const customUrl = process.env.R2_PUBLIC_URL?.replace(/\/$/, '');
-  if (customUrl) {
-    return `${customUrl}/${key}`;
+  if (!customUrl) {
+    throw new Error('[R2] R2_PUBLIC_URL is not set. Configure a public bucket domain.');
   }
-  // Fallback if public url is not configured: direct r2 dev url
-  const bucket = process.env.R2_BUCKET_NAME;
-  const accountId = process.env.R2_ACCOUNT_ID;
-  return `https://${bucket}.${accountId}.r2.cloudflarestorage.com/${key}`;
+  return `${customUrl}/${key}`;
 }
 
 export async function uploadToR2(
@@ -76,6 +75,43 @@ export async function uploadToR2(
     key,
     url: getR2PublicUrl(key),
   };
+}
+
+const MIME_BY_EXTENSION: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+};
+
+function mimeFor(key: string): string {
+  const ext = key.split('.').pop()?.toLowerCase() ?? '';
+  return MIME_BY_EXTENSION[ext] ?? 'application/octet-stream';
+}
+
+export async function createPresignedUpload(
+  key: string,
+  contentType: string,
+): Promise<{ uploadUrl: string; key: string; url: string }> {
+  const bucket = process.env.R2_BUCKET_NAME;
+  if (!bucket) {
+    throw new Error('[R2] R2_BUCKET_NAME is not set.');
+  }
+
+  const command = new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    ContentType: contentType,
+    CacheControl: 'public, max-age=31536000, immutable',
+  });
+
+  const uploadUrl = await getSignedUrl(getR2Client(), command, { expiresIn: 300 });
+
+  return { uploadUrl, key, url: getR2PublicUrl(key) };
 }
 
 export async function deleteFromR2(key: string): Promise<boolean> {
@@ -122,7 +158,7 @@ export async function listR2Files(limit = 50): Promise<Array<{
         id: key,
         name: key.replace(/^uploads\//, ''),
         sizeOriginal: item.Size || 0,
-        mimeType: 'image/jpeg',
+        mimeType: mimeFor(key),
         createdAt: item.LastModified ? item.LastModified.toISOString() : new Date().toISOString(),
         url: getR2PublicUrl(key),
       };

@@ -63,7 +63,7 @@ export default defineConfig({
       OPENROUTER_API_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),
       DEEPSEEK_API_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),
       ZYTE_API_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),
-      FIRECRAWL_API_URL: envField.string({ context: 'server', access: 'public', optional: true, default: 'http://127.0.0.1:3002' }),
+      FIRECRAWL_API_URL: envField.string({ context: 'server', access: 'public', optional: true }),
       FIRECRAWL_API_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),
     },
   },

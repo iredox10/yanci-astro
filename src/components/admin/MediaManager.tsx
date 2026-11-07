@@ -8,6 +8,7 @@ import {
   FaSpinner,
   FaMagnifyingGlass,
 } from 'react-icons/fa6';
+import { uploadMediaFile } from '../../lib/client-media';
 
 export interface MediaFile {
   id: string;
@@ -33,11 +34,7 @@ export default function MediaManager({ initialFiles }: Props) {
     if (!file) return;
     setUploading(true);
     try {
-      const form = new FormData();
-      form.set('file', file);
-      const res = await fetch('/api/admin/media', { method: 'POST', body: form });
-      if (!res.ok) throw new Error('Upload failed');
-      const data = (await res.json()) as { fileId: string; url: string };
+      const data = await uploadMediaFile(file);
       setFiles((prev) => [
         {
           id: data.fileId,

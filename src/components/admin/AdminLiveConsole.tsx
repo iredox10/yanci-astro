@@ -5,6 +5,7 @@ import {
   FaCheck, FaChevronUp, FaChevronDown, FaMagnifyingGlass, FaPencil,
   FaBookOpen,
 } from 'react-icons/fa6';
+import { uploadMediaFile } from '../../lib/client-media';
 
 interface LiveUpdate {
   id: string | number;
@@ -143,11 +144,7 @@ export default function AdminLiveConsole({ article: initialArticle, userName }: 
     try {
       setUploading(true);
       // Simplified: upload original file without canvas crop (preserve UI)
-      const fd = new FormData();
-      fd.append('file', pendingFile);
-      const res = await fetch('/api/admin/media', { method: 'POST', body: fd });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.url) throw new Error(data.message || 'Upload failed');
+      const data = await uploadMediaFile(pendingFile);
       const fileUrl = data.url;
       if (croppingTarget === 'edit') {
         setEditImages((prev) => [...prev, fileUrl]);

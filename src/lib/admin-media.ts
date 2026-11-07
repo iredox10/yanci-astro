@@ -27,7 +27,23 @@ export function mediaFileUrl(fileId?: string): string {
   if (fileId.startsWith('http://') || fileId.startsWith('https://')) {
     return fileId;
   }
-  return getR2PublicUrl(fileId);
+  try {
+    return getR2PublicUrl(fileId);
+  } catch {
+    return '';
+  }
+}
+
+/** Build a collision-resistant, URL-safe object key for an uploaded file. */
+export function buildMediaKey(fileName: string): string {
+  const safeExt = fileName.includes('.') ? fileName.slice(fileName.lastIndexOf('.')) : '';
+  const safeBase = fileName
+    .replace(/\.[^/.]+$/, '')
+    .replace(/[^a-z0-9_-]/gi, '-')
+    .toLowerCase()
+    .slice(0, 50);
+
+  return `uploads/${Date.now()}-${Math.random().toString(36).substring(2, 8)}-${safeBase}${safeExt}`;
 }
 
 export async function uploadMedia(
@@ -40,14 +56,7 @@ export async function uploadMedia(
     return null;
   }
 
-  const safeExt = fileName.includes('.') ? fileName.slice(fileName.lastIndexOf('.')) : '';
-  const safeBase = fileName
-    .replace(/\.[^/.]+$/, '')
-    .replace(/[^a-z0-9_-]/gi, '-')
-    .toLowerCase()
-    .slice(0, 50);
-
-  const fileKey = `uploads/${Date.now()}-${Math.random().toString(36).substring(2, 8)}-${safeBase}${safeExt}`;
+  const fileKey = buildMediaKey(fileName);
 
   try {
     const buffer = Buffer.from(blob);
