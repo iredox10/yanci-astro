@@ -1,18 +1,11 @@
 ---
-import { Client, Query, Storage } from 'node-appwrite';
-import { APPWRITE_API_KEY } from 'astro:env/server';
-import {
-  PUBLIC_APPWRITE_ENDPOINT,
-  PUBLIC_APPWRITE_PROJECT_ID,
-  PUBLIC_APPWRITE_BUCKET_ID,
-} from 'astro:env/client';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import MediaManager from '../../components/admin/MediaManager';
-import { isMediaConfigured, mediaFileUrl } from '@lib/admin-media';
+import { isMediaConfigured, listMediaFiles } from '@lib/admin-media';
 
 export const prerender = false;
 
-const PAGE_SIZE = 200;
+const PAGE_SIZE = 48;
 
 interface MediaItem {
   id: string;
@@ -23,56 +16,44 @@ interface MediaItem {
   url: string;
 }
 
-function errorCode(error: unknown): number | null {
-  if (typeof error !== 'object' || error === null || !('code' in error)) return null;
-  const code = (error as { code?: unknown }).code;
-  return typeof code === 'number' ? code : null;
-}
-
-const bucketId = PUBLIC_APPWRITE_BUCKET_ID;
 let files: MediaItem[] = [];
 let notice: string | null = null;
 
-if (!isMediaConfigured() || !bucketId) {
-  notice = 'Storage is not configured. Set PUBLIC_APPWRITE_BUCKET_ID and APPWRITE_API_KEY to manage media.';
+if (!isMediaConfigured()) {
+  notice = 'Cloudflare R2 Storage is not configured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET_NAME to manage media.';
 } else {
   try {
-    const client = new Client()
-      .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-      .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-      .setKey(APPWRITE_API_KEY ?? '');
-    const storage = new Storage(client);
-    const { files: bucketFiles } = await storage.listFiles({
-      bucketId,
-      queries: [Query.orderDesc('$createdAt'), Query.limit(PAGE_SIZE)],
-    });
-    files = bucketFiles.map((f) => ({
-      id: f.$id,
+    const r2Files = await listMediaFiles(PAGE_SIZE);
+    files = r2Files.map((f) => ({
+      id: f.id,
       name: f.name,
       size: f.sizeOriginal,
       mimeType: f.mimeType,
-      createdAt: f.$createdAt,
-      url: mediaFileUrl(f.$id),
+      createdAt: f.createdAt,
+      url: f.url,
     }));
   } catch (error) {
     console.error('[admin/media] listing failed', error);
-    const code = errorCode(error);
-    notice =
-      code === 401 || code === 403
-        ? 'Storage access denied (403). The Appwrite API key needs read access to the media bucket.'
-        : 'Could not load the media library. Check the storage configuration and try again.';
+    notice = 'Could not load media files. Check Cloudflare R2 credentials.';
   }
 }
 ---
 
-<AdminLayout title="Media" active="media">
-  <div class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
+<AdminLayout title="Media Manager — Yanci Admin" active="media">
+  <div class="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div>
+        <h1 class="text-2xl md:text-3xl font-serif font-black text-[#0f3036]">Ma'adanar Hotuna da Bidiyo</h1>
+        <p class="text-sm text-gray-500 mt-1">Loda da sarrafa hotunan labarai, rubutu da marubuta a kan Cloudflare R2.</p>
+      </div>
+    </div>
+
     {notice && (
-      <div class="border border-yanci-red/30 bg-yanci-red/5 px-4 py-3 text-sm text-yanci-red">
+      <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs font-bold text-amber-800">
         {notice}
       </div>
     )}
 
-    {!notice && <MediaManager client:only="react" initialFiles={files} />}
+    <MediaManager client:load initialFiles={files} />
   </div>
 </AdminLayout>

@@ -1,15 +1,10 @@
-import { Client, Databases, ID, Query } from 'node-appwrite';
-import { APPWRITE_API_KEY } from 'astro:env/server';
-import {
-  PUBLIC_APPWRITE_ENDPOINT,
-  PUBLIC_APPWRITE_PROJECT_ID,
-  PUBLIC_APPWRITE_DATABASE_ID,
-  PUBLIC_APPWRITE_COLLECTION_HOMEPAGE_LAYOUT,
-} from 'astro:env/client';
+import { db } from '@db';
+import { homepageLayout } from '@db/schema';
+import { eq, sql } from 'drizzle-orm';
 
 /**
  * Homepage module registry and persisted layout (`homepage_layout`
- * collection, one doc per module: { key, position, enabled }).
+ * table in PostgreSQL, one doc per module: { key, position, enabled }).
  */
 
 export const HOMEPAGE_MODULES = [
@@ -76,41 +71,6 @@ export function moduleDef(key: string): HomepageModuleDef | null {
   return isModuleKey(key) ? MODULE_MAP[key] : null;
 }
 
-const READ_ANY = 'read("any")';
-
-let _databases: Databases | null = null;
-
-function store(): { databases: Databases; databaseId: string; collectionId: string } | null {
-  const collectionId = PUBLIC_APPWRITE_COLLECTION_HOMEPAGE_LAYOUT || '';
-  if (
-    !APPWRITE_API_KEY ||
-    !PUBLIC_APPWRITE_ENDPOINT ||
-    !PUBLIC_APPWRITE_PROJECT_ID ||
-    !PUBLIC_APPWRITE_DATABASE_ID ||
-    !collectionId
-  ) {
-    return null;
-  }
-  if (!_databases) {
-    _databases = new Databases(
-      new Client()
-        .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-        .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-        .setKey(APPWRITE_API_KEY),
-    );
-  }
-  return { databases: _databases, databaseId: PUBLIC_APPWRITE_DATABASE_ID, collectionId };
-}
-
-function toDoc(raw: Record<string, unknown>): StoredHomepageLayoutDoc {
-  return {
-    $id: String(raw.$id),
-    key: String(raw.key ?? ''),
-    position: Number(raw.position ?? 0),
-    enabled: Boolean(raw.enabled),
-  };
-}
-
 function orderByPosition(items: HomepageLayoutItem[]): HomepageLayoutItem[] {
   return [...items]
     .sort((a, b) => a.position - b.position)
@@ -134,14 +94,19 @@ export function normalizeLayout(
 }
 
 export async function listHomepageLayoutDocs(): Promise<StoredHomepageLayoutDoc[]> {
-  const s = store();
-  if (!s) return [];
+  if (!db) return [];
   try {
-    const { documents } = await s.databases.listDocuments(s.databaseId, s.collectionId, [
-      Query.orderAsc('position'),
-      Query.limit(100),
-    ]);
-    return (documents ?? []).filter((d) => typeof d.key === 'string').map(toDoc);
+    const rows = await db.select().from(homepageLayout);
+    const docs = rows.map((r) => {
+      const cfg = (r.config ?? {}) as Record<string, unknown>;
+      return {
+        $id: r.id,
+        key: String(cfg.key || r.id),
+        position: Number(cfg.position ?? 0),
+        enabled: Boolean(cfg.enabled),
+      };
+    });
+    return docs.sort((a, b) => a.position - b.position);
   } catch (error) {
     console.error('[homepage-layout] list failed', error);
     return [];
@@ -159,32 +124,25 @@ export async function getHomepageLayout(): Promise<HomepageLayoutItem[]> {
 export async function saveHomepageLayout(items: HomepageLayoutItem[]): Promise<boolean> {
   const cleaned = normalizeLayout(items);
   if (cleaned.length !== HOMEPAGE_MODULES.length) return false;
-  const s = store();
-  if (!s) return false;
+  if (!db) return false;
+
   try {
-    const existing = await listHomepageLayoutDocs();
-    const byKey = new Map(existing.map((doc) => [doc.key, doc]));
-    const kept = new Set<string>();
     for (const item of cleaned) {
-      kept.add(item.key);
-      const data = { position: item.position, enabled: item.enabled };
-      const doc = byKey.get(item.key);
-      if (doc) {
-        await s.databases.updateDocument(s.databaseId, s.collectionId, doc.$id, data);
-      } else {
-        await s.databases.createDocument(
-          s.databaseId,
-          s.collectionId,
-          ID.unique(),
-          { key: item.key, ...data },
-          [READ_ANY],
-        );
-      }
-    }
-    for (const doc of existing) {
-      if (!kept.has(doc.key)) {
-        await s.databases.deleteDocument(s.databaseId, s.collectionId, doc.$id);
-      }
+      const config = { key: item.key, position: item.position, enabled: item.enabled };
+      await db
+        .insert(homepageLayout)
+        .values({
+          id: item.key,
+          config,
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: homepageLayout.id,
+          set: {
+            config,
+            updatedAt: new Date(),
+          },
+        });
     }
     return true;
   } catch (error) {
@@ -201,11 +159,38 @@ export async function updateHomepageLayoutDoc(
   id: string,
   patch: { enabled?: boolean; position?: number },
 ): Promise<StoredHomepageLayoutDoc | null> {
-  const s = store();
-  if (!s || Object.keys(patch).length === 0) return null;
+  if (!db || Object.keys(patch).length === 0) return null;
   try {
-    const doc = await s.databases.updateDocument(s.databaseId, s.collectionId, id, patch);
-    return toDoc(doc as unknown as Record<string, unknown>);
+    const [existing] = await db.select().from(homepageLayout).where(eq(homepageLayout.id, id)).limit(1);
+    const prevConfig = (existing?.config ?? {}) as Record<string, unknown>;
+    const updatedConfig = {
+      ...prevConfig,
+      key: prevConfig.key || id,
+      ...patch,
+    };
+
+    const [updated] = await db
+      .insert(homepageLayout)
+      .values({
+        id,
+        config: updatedConfig,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: homepageLayout.id,
+        set: {
+          config: updatedConfig,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+
+    return {
+      $id: updated.id,
+      key: String((updated.config as any)?.key || updated.id),
+      position: Number((updated.config as any)?.position ?? 0),
+      enabled: Boolean((updated.config as any)?.enabled),
+    };
   } catch (error) {
     console.error('[homepage-layout] update failed', error);
     return null;
@@ -213,10 +198,9 @@ export async function updateHomepageLayoutDoc(
 }
 
 export async function deleteHomepageLayoutDoc(id: string): Promise<boolean> {
-  const s = store();
-  if (!s) return false;
+  if (!db) return false;
   try {
-    await s.databases.deleteDocument(s.databaseId, s.collectionId, id);
+    await db.delete(homepageLayout).where(eq(homepageLayout.id, id));
     return true;
   } catch (error) {
     console.error('[homepage-layout] delete failed', error);

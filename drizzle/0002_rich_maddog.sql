@@ -1,0 +1,1 @@
+ALTER TABLE "articles" ADD COLUMN "social_posted" boolean DEFAULT false NOT NULL;

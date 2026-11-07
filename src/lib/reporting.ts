@@ -1,38 +1,24 @@
-import { Client, Databases, Query } from 'node-appwrite';
-import { APPWRITE_API_KEY } from 'astro:env/server';
-import {
-  PUBLIC_APPWRITE_ENDPOINT,
-  PUBLIC_APPWRITE_PROJECT_ID,
-  PUBLIC_APPWRITE_DATABASE_ID,
-  PUBLIC_APPWRITE_COLLECTION_VIEWS,
-} from 'astro:env/client';
+import { db } from '@db';
+import { articleViews } from '@db/schema';
+import { gte, desc } from 'drizzle-orm';
 
 /**
- * Traffic aggregation over the views collection for the admin reports page.
- * Rows are fetched with cursor pagination (capped) and aggregated in JS;
- * no server-side groupBy is assumed.
+ * Traffic aggregation over the `article_views` table for the admin reports page.
  */
 
 export const REPORT_RANGES = [7, 30, 90] as const;
 export type ReportRange = (typeof REPORT_RANGES)[number];
 
-const PAGE_SIZE = 500;
-const MAX_ROWS = 20_000;
 const DAY_MS = 86_400_000;
 
-/** Actual stored shape of a tracked view document. */
 interface ViewRow {
-  $id?: string;
-  $createdAt?: string | null;
-  article_id?: string | null;
+  articleId: string;
   section?: string | null;
   referrer?: string | null;
   device?: string | null;
-  viewed_at?: string | null;
-  // Optional fields some trackers may add; absent in the current schema.
-  session_id?: string | null;
   sessionId?: string | null;
-  ip_hash?: string | null;
+  ipHash?: string | null;
+  viewedAt: Date;
 }
 
 export interface DailyViews {
@@ -72,69 +58,6 @@ export interface TrafficReport {
 export function normalizeRange(raw: unknown): ReportRange {
   const n = Number(raw);
   return (REPORT_RANGES as readonly number[]).includes(n) ? (n as ReportRange) : 30;
-}
-
-interface ViewsStore {
-  db: Databases;
-  databaseId: string;
-  viewsId: string;
-}
-
-function viewsStore(): ViewsStore | null {
-  if (
-    !APPWRITE_API_KEY ||
-    !PUBLIC_APPWRITE_ENDPOINT ||
-    !PUBLIC_APPWRITE_PROJECT_ID ||
-    !PUBLIC_APPWRITE_DATABASE_ID ||
-    !PUBLIC_APPWRITE_COLLECTION_VIEWS
-  ) {
-    return null;
-  }
-  const client = new Client()
-    .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-    .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-    .setKey(APPWRITE_API_KEY);
-  return {
-    db: new Databases(client),
-    databaseId: PUBLIC_APPWRITE_DATABASE_ID,
-    viewsId: PUBLIC_APPWRITE_COLLECTION_VIEWS,
-  };
-}
-
-async function listRecentViews(): Promise<{ rows: ViewRow[]; truncated: boolean }> {
-  const store = viewsStore();
-  if (!store) return { rows: [], truncated: false };
-  const { db, databaseId, viewsId } = store;
-  const rows: ViewRow[] = [];
-  let cursor: string | undefined;
-  let truncated = false;
-  while (rows.length < MAX_ROWS) {
-    const queries = [Query.limit(Math.min(PAGE_SIZE, MAX_ROWS - rows.length))];
-    if (cursor) queries.push(Query.cursorAfter(cursor));
-    try {
-      const res = await db.listDocuments(databaseId, viewsId, queries);
-      const docs = (res.documents ?? []) as unknown as ViewRow[];
-      if (docs.length === 0) break;
-      rows.push(...docs);
-      cursor = String(docs[docs.length - 1]?.$id ?? '');
-      if (!cursor || docs.length < PAGE_SIZE) break;
-    } catch (error) {
-      console.error('[reporting] list views failed', error);
-      truncated = rows.length > 0;
-      break;
-    }
-  }
-  return { rows, truncated: truncated || rows.length >= MAX_ROWS };
-}
-
-function rowDate(v: ViewRow): string {
-  const d = v.viewed_at ?? v.$createdAt ?? '';
-  return typeof d === 'string' ? d : '';
-}
-
-function sessionKeyOf(v: ViewRow): string | null {
-  const key = v.sessionId ?? v.session_id ?? v.ip_hash ?? null;
-  return key ? String(key) : null;
 }
 
 function referrerHost(referrer: string | null | undefined): string {
@@ -178,14 +101,37 @@ function emptyReport(rangeDays: ReportRange, visitorBasis: VisitorBasis = 'none'
   };
 }
 
-/** Build the full traffic report for the requested range (plus fixed 7d/30d KPIs). */
 export async function buildTrafficReport(rangeDays: ReportRange): Promise<TrafficReport> {
+  if (!db) return emptyReport(rangeDays);
+
   const fetchDays = Math.max(rangeDays, 30);
   const now = Date.now();
   const cutoff = new Date(now - fetchDays * DAY_MS);
   const weekCutoff = new Date(now - 7 * DAY_MS);
 
-  const { rows, truncated } = await listRecentViews();
+  let rows: ViewRow[] = [];
+  try {
+    const results = await db
+      .select({
+        articleId: articleViews.articleId,
+        section: articleViews.section,
+        referrer: articleViews.referrer,
+        device: articleViews.device,
+        sessionId: articleViews.sessionId,
+        ipHash: articleViews.ipHash,
+        viewedAt: articleViews.viewedAt,
+      })
+      .from(articleViews)
+      .where(gte(articleViews.viewedAt, cutoff))
+      .orderBy(desc(articleViews.viewedAt))
+      .limit(20000);
+
+    rows = results;
+  } catch (error) {
+    console.error('[reporting] query failed', error);
+    return emptyReport(rangeDays);
+  }
+
   if (rows.length === 0) return emptyReport(rangeDays);
 
   const byArticle = new Map<string, number>();
@@ -200,17 +146,15 @@ export async function buildTrafficReport(rangeDays: ReportRange): Promise<Traffi
   let totalViews7d = 0;
 
   for (const v of rows) {
-    const iso = rowDate(v);
-    if (!iso) continue;
-    const ts = Date.parse(iso);
-    if (Number.isNaN(ts) || ts < cutoff.getTime()) continue;
+    const ts = v.viewedAt ? v.viewedAt.getTime() : 0;
+    if (!ts || ts < cutoff.getTime()) continue;
 
-    const dayKey = iso.slice(0, 10);
+    const dayKey = v.viewedAt.toISOString().slice(0, 10);
     byDay.set(dayKey, (byDay.get(dayKey) ?? 0) + 1);
     if (ts >= now - 30 * DAY_MS) totalViews30d += 1;
     if (ts >= weekCutoff.getTime()) {
       totalViews7d += 1;
-      const sessionKey = sessionKeyOf(v);
+      const sessionKey = v.sessionId || v.ipHash || null;
       if (sessionKey) {
         hasSessionField = true;
         visitors7d.add(sessionKey);
@@ -219,7 +163,7 @@ export async function buildTrafficReport(rangeDays: ReportRange): Promise<Traffi
       }
     }
 
-    const articleId = String(v.article_id ?? '').trim();
+    const articleId = String(v.articleId ?? '').trim();
     if (articleId) byArticle.set(articleId, (byArticle.get(articleId) ?? 0) + 1);
     const section = String(v.section ?? '').trim().toLowerCase();
     bySection.set(section || 'unknown', (bySection.get(section || 'unknown') ?? 0) + 1);
@@ -252,6 +196,6 @@ export async function buildTrafficReport(rangeDays: ReportRange): Promise<Traffi
     devices: ranked(byDevice, 6),
     referrers: ranked(byReferrer, 8),
     sampledRows: rows.length,
-    truncated,
+    truncated: rows.length >= 20000,
   };
 }

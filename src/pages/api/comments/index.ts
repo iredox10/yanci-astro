@@ -1,14 +1,8 @@
 import type { APIRoute } from 'astro';
+import crypto from 'node:crypto';
 import { getComments } from '@lib/appwrite-server';
 import { sanitizePlainText } from '@lib/sanitize';
-import { Client, Databases, ID } from 'node-appwrite';
-import { APPWRITE_API_KEY } from 'astro:env/server';
-import {
-  PUBLIC_APPWRITE_ENDPOINT,
-  PUBLIC_APPWRITE_PROJECT_ID,
-  PUBLIC_APPWRITE_DATABASE_ID,
-  PUBLIC_APPWRITE_COLLECTION_COMMENTS,
-} from 'astro:env/client';
+import { db, comments } from '@/db';
 
 export const prerender = false;
 
@@ -26,7 +20,6 @@ function rateLimited(articleId: string, ip: string): boolean {
     _recent.set(key, now);
     return false;
   }
-  // Allow one comment per 60s per IP+article; drop stale entries.
   if (now - hits < 60_000) return true;
   _recent.set(key, now);
   return false;
@@ -39,10 +32,9 @@ setInterval(() => {
 
 export const GET: APIRoute = async ({ url }) => {
   const articleId = url.searchParams.get('articleId') ?? '';
-  const sort = url.searchParams.get('sort') === 'top' ? 'top' : 'latest';
   if (!articleId) return json({ ok: false, message: 'Missing articleId' }, 422);
-  const comments = await getComments(articleId, sort);
-  return json({ ok: true, comments });
+  const commentList = await getComments(articleId);
+  return json({ ok: true, comments: commentList });
 };
 
 export const POST: APIRoute = async ({ request }) => {
@@ -65,30 +57,34 @@ export const POST: APIRoute = async ({ request }) => {
     return json({ ok: false, message: 'A hankali — a sake gwadawa nan gaba' }, 429);
   }
 
-  if (!PUBLIC_APPWRITE_ENDPOINT || !PUBLIC_APPWRITE_PROJECT_ID || !PUBLIC_APPWRITE_DATABASE_ID || !PUBLIC_APPWRITE_COLLECTION_COMMENTS) {
-    return json({ ok: false, message: 'Comments unavailable' }, 503);
-  }
+  const commentId = `cm_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+  const ownerToken = typeof body.ownerToken === 'string' ? sanitizePlainText(body.ownerToken, 64) : '';
 
-  const client = new Client()
-    .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-    .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-    .setKey(APPWRITE_API_KEY ?? '');
-  const databases = new Databases(client);
   try {
-    const doc = await databases.createDocument({
-      databaseId: PUBLIC_APPWRITE_DATABASE_ID,
-      collectionId: PUBLIC_APPWRITE_COLLECTION_COMMENTS,
-      documentId: ID.unique(),
-      data: {
+    await db.insert(comments).values({
+      id: commentId,
+      articleId,
+      name,
+      body: commentBody,
+      likes: 0,
+      status: 'pending',
+      ownerToken,
+    });
+
+    return json({
+      ok: true,
+      comment: {
+        $id: commentId,
+        id: commentId,
         articleId,
         name,
         body: commentBody,
         likes: 0,
         status: 'pending',
-        ownerToken: typeof body.ownerToken === 'string' ? sanitizePlainText(body.ownerToken, 64) : '',
+        ownerToken,
+        createdAt: new Date().toISOString(),
       },
-    });
-    return json({ ok: true, comment: doc as unknown as Record<string, unknown> }, 201);
+    }, 201);
   } catch (error) {
     console.error('[comments] create failed', error);
     return json({ ok: false, message: 'An kasa aikawa' }, 503);

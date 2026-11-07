@@ -1,14 +1,9 @@
 import type { APIRoute } from 'astro';
-import { AppwriteException, Client, Databases, ID, Query } from 'node-appwrite';
-import { APPWRITE_API_KEY } from 'astro:env/server';
-import {
-  PUBLIC_APPWRITE_ENDPOINT,
-  PUBLIC_APPWRITE_PROJECT_ID,
-  PUBLIC_APPWRITE_DATABASE_ID,
-} from 'astro:env/client';
+import crypto from 'node:crypto';
 import { requireUser, hasRole } from '@lib/auth';
 import { sanitizePlainText } from '@lib/sanitize';
 import { SECTIONS } from '@/data/sections';
+import { db, notificationsOutbox } from '@/db';
 
 export const prerender = false;
 
@@ -17,10 +12,6 @@ const json = (data: unknown, status = 200) =>
     status,
     headers: { 'Content-Type': 'application/json' },
   });
-
-const SUBSCRIPTIONS_COLLECTION =
-  process.env.APPWRITE_COLLECTION_PUSH_SUBSCRIPTIONS || 'push_subscriptions';
-const OUTBOX_COLLECTION = process.env.APPWRITE_COLLECTION_NOTIFICATIONS || 'notifications_outbox';
 
 const AUDIENCES = new Set(['all', ...SECTIONS.map((s) => s.slug)]);
 
@@ -48,83 +39,37 @@ function parseSendPayload(raw: unknown): SendPayload | null {
   return { title, body, url, audience };
 }
 
-/**
- * POST /api/admin/push/send
- *
- * Validates a notification and enqueues exactly one outbox document. Delivery
- * itself is drained by the send worker; this endpoint never pushes directly.
- */
 export const POST: APIRoute = async ({ request }) => {
   const auth = await requireUser(request);
   if (!auth.ok) return json({ ok: false, message: 'Unauthorized' }, auth.status);
   if (!hasRole(auth.user, 'editor')) return json({ ok: false, message: 'Forbidden' }, 403);
 
-  let raw: unknown;
+  let body: unknown;
   try {
-    raw = await request.json();
+    body = await request.json();
   } catch {
     return json({ ok: false, message: 'Bad JSON' }, 400);
   }
 
-  const payload = parseSendPayload(raw);
+  const payload = parseSendPayload(body);
   if (!payload) {
-    return json({ ok: false, message: 'Sanarwa ba daidai ba: take (≤80), saƙonni (≤200), hanya ingantaccen URL' }, 422);
+    return json({ ok: false, message: 'Dole ne a ba da take, bayani da adireshin labari daidai' }, 422);
   }
 
-  if (!PUBLIC_APPWRITE_ENDPOINT || !PUBLIC_APPWRITE_PROJECT_ID || !PUBLIC_APPWRITE_DATABASE_ID) {
-    return json({ ok: false, message: 'Push unavailable' }, 503);
-  }
-
-  const client = new Client()
-    .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-    .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-    .setKey(APPWRITE_API_KEY ?? '');
-  const databases = new Databases(client);
+  const id = `notif_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
 
   try {
-    const subs = await databases.listDocuments({
-      databaseId: PUBLIC_APPWRITE_DATABASE_ID,
-      collectionId: SUBSCRIPTIONS_COLLECTION,
-      queries: [Query.limit(1)],
+    await db.insert(notificationsOutbox).values({
+      id,
+      title: payload.title,
+      body: payload.body,
+      url: payload.url,
+      audience: payload.audience,
+      sentCount: 0,
     });
-    const subscribers = subs.total;
-
-    await databases.createDocument({
-      databaseId: PUBLIC_APPWRITE_DATABASE_ID,
-      collectionId: OUTBOX_COLLECTION,
-      documentId: ID.unique(),
-      data: {
-        title: payload.title,
-        body: payload.body,
-        url: payload.url,
-        audience: payload.audience,
-        queuedAt: new Date().toISOString(),
-        sentCount: 0,
-      },
-    });
-
-    const pending = await databases.listDocuments({
-      databaseId: PUBLIC_APPWRITE_DATABASE_ID,
-      collectionId: OUTBOX_COLLECTION,
-      queries: [Query.equal('sentCount', 0), Query.limit(1)],
-    });
-
-    return json(
-      { ok: true, queued: true, subscribers, queueDepth: pending.total },
-      201,
-    );
+    return json({ ok: true, id }, 202);
   } catch (error) {
-    if (
-      error instanceof AppwriteException &&
-      (error.code === 404 || error.type === 'collection_not_found')
-    ) {
-      console.error('[push] outbox or subscriptions collection missing', {
-        outbox: OUTBOX_COLLECTION,
-        subscriptions: SUBSCRIPTIONS_COLLECTION,
-      });
-      return json({ ok: false, message: 'Push unavailable' }, 503);
-    }
     console.error('[push] enqueue failed', error);
-    return json({ ok: false, message: 'An kasa tsara aikawa' }, 503);
+    return json({ ok: false, message: 'An kasa aikawa' }, 503);
   }
 };

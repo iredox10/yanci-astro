@@ -4,40 +4,16 @@
  *
  * Standalone background worker to format and publish social media posts
  * (Twitter/X and Facebook Page) for published articles.
- *
- * Usage:
- *   node scripts/social-auto-post.mjs --check-recent [--dry-run]
- *   node scripts/social-auto-post.mjs <article_id> [--dry-run]
- *
- * Environment variables:
- *   PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID,
- *   PUBLIC_APPWRITE_DATABASE_ID, PUBLIC_APPWRITE_COLLECTION_ARTICLES,
- *   APPWRITE_API_KEY, PUBLIC_SITE_URL
- *   TWITTER_BEARER_TOKEN, TWITTER_API_KEY, TWITTER_API_SECRET,
- *   TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET
- *   FACEBOOK_PAGE_ID, FACEBOOK_ACCESS_TOKEN
+ * Designed to run on Heroku Scheduler (e.g. every 10-30 mins).
  */
 
-import { Client, Databases, Query } from 'node-appwrite';
+import pg from 'pg';
 import dns from 'node:dns';
 import crypto from 'node:crypto';
-import { setGlobalDispatcher, Agent } from 'undici';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-// Force IPv4 DNS resolution for reliability
 dns.setDefaultResultOrder('ipv4first');
-setGlobalDispatcher(
-  new Agent({
-    connect: {
-      timeout: 60000,
-      lookup: (hostname, options, callback) =>
-        dns.lookup(hostname, { ...options, family: 4 }, callback),
-    },
-    headersTimeout: 120000,
-    bodyTimeout: 120000,
-  }),
-);
 
 function loadEnv() {
   const envPath = join(process.cwd(), '.env');
@@ -57,117 +33,75 @@ function loadEnv() {
 
 const env = { ...loadEnv(), ...process.env };
 
-const ENDPOINT = env.PUBLIC_APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1';
-const PROJECT = env.PUBLIC_APPWRITE_PROJECT_ID;
-const DATABASE = env.PUBLIC_APPWRITE_DATABASE_ID;
-const COLLECTION_ARTICLES = env.PUBLIC_APPWRITE_COLLECTION_ARTICLES || 'articles';
-const API_KEY = env.APPWRITE_API_KEY;
-const SITE_URL = (env.PUBLIC_SITE_URL || 'https://yanci.ng').replace(/\/+$/, '');
+const SITE_URL = (env.PUBLIC_SITE_URL || 'https://yanci.ng').replace(/\/$/, '');
+const DATABASE_URL = env.DATABASE_URL;
 
-// Twitter/X credentials
-const TWITTER_BEARER_TOKEN = env.TWITTER_BEARER_TOKEN || '';
-const TWITTER_API_KEY = env.TWITTER_API_KEY || '';
-const TWITTER_API_SECRET = env.TWITTER_API_SECRET || '';
-const TWITTER_ACCESS_TOKEN = env.TWITTER_ACCESS_TOKEN || '';
-const TWITTER_ACCESS_SECRET = env.TWITTER_ACCESS_SECRET || '';
+// Twitter / X
+const TWITTER_BEARER_TOKEN = env.TWITTER_BEARER_TOKEN;
+const TWITTER_API_KEY = env.TWITTER_API_KEY;
+const TWITTER_API_SECRET = env.TWITTER_API_SECRET;
+const TWITTER_ACCESS_TOKEN = env.TWITTER_ACCESS_TOKEN;
+const TWITTER_ACCESS_SECRET = env.TWITTER_ACCESS_SECRET;
 
-// Facebook credentials
-const FACEBOOK_PAGE_ID = env.FACEBOOK_PAGE_ID || 'me';
-const FACEBOOK_ACCESS_TOKEN = env.FACEBOOK_ACCESS_TOKEN || '';
+// Facebook
+const FACEBOOK_PAGE_ID = env.FACEBOOK_PAGE_ID;
+const FACEBOOK_ACCESS_TOKEN = env.FACEBOOK_ACCESS_TOKEN;
 
-const HASHTAGS = '#Yanci #Labarai';
+const HASHTAGS = '#Yanci #Labarai #Najeriya #Hausa';
+const TCO_LENGTH = 23;
 
-// Parse arguments
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes('--dry-run');
 const CHECK_RECENT = args.includes('--check-recent');
-const SHOW_HELP = args.includes('--help') || args.includes('-h');
-const positionalArgs = args.filter((arg) => !arg.startsWith('--') && !arg.startsWith('-'));
-const ARTICLE_ID = positionalArgs[0] || null;
+const ARTICLE_ID = args.find((a) => !a.startsWith('--'));
 
-if (SHOW_HELP || (!CHECK_RECENT && !ARTICLE_ID)) {
+if (!ARTICLE_ID && !CHECK_RECENT) {
   console.log(`
-social-auto-post.mjs - Social media auto-poster for Yanci articles
-
 Usage:
   node scripts/social-auto-post.mjs --check-recent [--dry-run]
   node scripts/social-auto-post.mjs <article_id> [--dry-run]
-
-Options:
-  --check-recent   Find published articles in the last 24h where social_posted is not true
-  --dry-run        Format and preview posts without calling APIs or updating the DB
-  --help, -h       Show this help message
-
-Configuration (via .env or environment):
-  Appwrite:   PUBLIC_APPWRITE_PROJECT_ID, PUBLIC_APPWRITE_DATABASE_ID, APPWRITE_API_KEY
-  Twitter:    TWITTER_BEARER_TOKEN or (TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET)
-  Facebook:   FACEBOOK_ACCESS_TOKEN, FACEBOOK_PAGE_ID
-`);
-  process.exit(SHOW_HELP ? 0 : 1);
+  `);
+  process.exit(0);
 }
 
-if (!PROJECT || !DATABASE || !API_KEY) {
-  console.error(
-    'Error: Missing required Appwrite environment variables (PUBLIC_APPWRITE_PROJECT_ID, PUBLIC_APPWRITE_DATABASE_ID, APPWRITE_API_KEY)',
-  );
+if (!DATABASE_URL) {
+  console.error('[social-auto-post] ERROR: DATABASE_URL is not set.');
   process.exit(1);
 }
 
-const client = new Client().setEndpoint(ENDPOINT).setProject(PROJECT).setKey(API_KEY);
-const databases = new Databases(client);
+const isLocal = DATABASE_URL.includes('localhost') || DATABASE_URL.includes('127.0.0.1');
+const pool = new pg.Pool({
+  connectionString: DATABASE_URL,
+  ssl: isLocal ? false : { rejectUnauthorized: false },
+  max: 1,
+});
 
-async function withRetry(fn, label, attempts = 5) {
-  for (let i = 1; ; i++) {
-    try {
-      return await fn();
-    } catch (error) {
-      const transport =
-        error?.type === 'Error' ||
-        /fetch failed|ETIMEDOUT|ENETUNREACH|ECONN|timeout/i.test(
-          String(error?.cause ?? error),
-        );
-      if (i >= attempts || (error && !transport)) throw error;
-      const wait = Math.min(2000 * 2 ** (i - 1), 15000);
-      console.log(
-        `    [retry] ${label} (attempt ${i}, wait ${wait}ms): ${error?.cause?.code ?? error?.code ?? 'network error'}`,
-      );
-      await new Promise((r) => setTimeout(r, wait));
-    }
-  }
-}
-
-/** Helper: percent-encoding according to RFC 3986 for OAuth 1.0a */
 function percentEncode(str) {
-  return encodeURIComponent(str).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return encodeURIComponent(str)
+    .replace(/!/g, '%21')
+    .replace(/'/g, '%27')
+    .replace(/\(/g, '%28')
+    .replace(/\)/g, '%29')
+    .replace(/\*/g, '%2A');
 }
 
-/** Helper: generate OAuth 1.0a HMAC-SHA1 Authorization header */
 function getOAuth1Header({ method, url, apiKey, apiSecret, accessToken, accessSecret }) {
   const oauthParams = {
     oauth_consumer_key: apiKey,
-    oauth_nonce: crypto.randomBytes(16).toString('hex'),
+    oauth_token: accessToken,
     oauth_signature_method: 'HMAC-SHA1',
     oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
-    oauth_token: accessToken,
+    oauth_nonce: crypto.randomBytes(16).toString('hex'),
     oauth_version: '1.0',
   };
 
   const sortedKeys = Object.keys(oauthParams).sort();
-  const paramString = sortedKeys
-    .map((key) => `${percentEncode(key)}=${percentEncode(oauthParams[key])}`)
-    .join('&');
-
-  const baseString = [
-    method.toUpperCase(),
-    percentEncode(url),
-    percentEncode(paramString),
-  ].join('&');
-
+  const paramString = sortedKeys.map((k) => `${percentEncode(k)}=${percentEncode(oauthParams[k])}`).join('&');
+  const signatureBase = `${method.toUpperCase()}&${percentEncode(url)}&${percentEncode(paramString)}`;
   const signingKey = `${percentEncode(apiSecret)}&${percentEncode(accessSecret)}`;
-  const signature = crypto.createHmac('sha1', signingKey).update(baseString).digest('base64');
+  const signature = crypto.createHmac('sha1', signingKey).update(signatureBase).digest('base64');
 
   oauthParams.oauth_signature = signature;
-
   const headerParts = Object.keys(oauthParams)
     .sort()
     .map((k) => `${percentEncode(k)}="${percentEncode(oauthParams[k])}"`);
@@ -175,27 +109,18 @@ function getOAuth1Header({ method, url, apiKey, apiSecret, accessToken, accessSe
   return `OAuth ${headerParts.join(', ')}`;
 }
 
-function getArticleUrl(article) {
-  const identifier = article.slug || article.$id;
-  return `${SITE_URL}/article/${identifier}`;
-}
-
-/** Formats a tweet text respecting the 280-character limit with 23-char t.co url */
 function formatTwitterPost(article, articleUrl) {
   const headline = (article.headline || '').trim();
   const trail = (article.trail || '').trim();
-  const tags = HASHTAGS;
   const url = articleUrl;
+  const tags = HASHTAGS;
 
-  // t.co URL counts as 23 characters
-  const urlLen = 23;
-  const tagLen = tags.length;
-  const separatorLen = 4; // newlines & space
-  const availableForText = 280 - (urlLen + tagLen + separatorLen);
+  const urlAndTags = `\n\n${url} ${tags}`;
+  const availableForText = 280 - (TCO_LENGTH + 2 + tags.length + 2);
 
-  if (trail && headline.length + trail.length + 2 <= availableForText) {
-    return `${headline}\n\n${trail}\n\n${url} ${tags}`;
-  } else if (trail && headline.length + 10 <= availableForText) {
+  if (headline.length + 2 + trail.length <= availableForText) {
+    return `${headline}\n\n${trail}${urlAndTags}`;
+  } else if (headline.length + 5 <= availableForText && trail.length > 0) {
     const maxTrail = availableForText - headline.length - 5;
     const truncatedTrail = trail.slice(0, maxTrail).replace(/[,\s]+$/, '') + '...';
     return `${headline}\n\n${truncatedTrail}\n\n${url} ${tags}`;
@@ -207,7 +132,6 @@ function formatTwitterPost(article, articleUrl) {
   }
 }
 
-/** Formats a Facebook page post */
 function formatFacebookPost(article, articleUrl) {
   const headline = (article.headline || '').trim();
   const trail = (article.trail || '').trim();
@@ -249,7 +173,7 @@ async function postToTwitter(tweetText) {
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
-      'Authorization': authHeader,
+      Authorization: authHeader,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ text: tweetText }),
@@ -264,31 +188,24 @@ async function postToTwitter(tweetText) {
   }
 
   if (!response.ok) {
-    throw new Error(`Twitter API HTTP ${response.status}: ${JSON.stringify(json)}`);
+    throw new Error(`Twitter API error (${response.status}): ${JSON.stringify(json)}`);
   }
 
-  return { configured: true, ok: true, id: json?.data?.id, response: json };
+  return { ok: true, data: json };
 }
 
-async function postToFacebook({ message, link }) {
-  if (!FACEBOOK_ACCESS_TOKEN) {
-    return { configured: false, skipped: true, reason: 'FACEBOOK_ACCESS_TOKEN not configured' };
+async function postToFacebook(fbPost) {
+  if (!FACEBOOK_PAGE_ID || !FACEBOOK_ACCESS_TOKEN) {
+    return { configured: false, skipped: true, reason: 'No Facebook credentials configured' };
   }
 
-  const endpoint = `https://graph.facebook.com/v20.0/${encodeURIComponent(FACEBOOK_PAGE_ID)}/feed`;
+  const endpoint = `https://graph.facebook.com/v19.0/${FACEBOOK_PAGE_ID}/feed`;
+  const url = new URL(endpoint);
+  url.searchParams.set('message', fbPost.message);
+  url.searchParams.set('link', fbPost.link);
+  url.searchParams.set('access_token', FACEBOOK_ACCESS_TOKEN);
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      message,
-      link,
-      access_token: FACEBOOK_ACCESS_TOKEN,
-    }),
-  });
-
+  const response = await fetch(url.toString(), { method: 'POST' });
   const responseBody = await response.text();
   let json;
   try {
@@ -298,187 +215,101 @@ async function postToFacebook({ message, link }) {
   }
 
   if (!response.ok) {
-    throw new Error(`Facebook Graph API HTTP ${response.status}: ${JSON.stringify(json)}`);
+    throw new Error(`Facebook API error (${response.status}): ${JSON.stringify(json)}`);
   }
 
-  return { configured: true, ok: true, id: json?.id, response: json };
+  return { ok: true, data: json };
 }
 
 async function processArticle(article) {
-  const id = article.$id;
+  const id = article.id;
   const headline = article.headline || '(untitled)';
-  const articleUrl = getArticleUrl(article);
-  const isPublished = article.status === 'published';
+  const articleUrl = `${SITE_URL}/article/${id}`;
 
-  console.log(`\n------------------------------------------------------------`);
-  console.log(`Processing article: ${id}`);
-  console.log(`Headline: "${headline}"`);
-  console.log(`Status: ${article.status || 'unknown'} (isLive: ${article.isLive})`);
+  console.log(`\n----------------------------------------`);
+  console.log(`Processing: "${headline}" (ID: ${id})`);
   console.log(`URL: ${articleUrl}`);
-  console.log(`social_posted: ${article.social_posted === true}`);
-
-  if (!isPublished) {
-    console.warn(`  [warn] Article is not in 'published' status (status="${article.status}").`);
-  }
 
   const tweetText = formatTwitterPost(article, articleUrl);
   const fbPost = formatFacebookPost(article, articleUrl);
 
-  const hasTwitterCreds = Boolean(
-    (TWITTER_API_KEY && TWITTER_API_SECRET && TWITTER_ACCESS_TOKEN && TWITTER_ACCESS_SECRET) ||
-      TWITTER_BEARER_TOKEN,
-  );
-  const hasFacebookCreds = Boolean(FACEBOOK_ACCESS_TOKEN);
-
-  console.log(`\n  [Twitter/X Post Preview (${tweetText.length} chars)]:`);
-  console.log(`  -----------------------------------------`);
-  console.log(tweetText.split('\n').map((l) => `  | ${l}`).join('\n'));
-  console.log(`  -----------------------------------------`);
-  console.log(`  Twitter credentials configured: ${hasTwitterCreds}`);
-
-  console.log(`\n  [Facebook Post Preview]:`);
-  console.log(`  -----------------------------------------`);
-  console.log(fbPost.message.split('\n').map((l) => `  | ${l}`).join('\n'));
-  console.log(`  | Link: ${fbPost.link}`);
-  console.log(`  -----------------------------------------`);
-  console.log(`  Facebook credentials configured: ${hasFacebookCreds}`);
-
   if (DRY_RUN) {
-    console.log(`\n  [dry-run] Skipping actual social API calls and DB update.`);
+    console.log('\n[DRY RUN - Twitter Preview]:\n' + tweetText);
+    console.log('\n[DRY RUN - Facebook Preview]:\n' + fbPost.message);
     return { ok: true, dryRun: true };
   }
 
-  if (!hasTwitterCreds && !hasFacebookCreds) {
-    console.log(
-      `\n  [skip] No social credentials configured (Twitter/Facebook tokens missing). Skipping post.`,
-    );
-    return { ok: false, reason: 'No credentials configured' };
-  }
-
-  const results = {};
   let anySuccess = false;
 
-  // Twitter/X
-  if (hasTwitterCreds) {
-    try {
-      console.log(`  Posting to Twitter/X...`);
-      const twRes = await postToTwitter(tweetText);
-      results.twitter = twRes;
-      console.log(`  [Twitter/X] Successfully posted (Tweet ID: ${twRes.id || 'ok'})`);
+  // Twitter
+  try {
+    const twRes = await postToTwitter(tweetText);
+    if (twRes.ok) {
+      console.log(`  [Twitter] Successfully posted!`);
       anySuccess = true;
-    } catch (err) {
-      console.error(`  [Twitter/X Error]:`, err.message || err);
-      results.twitter = { ok: false, error: err.message };
     }
+  } catch (err) {
+    console.error(`  [Twitter Error]:`, err.message || err);
   }
 
   // Facebook
-  if (hasFacebookCreds) {
-    try {
-      console.log(`  Posting to Facebook Page (${FACEBOOK_PAGE_ID})...`);
-      const fbRes = await postToFacebook(fbPost);
-      results.facebook = fbRes;
-      console.log(`  [Facebook] Successfully posted (Post ID: ${fbRes.id || 'ok'})`);
+  try {
+    const fbRes = await postToFacebook(fbPost);
+    if (fbRes.ok) {
+      console.log(`  [Facebook] Successfully posted!`);
       anySuccess = true;
-    } catch (err) {
-      console.error(`  [Facebook Error]:`, err.message || err);
-      results.facebook = { ok: false, error: err.message };
     }
+  } catch (err) {
+    console.error(`  [Facebook Error]:`, err.message || err);
   }
 
-  // If at least one configured network succeeded, mark social_posted: true
   if (anySuccess) {
     try {
-      await withRetry(
-        () =>
-          databases.updateDocument(DATABASE, COLLECTION_ARTICLES, id, {
-            social_posted: true,
-          }),
-        `updateDocument(${id}, social_posted=true)`,
-      );
-      console.log(`  [Appwrite] Updated article ${id}: social_posted = true`);
+      await pool.query('UPDATE articles SET social_posted = true WHERE id = $1', [id]);
+      console.log(`  [DB] Updated article ${id}: social_posted = true`);
     } catch (err) {
-      console.error(`  [Appwrite Error] Failed to update social_posted on ${id}:`, err.message || err);
+      console.error(`  [DB Error] Failed to update social_posted on ${id}:`, err);
     }
   }
 
-  return { ok: anySuccess, results };
+  return { ok: anySuccess };
 }
 
 async function main() {
   const now = new Date();
   console.log(`\n=== Yanci Social Auto-Post Worker ===`);
   console.log(`Time: ${now.toISOString()}`);
-  console.log(`Mode: ${DRY_RUN ? 'DRY RUN (preview only)' : 'LIVE'}`);
+  console.log(`Mode: ${DRY_RUN ? 'DRY RUN' : 'LIVE'}`);
 
-  if (ARTICLE_ID) {
-    console.log(`Target: Single Article ID "${ARTICLE_ID}"`);
-    let article;
-    try {
-      article = await withRetry(
-        () => databases.getDocument(DATABASE, COLLECTION_ARTICLES, ARTICLE_ID),
-        `getDocument(${ARTICLE_ID})`,
-      );
-    } catch (err) {
-      console.error(`Error: Could not retrieve article "${ARTICLE_ID}":`, err.message || err);
-      process.exit(1);
-    }
-    await processArticle(article);
-  } else if (CHECK_RECENT) {
-    console.log(`Target: Published articles in last 24h where social_posted != true`);
-
-    const cutoffTime = Date.now() - 24 * 60 * 60 * 1000;
-    const cutoffIso = new Date(cutoffTime).toISOString();
-    console.log(`Checking articles published since: ${cutoffIso}`);
-
-    const perPage = 100;
-    let offset = 0;
-    const candidates = [];
-
-    while (true) {
-      const result = await withRetry(
-        () =>
-          databases.listDocuments(DATABASE, COLLECTION_ARTICLES, [
-            Query.equal('status', 'published'),
-            Query.orderDesc('$createdAt'),
-            Query.limit(perPage),
-            Query.offset(offset),
-          ]),
-        'listDocuments(status=published)',
-      );
-
-      const docs = result.documents || [];
-      for (const doc of docs) {
-        if (doc.social_posted === true) continue;
-        const pubDateStr = doc.publishAt || doc.$createdAt;
-        const pubTime = new Date(pubDateStr).getTime();
-        if (!isNaN(pubTime) && pubTime >= cutoffTime) {
-          candidates.push(doc);
-        }
+  try {
+    if (ARTICLE_ID) {
+      const res = await pool.query('SELECT * FROM articles WHERE id = $1 LIMIT 1', [ARTICLE_ID]);
+      if (!res.rows.length) {
+        console.error(`Article ${ARTICLE_ID} not found.`);
+        process.exit(1);
       }
+      await processArticle(res.rows[0]);
+    } else if (CHECK_RECENT) {
+      const res = await pool.query(`
+        SELECT * FROM articles
+        WHERE status = 'published'
+          AND (social_posted IS NULL OR social_posted = false)
+          AND created_at >= NOW() - INTERVAL '24 hours'
+        ORDER BY created_at DESC
+        LIMIT 50
+      `);
 
-      if (docs.length < perPage) break;
-      offset += perPage;
+      console.log(`Found ${res.rows.length} unposted recent article(s).`);
+      for (const row of res.rows) {
+        await processArticle(row);
+      }
     }
-
-    console.log(`Found ${candidates.length} recent article(s) needing social media posts.`);
-
-    if (candidates.length === 0) {
-      console.log('No recent unposted articles found.\n');
-      return;
-    }
-
-    let processed = 0;
-    for (const article of candidates) {
-      await processArticle(article);
-      processed++;
-    }
-
-    console.log(`\n=== Social auto-post complete: processed ${processed} article(s) ===\n`);
+  } catch (err) {
+    console.error('[social-auto-post] Error:', err);
+    process.exit(1);
+  } finally {
+    await pool.end();
   }
 }
 
-main().catch((err) => {
-  console.error('\nFatal error in social-auto-post script:', err);
-  process.exit(1);
-});
+main();

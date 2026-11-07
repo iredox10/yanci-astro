@@ -1,11 +1,6 @@
 import type { APIRoute } from 'astro';
-import { Client, Users, Query } from 'node-appwrite';
-import { APPWRITE_API_KEY } from 'astro:env/server';
-import {
-  PUBLIC_APPWRITE_ENDPOINT,
-  PUBLIC_APPWRITE_PROJECT_ID,
-  PUBLIC_SITE_URL,
-} from 'astro:env/client';
+import { eq } from 'drizzle-orm';
+import { db, users } from '@/db';
 import { getSettings } from '@lib/appwrite-server';
 import { sendMail } from '@lib/mailer';
 import { signResetToken } from '@lib/reset-token';
@@ -52,31 +47,30 @@ export const POST: APIRoute = async ({ request }) => {
 
   // Always report success: do not leak which emails have accounts.
   const settings = await getSettings();
-  const secret = APPWRITE_API_KEY ?? '';
-  if (secret && PUBLIC_APPWRITE_ENDPOINT && PUBLIC_APPWRITE_PROJECT_ID) {
-    try {
-      const client = new Client()
-        .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-        .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-        .setKey(secret);
-      const usersApi = new Users(client);
-      const { users } = await usersApi.list([Query.equal('email', email), Query.limit(1)]);
-      const user = users?.[0];
-      if (user) {
-        const token = signResetToken(email, secret);
-        const base = String(PUBLIC_SITE_URL || 'https://yanci.ng').replace(/\/$/, '');
-        const link = `${base}/admin/reset-password?token=${encodeURIComponent(token)}`;
-        const siteName = settings.site_name || 'Yanci';
-        await sendMail(settings, {
-          to: email,
-          subject: `${siteName} — Sake saita kalmar shiga`,
-          text: `Ana iya sake saita kalmar shiga ta wannan hanyar (yana aiki na mintuna 30):\n${link}\n\nIdan ba kai ba ne, ka yi watsi da wannan sakon.`,
-          html: `<p>Ana iya sake saita kalmar shiga ta wannan hanyar (yana aiki na mintuna 30):</p><p><a href="${link}">Sake saita kalmar shiga</a></p><p>Idan ba kai ba ne, ka yi watsi da wannan sakon.</p>`,
-        });
-      }
-    } catch (error) {
-      console.error('[auth] recovery failed', error);
+  const secret = process.env.SESSION_SECRET || 'yanci-default-session-secret-change-in-production';
+
+  try {
+    const [user] = await db
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+    if (user) {
+      const token = signResetToken(email, secret);
+      const base = String(process.env.PUBLIC_SITE_URL || 'https://yanci.ng').replace(/\/$/, '');
+      const link = `${base}/admin/reset-password?token=${encodeURIComponent(token)}`;
+      const siteName = settings.site_name || 'Yanci';
+
+      await sendMail(settings, {
+        to: email,
+        subject: `${siteName} — Sake saita kalmar shiga`,
+        text: `Ana iya sake saita kalmar shiga ta wannan hanyar (yana aiki na mintuna 30):\n${link}\n\nIdan ba kai ba ne, ka yi watsi da wannan sakon.`,
+        html: `<p>Ana iya sake saita kalmar shiga ta wannan hanyar (yana aiki na mintuna 30):</p><p><a href="${link}">Sake saita kalmar shiga</a></p><p>Idan ba kai ba ne, ka yi watsi da wannan sakon.</p>`,
+      });
     }
+  } catch (error) {
+    console.error('[auth] recovery failed', error);
   }
 
   return json({ ok: true, message: 'Idan akwai wannan asusu, an aika hanyar sake saitin kalmar shiga.' });

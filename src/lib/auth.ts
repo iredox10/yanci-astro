@@ -1,43 +1,7 @@
-import { Client, Account, Users, Databases, Query } from 'node-appwrite';
-import { APPWRITE_COLLECTION_ROLES, APPWRITE_API_KEY } from 'astro:env/server';
-import {
-  PUBLIC_APPWRITE_ENDPOINT,
-  PUBLIC_APPWRITE_PROJECT_ID,
-  PUBLIC_APPWRITE_DATABASE_ID,
-} from 'astro:env/client';
-
-let _authFetchTuned = false;
-async function tuneAuthFetch(): Promise<void> {
-  if (_authFetchTuned) return;
-  _authFetchTuned = true;
-  try {
-    const dns = await import('node:dns');
-    dns.setDefaultResultOrder('ipv4first');
-    const { Agent, setGlobalDispatcher } = await import('undici');
-    setGlobalDispatcher(
-      new Agent({
-        connect: {
-          autoSelectFamily: false,
-          lookup: (hostname, options, callback) => {
-            dns.lookup(hostname, { ...options, family: 4 }, callback);
-          },
-          timeout: 8_000,
-        },
-        keepAliveTimeout: 60_000,
-      }),
-    );
-  } catch {
-    // undici unavailable — keep default fetch timeouts
-  }
-}
-void tuneAuthFetch();
-
-/**
- * Server-side session verification. The legacy app trusted client-side auth
- * state ("anyone logged in is an editor"); here every admin call re-verifies
- * the session with Appwrite and re-reads the role from the `roles` collection
- * (falling back to verified server-side user labels).
- */
+import crypto from 'node:crypto';
+import bcrypt from 'bcryptjs';
+import { eq, and, gt } from 'drizzle-orm';
+import { db, users, sessions, roles } from '../db';
 
 export interface SessionUser {
   id: string;
@@ -47,10 +11,8 @@ export interface SessionUser {
   labels?: string[];
 }
 
-/** `super_admin` has the most access; unknown roles are denied, never "editor". */
-const ROLE_PRIORITY: Record<string, number> = {
+export const ROLE_PRIORITY: Record<string, number> = {
   super_admin: 4,
-  // Legacy handlers request `admin` as the minimum role; treat it as super_admin.
   admin: 4,
   managing_editor: 3,
   editor: 2,
@@ -58,7 +20,11 @@ const ROLE_PRIORITY: Record<string, number> = {
   contributor: 0,
 };
 
-const PREFERRED_ROLES = ['super_admin', 'managing_editor', 'editor', 'author', 'contributor'];
+export const ADMIN_COOKIE = 'yc_session';
+const SESSION_TTL_DAYS = 30;
+const SESSION_CACHE_TTL_MS = 60_000;
+
+const _sessionCache = new Map<string, { user: SessionUser; expires: number }>();
 
 function parseCookies(request?: Request): Map<string, string> {
   const map = new Map<string, string>();
@@ -70,10 +36,10 @@ function parseCookies(request?: Request): Map<string, string> {
     return map;
   }
   for (const part of header.split(';')) {
-    const eq = part.indexOf('=');
-    if (eq === -1) continue;
-    const key = part.slice(0, eq).trim();
-    let value = part.slice(eq + 1).trim();
+    const eqIdx = part.indexOf('=');
+    if (eqIdx === -1) continue;
+    const key = part.slice(0, eqIdx).trim();
+    let value = part.slice(eqIdx + 1).trim();
     try {
       value = decodeURIComponent(value);
     } catch {
@@ -84,27 +50,11 @@ function parseCookies(request?: Request): Map<string, string> {
   return map;
 }
 
-/**
- * Validate a session credential: either a 3-part JWT, raw session secret, or Appwrite's base64
- * JSON session envelope `{"id":...,"secret":...}` (the legacy session token).
- */
 export function isSessionToken(value: string): boolean {
   if (!value || typeof value !== 'string') return false;
-  if (value.split('.').length === 3) return true;
-  // Raw session secret token (alphanumeric/hex string, e.g. 64-256 chars)
-  if (/^[A-Za-z0-9_\-\.]+$/.test(value) && value.length >= 16) return true;
-  if (/^[A-Za-z0-9+/]+={0,2}$/.test(value)) {
-    try {
-      const parsed = JSON.parse(Buffer.from(value, 'base64').toString('utf8'));
-      return typeof parsed?.id === 'string' && typeof parsed?.secret === 'string';
-    } catch {
-      return false;
-    }
-  }
-  return false;
+  return /^[A-Za-z0-9_\-\.]{16,128}$/.test(value);
 }
 
-/** Pull a session token out of the request: Authorization header or cookie. */
 export async function sessionTokenFrom(request?: Request): Promise<string | null> {
   if (!request) return null;
   let auth = '';
@@ -120,31 +70,11 @@ export async function sessionTokenFrom(request?: Request): Promise<string | null
   }
 
   const cookies = parseCookies(request);
+  const token = cookies.get(ADMIN_COOKIE);
+  if (token && isSessionToken(token)) return token;
 
-  // Admin console cookie (HttpOnly, set by POST /api/auth/login).
-  const admin = cookies.get(ADMIN_COOKIE);
-  if (admin && isSessionToken(admin)) return admin;
-
-  const project = PUBLIC_APPWRITE_PROJECT_ID;
-  if (!project) return null;
-  for (const key of [`a_session_${project}`, `a_session_${project}_legacy`]) {
-    const value = cookies.get(key);
-    if (!value) continue;
-    const token = value.startsWith('{') ? null : value;
-    if (token && isSessionToken(token)) return token;
-    // JSON cookie format: attempt to recover a session token field.
-    try {
-      const parsed = JSON.parse(value);
-      const token = parsed?.jwt ?? parsed?.token ?? null;
-      if (token && isSessionToken(String(token))) return String(token);
-    } catch {
-      /* not JSON */
-    }
-  }
   return null;
 }
-
-export const ADMIN_COOKIE = 'yc_session';
 
 export function adminCookieHeader(token: string, maxAgeSeconds: number, reset = false): string {
   const secure = import.meta.env?.PROD ? '; Secure' : '';
@@ -160,206 +90,158 @@ export function adminCookieHeader(token: string, maxAgeSeconds: number, reset = 
     .join('; ');
 }
 
-/**
- * Create an Appwrite email/password session server-side and return its
- * session token. Used for reader and staff authentication.
- */
+export async function hashPassword(plain: string): Promise<string> {
+  return bcrypt.hash(plain, 10);
+}
+
+export async function verifyPassword(plain: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(plain, hash);
+}
+
 export async function createSession(
   email: string,
   password: string,
-): Promise<{ token: string; user: SessionUser } | { ok: false; status: number; message?: string }> {
-  await tuneAuthFetch();
-  if (!PUBLIC_APPWRITE_ENDPOINT || !PUBLIC_APPWRITE_PROJECT_ID) {
-    return { ok: false, status: 503, message: 'Tsarin Appwrite bai kammala ba' };
-  }
+  request?: Request,
+): Promise<{ token: string; user: SessionUser } | { ok: false; status: number; message: string }> {
   try {
-    const publicClient = new Client()
-      .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-      .setProject(PUBLIC_APPWRITE_PROJECT_ID);
+    const normalizedEmail = email.trim().toLowerCase();
+    const [userRecord] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, normalizedEmail))
+      .limit(1);
 
-    const account = new Account(publicClient);
-    // 1. Verify user password with Appwrite
-    const clientSession = await account.createEmailPasswordSession(email.trim(), password);
-    const userId = clientSession.userId;
-
-    if (!userId) {
+    if (!userRecord || !userRecord.active) {
       return { ok: false, status: 401, message: 'Imel ko kalmar sirri ba daidai ba ne' };
     }
 
-    // 2. Generate secure session token on server
-    let token = clientSession.secret;
-    if (!token && APPWRITE_API_KEY) {
-      const adminClient = new Client()
-        .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-        .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-        .setKey(APPWRITE_API_KEY);
-      const serverSession = await new Users(adminClient).createSession(userId);
-      token = serverSession.secret;
+    const passwordValid = await verifyPassword(password, userRecord.passwordHash);
+    if (!passwordValid) {
+      return { ok: false, status: 401, message: 'Imel ko kalmar sirri ba daidai ba ne' };
     }
 
-    if (!token) {
-      return { ok: false, status: 401, message: 'An kasa samar da session' };
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
+
+    let userAgent: string | undefined;
+    let ipAddress: string | undefined;
+
+    if (request) {
+      userAgent = request.headers.get('user-agent') ?? undefined;
+      ipAddress =
+        request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+        request.headers.get('cf-connecting-ip') ??
+        undefined;
     }
 
-    const verified = await verifySession(token);
-    if (!verified) {
-      // Fallback verification using userId
-      const custom = await roleForUser(userId);
-      let userRole = custom;
-      let userName = clientSession.providerUid || email;
-      let userLabels: string[] = [];
+    await db.insert(sessions).values({
+      id: token,
+      userId: userRecord.id,
+      expiresAt,
+      userAgent,
+      ipAddress,
+    });
 
-      if (APPWRITE_API_KEY) {
-        try {
-          const adminClient = new Client()
-            .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-            .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-            .setKey(APPWRITE_API_KEY);
-          const u = await new Users(adminClient).get(userId);
-          userName = u.name || userName;
-          userLabels = u.labels || [];
-          if (!userRole) {
-            userRole = (await roleFromLabels(u.labels)) ?? 'reader';
-          }
-        } catch {
-          /* ignore */
-        }
-      }
-
-      const user: SessionUser = {
-        id: userId,
-        name: userName,
-        email: email.trim(),
-        role: userRole ?? 'reader',
-        labels: userLabels,
-      };
-      _sessionCache.set(token, { user, expires: Date.now() + SESSION_TTL_MS });
-      return { token, user };
-    }
-
-    const custom = await roleForUser(verified.id);
-    const role = custom ?? (await roleFromLabels(verified.labels)) ?? 'reader';
-    const user: SessionUser = { ...verified, role };
-    _sessionCache.set(token, { user, expires: Date.now() + SESSION_TTL_MS });
-    return { token, user };
-  } catch (err: any) {
-    const status = err?.code === 401 || err?.status === 401 ? 401 : 400;
-    return {
-      ok: false,
-      status,
-      message: err?.message || 'Imel ko kalmar sirri ba daidai ba ne',
+    const sessionUser: SessionUser = {
+      id: userRecord.id,
+      name: userRecord.name,
+      email: userRecord.email,
+      role: userRecord.role,
+      labels: [userRecord.role],
     };
+
+    _sessionCache.set(token, { user: sessionUser, expires: Date.now() + SESSION_CACHE_TTL_MS });
+
+    return { token, user: sessionUser };
+  } catch (error) {
+    console.error('[auth] createSession error', error);
+    return { ok: false, status: 500, message: 'Kuskuren uwar garke wajen shiga' };
   }
 }
 
-/**
- * Create an Appwrite email/password session server-side and ensure the user
- * has an editorial role.
- */
 export async function createAdminSession(
   email: string,
   password: string,
-): Promise<{ token: string; user: SessionUser } | { ok: false; status: number; message?: string }> {
-  const result = await createSession(email, password);
+  request?: Request,
+): Promise<{ token: string; user: SessionUser } | { ok: false; status: number; message: string }> {
+  const result = await createSession(email, password, request);
   if (!('token' in result)) return result;
+
   if (ROLE_PRIORITY[result.user.role] === undefined) {
     return { ok: false, status: 403, message: 'Ba ku da ikon shiga bangaren admin ba' };
   }
   return result;
 }
 
-export async function verifySession(
-  token: string,
-): Promise<Omit<SessionUser, 'role'> | null> {
-  await tuneAuthFetch();
-  if (!PUBLIC_APPWRITE_ENDPOINT || !PUBLIC_APPWRITE_PROJECT_ID) return null;
+export async function destroySession(token: string): Promise<void> {
+  _sessionCache.delete(token);
   try {
-    const client = new Client()
-      .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-      .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-      .setSession(token);
-    const session = await new Account(client).get();
-    return {
-      id: session.$id,
-      name: session.name,
-      email: session.email,
-      labels: (session as unknown as { labels?: string[] }).labels ?? [],
-    };
-  } catch {
-    return null;
+    await db.delete(sessions).where(eq(sessions.id, token));
+  } catch (err) {
+    console.error('[auth] destroySession error', err);
   }
 }
 
-export async function roleForUser(userId: string): Promise<string | null> {
-  await tuneAuthFetch();
-  if (!PUBLIC_APPWRITE_DATABASE_ID || !APPWRITE_COLLECTION_ROLES) return null;
-  try {
-    const client = new Client()
-      .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-      .setProject(PUBLIC_APPWRITE_PROJECT_ID);
-    const roles = await new Databases(client).listDocuments({
-      databaseId: PUBLIC_APPWRITE_DATABASE_ID,
-      collectionId: APPWRITE_COLLECTION_ROLES,
-      queries: [
-        Query.or([Query.equal('userId', userId), Query.equal('user_id', userId)]),
-        Query.limit(1),
-      ],
-    });
-    const first = roles?.documents?.[0];
-    const role = String(first?.role ?? '');
-    return ROLE_PRIORITY[role] !== undefined ? role : null;
-  } catch {
-    return null;
-  }
-}
-
-export async function roleFromLabels(labels: string[] | undefined): Promise<string | null> {
-  if (!labels) return null;
-  const set = new Set(labels.map((l) => l.trim().toLowerCase()));
-  // Legacy app stored "superadmin" (Appwrite labels forbid underscores);
-  // accept that spelling alongside the underscore form.
-  if (set.has('super_admin') || set.has('superadmin')) return 'super_admin';
-  if (set.has('managing_editor') || set.has('managingeditor')) return 'managing_editor';
-  for (const candidate of PREFERRED_ROLES) {
-    if (set.has(candidate)) return candidate;
-  }
-  return null;
-}
-
-const _sessionCache = new Map<string, { user: SessionUser; expires: number }>();
-const SESSION_TTL_MS = 60_000;
-
-/** Retrieve authenticated user without requiring an editorial role (readers or staff). */
 export async function getSessionUser(request: Request): Promise<SessionUser | null> {
   const token = await sessionTokenFrom(request);
   if (!token) return null;
+
   const cached = _sessionCache.get(token);
   if (cached && cached.expires > Date.now()) return cached.user;
-  const session = await verifySession(token);
-  if (!session) return null;
-  const custom = await roleForUser(session.id);
-  const role = custom ?? (await roleFromLabels(session.labels)) ?? 'reader';
-  const user: SessionUser = { ...session, role };
-  _sessionCache.set(token, { user, expires: Date.now() + SESSION_TTL_MS });
-  return user;
+
+  try {
+    const result = await db
+      .select({
+        sessionId: sessions.id,
+        sessionExpiresAt: sessions.expiresAt,
+        userId: users.id,
+        userName: users.name,
+        userEmail: users.email,
+        userRole: users.role,
+        userActive: users.active,
+      })
+      .from(sessions)
+      .innerJoin(users, eq(sessions.userId, users.id))
+      .where(and(eq(sessions.id, token), gt(sessions.expiresAt, new Date())))
+      .limit(1);
+
+    if (!result.length) {
+      _sessionCache.delete(token);
+      return null;
+    }
+
+    const row = result[0];
+    if (!row.userActive) return null;
+
+    const user: SessionUser = {
+      id: row.userId,
+      name: row.userName,
+      email: row.userEmail,
+      role: row.userRole,
+      labels: [row.userRole],
+    };
+
+    _sessionCache.set(token, { user, expires: Date.now() + SESSION_CACHE_TTL_MS });
+    return user;
+  } catch (err) {
+    console.error('[auth] getSessionUser error', err);
+    return null;
+  }
 }
 
-export async function requireUser(request: Request): Promise<{ ok: true; user: SessionUser } | { ok: false; status: number }> {
-  const token = await sessionTokenFrom(request);
-  if (!token) return { ok: false, status: 401 };
-  const cached = _sessionCache.get(token);
-  if (cached && cached.expires > Date.now()) return { ok: true, user: cached.user };
-  const session = await verifySession(token);
-  if (!session) return { ok: false, status: 401 };
-  const custom = await roleForUser(session.id);
-  const role = custom ?? (await roleFromLabels(session.labels));
-  if (!role || ROLE_PRIORITY[role] === undefined) return { ok: false, status: 403 };
-  const user: SessionUser = { ...session, role };
-  _sessionCache.set(token, { user, expires: Date.now() + SESSION_TTL_MS });
+export async function requireUser(
+  request: Request,
+): Promise<{ ok: true; user: SessionUser } | { ok: false; status: number }> {
+  const user = await getSessionUser(request);
+  if (!user) return { ok: false, status: 401 };
+
+  if (ROLE_PRIORITY[user.role] === undefined) {
+    return { ok: false, status: 403 };
+  }
+
   return { ok: true, user };
 }
 
-/** True when the authenticated user has at least `minRole` (or is admin). */
 export function hasRole(user: SessionUser, minRole: string): boolean {
   return (ROLE_PRIORITY[user.role] ?? -1) >= (ROLE_PRIORITY[minRole] ?? Infinity);
 }

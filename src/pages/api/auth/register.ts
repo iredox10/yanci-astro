@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
-import { Client, Users } from 'node-appwrite';
-import { APPWRITE_API_KEY } from 'astro:env/server';
-import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
-import { adminCookieHeader } from '@lib/auth';
+import crypto from 'node:crypto';
+import { eq } from 'drizzle-orm';
+import { db, users } from '@/db';
+import { adminCookieHeader, createSession, hashPassword } from '@lib/auth';
 import { sanitizePlainText } from '@lib/sanitize';
 
 export const prerender = false;
@@ -19,7 +19,6 @@ const json = (data: unknown, status = 200, headers: Record<string, string> = {})
     headers: { 'Content-Type': 'application/json', ...headers },
   });
 
-// Naive IP-hash rate limiting, same spirit as api/comments.
 const _attempts = new Map<string, number[]>();
 setInterval(() => {
   const cutoff = Date.now() - RATE_WINDOW_MS;
@@ -49,39 +48,6 @@ function rateLimited(ip: string): boolean {
   return false;
 }
 
-/**
- * Create an Appwrite email/password session without the editorial-role gate of
- * `createAdminSession` — self-registered readers get accounts, never roles
- * (the legacy register flow assigned none). Admin surfaces stay protected by
- * `requireUser`, which re-verifies roles on every request.
- */
-async function createReaderSession(email: string, password: string): Promise<string | null> {
-  const base = PUBLIC_APPWRITE_ENDPOINT.replace(/\/$/, '');
-  try {
-    const res = await fetch(`${base}/account/sessions/email`, {
-      method: 'POST',
-      headers: {
-        'X-Appwrite-Project': PUBLIC_APPWRITE_PROJECT_ID,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email, password }),
-    });
-    if (!res.ok) return null;
-    // Appwrite 1.9 only returns the token inside its session cookie.
-    for (const cookie of res.headers.getSetCookie?.() ?? []) {
-      const pair = cookie.split(';')[0] ?? '';
-      const eq = pair.indexOf('=');
-      if (eq === -1) continue;
-      if (pair.slice(0, eq).trim() === `a_session_${PUBLIC_APPWRITE_PROJECT_ID}`) {
-        return decodeURIComponent(pair.slice(eq + 1).trim());
-      }
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 export const POST: APIRoute = async ({ request }) => {
   let body: Record<string, unknown>;
   try {
@@ -107,33 +73,41 @@ export const POST: APIRoute = async ({ request }) => {
     return json({ ok: false, message: 'A hankali — a sake gwadawa bayan dan lokaci' }, 429);
   }
 
-  if (!APPWRITE_API_KEY || !PUBLIC_APPWRITE_ENDPOINT || !PUBLIC_APPWRITE_PROJECT_ID) {
-    return json({ ok: false, message: 'Rajista ba ta nan a yanzu' }, 503);
-  }
-
   try {
-    const client = new Client()
-      .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-      .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-      .setKey(APPWRITE_API_KEY);
+    const [existing] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
 
-    // Duplicate emails answer identically to every other failure path so the
-    // endpoint cannot be used to enumerate registered addresses.
-    try {
-      const users = new Users(client);
-      await users.create({ userId: 'unique()', email, password, name });
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : '';
-      if (!/already|exists|unique/i.test(msg)) throw error;
+    if (existing) {
+      // Don't leak user existence, return friendly message
+      return json({ ok: true }, 201);
     }
+
+    const userId = `usr_${crypto.randomBytes(12).toString('hex')}`;
+    const passwordHash = await hashPassword(password);
+
+    await db.insert(users).values({
+      id: userId,
+      email,
+      name,
+      passwordHash,
+      role: 'reader',
+      active: true,
+    });
   } catch (error) {
     console.error('[register] account creation failed', error);
     return json({ ok: false, message: 'Rajista ta kasa — gwada sake' }, 500);
   }
 
-  // Auto-login on success, same cookie contract as POST /api/auth/login.
+  // Auto-login on success
+  const sessionResult = await createSession(email, password, request);
   const headers: Record<string, string> = { 'Cache-Control': 'no-store' };
-  const token = await createReaderSession(email, password);
-  if (token) headers['Set-Cookie'] = adminCookieHeader(token, SESSION_TTL);
+
+  if ('token' in sessionResult) {
+    headers['Set-Cookie'] = adminCookieHeader(sessionResult.token, SESSION_TTL);
+  }
+
   return json({ ok: true }, 201, headers);
 };

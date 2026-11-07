@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
-import { Client, Users, Query } from 'node-appwrite';
-import { APPWRITE_API_KEY } from 'astro:env/server';
-import { PUBLIC_APPWRITE_ENDPOINT, PUBLIC_APPWRITE_PROJECT_ID } from 'astro:env/client';
+import { eq } from 'drizzle-orm';
+import { db, users } from '@/db';
+import { hashPassword } from '@lib/auth';
 import { verifyResetToken } from '@lib/reset-token';
 
 export const prerender = false;
@@ -27,26 +27,27 @@ export const POST: APIRoute = async ({ request }) => {
     return json({ ok: false, message: 'Kalmar shiga ta fi gajarta (a kalla haruffa 8)' }, 422);
   }
 
-  const secret = APPWRITE_API_KEY ?? '';
-  if (!secret || !PUBLIC_APPWRITE_ENDPOINT || !PUBLIC_APPWRITE_PROJECT_ID) {
-    return json({ ok: false, message: 'Reset unavailable' }, 503);
-  }
-
+  const secret = process.env.SESSION_SECRET || 'yanci-default-session-secret-change-in-production';
   const email = verifyResetToken(token, secret);
   if (!email) {
     return json({ ok: false, message: 'Hanyar ta ƙare ko kuma ba daidai ba — ka sake nema' }, 400);
   }
 
   try {
-    const client = new Client()
-      .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-      .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-      .setKey(secret);
-    const usersApi = new Users(client);
-    const { users } = await usersApi.list([Query.equal('email', email), Query.limit(1)]);
-    const user = users?.[0];
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
     if (!user) return json({ ok: false, message: 'Babu wannan asusu' }, 404);
-    await usersApi.updatePassword(user.$id, password);
+
+    const passwordHash = await hashPassword(password);
+    await db
+      .update(users)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(users.id, user.id));
+
     return json({ ok: true });
   } catch (error) {
     console.error('[auth] reset failed', error);

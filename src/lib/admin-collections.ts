@@ -1,31 +1,21 @@
-import { Client, Databases, ID, Query } from 'node-appwrite';
+import { eq, desc } from 'drizzle-orm';
 import {
-  APPWRITE_API_KEY,
-  APPWRITE_COLLECTION_AUTOFETCH_SOURCES,
-  APPWRITE_COLLECTION_INVITATIONS,
-  APPWRITE_COLLECTION_NEWSLETTER,
-  APPWRITE_COLLECTION_ROLES,
-} from 'astro:env/server';
-import {
-  PUBLIC_APPWRITE_ENDPOINT,
-  PUBLIC_APPWRITE_PROJECT_ID,
-  PUBLIC_APPWRITE_DATABASE_ID,
-  PUBLIC_APPWRITE_COLLECTION_HIGHLIGHTS,
-  PUBLIC_APPWRITE_COLLECTION_HOMEPAGE_STATS,
-  PUBLIC_APPWRITE_COLLECTION_SPORTS,
-  PUBLIC_APPWRITE_COLLECTION_SETTINGS,
-  PUBLIC_APPWRITE_COLLECTION_ELECTIONS,
-  PUBLIC_APPWRITE_COLLECTION_CANDIDATES,
-  PUBLIC_APPWRITE_COLLECTION_RESULTS,
-  PUBLIC_APPWRITE_COLLECTION_FACTCHECKS,
-  PUBLIC_APPWRITE_COLLECTION_VIEWS,
-  PUBLIC_APPWRITE_COLLECTION_STAFF,
-} from 'astro:env/client';
-
-/**
- * Generic server-side CRUD for the homepage/content collections. All writes
- * go through the API key; documents are created with public read only.
- */
+  db,
+  highlights,
+  homepageStats,
+  sportsData,
+  settings,
+  elections,
+  candidates,
+  electionResults,
+  factChecks,
+  articleViews,
+  autofetchSources,
+  invitations,
+  newsletterSubscribers,
+  roles,
+  users,
+} from '../db';
 
 export const READ_ANY = 'read("any")';
 
@@ -45,56 +35,39 @@ export type CollectionKey =
   | 'roles'
   | 'staff';
 
-function collectionIdFor(key: CollectionKey): string | null {
-  const pick = (v: string | undefined | null): string | null => v ?? null;
+function getTableForKey(key: CollectionKey): any {
   switch (key) {
-    case 'highlights': return pick(PUBLIC_APPWRITE_COLLECTION_HIGHLIGHTS);
-    case 'stats': return pick(PUBLIC_APPWRITE_COLLECTION_HOMEPAGE_STATS);
-    case 'sports': return pick(PUBLIC_APPWRITE_COLLECTION_SPORTS);
-    case 'settings': return pick(PUBLIC_APPWRITE_COLLECTION_SETTINGS);
-    case 'elections': return pick(PUBLIC_APPWRITE_COLLECTION_ELECTIONS);
-    case 'candidates': return pick(PUBLIC_APPWRITE_COLLECTION_CANDIDATES);
-    case 'results': return pick(PUBLIC_APPWRITE_COLLECTION_RESULTS);
-    case 'factchecks': return pick(PUBLIC_APPWRITE_COLLECTION_FACTCHECKS);
-    case 'views': return pick(PUBLIC_APPWRITE_COLLECTION_VIEWS);
-    case 'autofetch': return pick(APPWRITE_COLLECTION_AUTOFETCH_SOURCES);
-    case 'invitations': return pick(APPWRITE_COLLECTION_INVITATIONS);
-    case 'newsletter': return pick(APPWRITE_COLLECTION_NEWSLETTER);
-    case 'roles': return pick(APPWRITE_COLLECTION_ROLES);
-    case 'staff': return pick(PUBLIC_APPWRITE_COLLECTION_STAFF);
+    case 'highlights': return highlights;
+    case 'stats': return homepageStats;
+    case 'sports': return sportsData;
+    case 'settings': return settings;
+    case 'elections': return elections;
+    case 'candidates': return candidates;
+    case 'results': return electionResults;
+    case 'factchecks': return factChecks;
+    case 'views': return articleViews;
+    case 'autofetch': return autofetchSources;
+    case 'invitations': return invitations;
+    case 'newsletter': return newsletterSubscribers;
+    case 'roles': return roles;
+    case 'staff': return users;
+    default: return null;
   }
-}
-
-function writable() {
-  if (
-    !APPWRITE_API_KEY ||
-    !PUBLIC_APPWRITE_ENDPOINT ||
-    !PUBLIC_APPWRITE_PROJECT_ID ||
-    !PUBLIC_APPWRITE_DATABASE_ID
-  ) {
-    return null;
-  }
-  const client = new Client()
-    .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-    .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-    .setKey(APPWRITE_API_KEY);
-  return { client, databaseId: PUBLIC_APPWRITE_DATABASE_ID };
 }
 
 export async function adminListCollection<T = Record<string, unknown>>(
   key: CollectionKey,
   limit = 500,
 ): Promise<T[]> {
-  const env = writable();
-  const collectionId = collectionIdFor(key);
-  if (!env || !collectionId) return [];
+  const table = getTableForKey(key);
+  if (!table) return [];
   try {
-    const res = await new Databases(env.client).listDocuments({
-      databaseId: env.databaseId,
-      collectionId,
-      queries: [Query.limit(limit)],
-    });
-    return res.documents as unknown as T[];
+    const rows = await db.select().from(table).limit(limit);
+    return rows.map((r: any) => ({
+      ...r,
+      $id: r.id ?? r.key,
+      id: r.id ?? r.key,
+    })) as T[];
   } catch (error) {
     console.error(`[admin-collections] list ${key} failed`, error);
     return [];
@@ -105,18 +78,15 @@ export async function adminCreateCollectionDoc(
   key: CollectionKey,
   data: Record<string, unknown>,
 ): Promise<string | null> {
-  const env = writable();
-  const collectionId = collectionIdFor(key);
-  if (!env || !collectionId) return null;
+  const table = getTableForKey(key);
+  if (!table) return null;
   try {
-    const doc = await new Databases(env.client).createDocument({
-      databaseId: env.databaseId,
-      collectionId,
-      documentId: ID.unique(),
-      data,
-      permissions: [READ_ANY],
-    });
-    return doc.$id;
+    const id = String(data.id || data.$id || `doc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
+    const payload: any = { ...data, id };
+    delete payload.$id;
+
+    await db.insert(table).values(payload);
+    return id;
   } catch (error) {
     console.error(`[admin-collections] create ${key} failed`, error);
     return null;
@@ -128,16 +98,15 @@ export async function adminUpdateCollectionDoc(
   id: string,
   data: Record<string, unknown>,
 ): Promise<boolean> {
-  const env = writable();
-  const collectionId = collectionIdFor(key);
-  if (!env || !collectionId) return false;
+  const table = getTableForKey(key);
+  if (!table) return false;
   try {
-    await new Databases(env.client).updateDocument({
-      databaseId: env.databaseId,
-      collectionId,
-      documentId: id,
-      data,
-    });
+    const payload: any = { ...data };
+    delete payload.$id;
+    delete payload.id;
+
+    const idCol = key === 'settings' ? table.key : table.id;
+    await db.update(table).set(payload).where(eq(idCol, id));
     return true;
   } catch (error) {
     console.error(`[admin-collections] update ${key} failed`, error);
@@ -149,11 +118,11 @@ export async function adminDeleteCollectionDoc(
   key: CollectionKey,
   id: string,
 ): Promise<boolean> {
-  const env = writable();
-  const collectionId = collectionIdFor(key);
-  if (!env || !collectionId) return false;
+  const table = getTableForKey(key);
+  if (!table) return false;
   try {
-    await new Databases(env.client).deleteDocument(env.databaseId, collectionId, id);
+    const idCol = key === 'settings' ? table.key : table.id;
+    await db.delete(table).where(eq(idCol, id));
     return true;
   } catch (error) {
     console.error(`[admin-collections] delete ${key} failed`, error);

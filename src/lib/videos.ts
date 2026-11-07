@@ -1,10 +1,7 @@
-import { Client, Databases, ID, Query } from 'node-appwrite';
-import { APPWRITE_API_KEY } from 'astro:env/server';
-import {
-  PUBLIC_APPWRITE_ENDPOINT,
-  PUBLIC_APPWRITE_PROJECT_ID,
-  PUBLIC_APPWRITE_DATABASE_ID,
-} from 'astro:env/client';
+import { db } from '@db';
+import { videos } from '@db/schema';
+import { eq, asc, desc } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
 import { sanitizeImageUrl, sanitizePlainText } from '@lib/sanitize';
 import { parseYouTubeId, youTubeThumbnail } from '@lib/youtube';
 
@@ -41,40 +38,20 @@ export interface VideoPatch {
   published?: boolean;
 }
 
-const READ_ANY = 'read("any")';
-
-function store(): { db: Databases; databaseId: string } | null {
-  if (
-    !APPWRITE_API_KEY ||
-    !PUBLIC_APPWRITE_ENDPOINT ||
-    !PUBLIC_APPWRITE_PROJECT_ID ||
-    !PUBLIC_APPWRITE_DATABASE_ID
-  ) {
-    return null;
-  }
-  const client = new Client()
-    .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-    .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-    .setKey(APPWRITE_API_KEY);
-  return { db: new Databases(client), databaseId: PUBLIC_APPWRITE_DATABASE_ID };
-}
-
-type VideoRaw = Record<string, unknown> & { $id: string };
-
-function toVideo(doc: VideoRaw): VideoDoc {
-  const url = String(doc.url ?? '');
-  const stored = String(doc.youtubeId ?? '');
-  const youtubeId = parseYouTubeId(stored || url) ?? '';
-  const thumbnail = String(doc.thumbnail ?? '') || (youtubeId ? youTubeThumbnail(youtubeId) : '');
+function toVideo(row: typeof videos.$inferSelect): VideoDoc {
+  const url = row.url ?? '';
+  const stored = row.youtubeId ?? '';
+  const youtubeId = parseYouTubeId(stored || url) ?? stored ?? '';
+  const thumbnail = row.thumbnail || (youtubeId ? youTubeThumbnail(youtubeId) : '');
   return {
-    $id: doc.$id,
-    title: String(doc.title ?? ''),
+    $id: row.id,
+    title: row.title ?? '',
     url,
     youtubeId,
-    description: String(doc.description ?? ''),
+    description: row.description ?? '',
     thumbnail,
-    order: Number(doc.order ?? 0),
-    published: doc.published !== false,
+    order: row.order ?? 0,
+    published: row.published !== false,
   };
 }
 
@@ -98,13 +75,15 @@ export function cleanVideoInput(raw: Record<string, unknown>): CleanedVideo | nu
   };
 }
 
-async function nextOrder(db: Databases, databaseId: string): Promise<number> {
+async function nextOrder(): Promise<number> {
+  if (!db) return 0;
   try {
-    const { documents } = await db.listDocuments(databaseId, VIDEOS_COLLECTION_ID, [
-      Query.orderDesc('order'),
-      Query.limit(1),
-    ]);
-    return documents.length > 0 ? Number(documents[0].order ?? 0) + 1 : 0;
+    const [highest] = await db
+      .select({ order: videos.order })
+      .from(videos)
+      .orderBy(desc(videos.order))
+      .limit(1);
+    return highest ? (highest.order ?? 0) + 1 : 0;
   } catch {
     return 0;
   }
@@ -113,15 +92,15 @@ async function nextOrder(db: Databases, databaseId: string): Promise<number> {
 export async function listVideos(
   options?: { publishedOnly?: boolean; limit?: number },
 ): Promise<VideoDoc[]> {
-  const s = store();
-  if (!s) return [];
-  const queries = [Query.orderAsc('order'), Query.limit(Math.min(options?.limit ?? 200, 100))];
-  if (options?.publishedOnly) queries.push(Query.equal('published', true));
+  if (!db) return [];
   try {
-    const { documents } = await s.db.listDocuments(s.databaseId, VIDEOS_COLLECTION_ID, queries);
-    return (documents as unknown as VideoRaw[])
-      .map(toVideo)
-      .sort((a, b) => a.order - b.order);
+    const query = db.select().from(videos);
+    if (options?.publishedOnly) {
+      query.where(eq(videos.published, true));
+    }
+    const limit = Math.min(options?.limit ?? 200, 100);
+    const rows = await query.orderBy(asc(videos.order)).limit(limit);
+    return rows.map(toVideo);
   } catch (error) {
     console.error('[videos] list failed', error);
     return [];
@@ -129,26 +108,23 @@ export async function listVideos(
 }
 
 export async function getVideo(id: string): Promise<VideoDoc | null> {
-  const s = store();
-  if (!s) return null;
+  if (!db) return null;
   try {
-    const doc = await s.db.getDocument(s.databaseId, VIDEOS_COLLECTION_ID, id);
-    return toVideo(doc as unknown as VideoRaw);
+    const [row] = await db.select().from(videos).where(eq(videos.id, id)).limit(1);
+    return row ? toVideo(row) : null;
   } catch {
     return null;
   }
 }
 
 export async function createVideo(input: CleanedVideo): Promise<VideoDoc | null> {
-  const s = store();
-  if (!s) return null;
+  if (!db) return null;
   try {
-    const order = input.order ?? (await nextOrder(s.db, s.databaseId));
-    const doc = await s.db.createDocument(
-      s.databaseId,
-      VIDEOS_COLLECTION_ID,
-      ID.unique(),
-      {
+    const order = input.order ?? (await nextOrder());
+    const [created] = await db
+      .insert(videos)
+      .values({
+        id: randomUUID(),
         title: input.title,
         url: input.url,
         youtubeId: input.youtubeId,
@@ -156,10 +132,9 @@ export async function createVideo(input: CleanedVideo): Promise<VideoDoc | null>
         thumbnail: input.thumbnail,
         order,
         published: input.published,
-      },
-      [READ_ANY],
-    );
-    return toVideo(doc as unknown as VideoRaw);
+      })
+      .returning();
+    return created ? toVideo(created) : null;
   } catch (error) {
     console.error('[videos] create failed', error);
     return null;
@@ -167,16 +142,25 @@ export async function createVideo(input: CleanedVideo): Promise<VideoDoc | null>
 }
 
 export async function updateVideo(id: string, patch: VideoPatch): Promise<VideoDoc | null> {
-  const s = store();
-  if (!s) return null;
-  const data: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(patch)) {
-    if (value !== undefined) data[key] = value;
-  }
-  if (Object.keys(data).length === 0) return null;
+  if (!db) return null;
+  const updateData: Partial<typeof videos.$inferInsert> = {};
+  if (patch.title !== undefined) updateData.title = patch.title;
+  if (patch.url !== undefined) updateData.url = patch.url;
+  if (patch.youtubeId !== undefined) updateData.youtubeId = patch.youtubeId;
+  if (patch.description !== undefined) updateData.description = patch.description;
+  if (patch.thumbnail !== undefined) updateData.thumbnail = patch.thumbnail;
+  if (patch.order !== undefined) updateData.order = patch.order;
+  if (patch.published !== undefined) updateData.published = patch.published;
+
+  if (Object.keys(updateData).length === 0) return null;
+
   try {
-    const doc = await s.db.updateDocument(s.databaseId, VIDEOS_COLLECTION_ID, id, data);
-    return toVideo(doc as unknown as VideoRaw);
+    const [updated] = await db
+      .update(videos)
+      .set(updateData)
+      .where(eq(videos.id, id))
+      .returning();
+    return updated ? toVideo(updated) : null;
   } catch (error) {
     console.error('[videos] update failed', error);
     return null;
@@ -184,12 +168,11 @@ export async function updateVideo(id: string, patch: VideoPatch): Promise<VideoD
 }
 
 export async function reorderVideos(orderedIds: string[]): Promise<boolean> {
-  const s = store();
-  if (!s || orderedIds.length === 0) return false;
+  if (!db || orderedIds.length === 0) return false;
   try {
     await Promise.all(
       orderedIds.map((id, index) =>
-        s.db.updateDocument(s.databaseId, VIDEOS_COLLECTION_ID, id, { order: index }),
+        db!.update(videos).set({ order: index }).where(eq(videos.id, id)),
       ),
     );
     return true;
@@ -200,10 +183,9 @@ export async function reorderVideos(orderedIds: string[]): Promise<boolean> {
 }
 
 export async function deleteVideo(id: string): Promise<boolean> {
-  const s = store();
-  if (!s) return false;
+  if (!db) return false;
   try {
-    await s.db.deleteDocument(s.databaseId, VIDEOS_COLLECTION_ID, id);
+    await db.delete(videos).where(eq(videos.id, id));
     return true;
   } catch (error) {
     console.error('[videos] delete failed', error);

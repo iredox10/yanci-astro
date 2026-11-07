@@ -19,9 +19,9 @@ export const POST: APIRoute = async ({ request }) => {
   // Fire-and-forget: render the article even if tracking lags.
   await trackView({
     articleId,
-    section: data.section ?? null,
-    referrer: data.referrer ?? null,
-    device: data.device ?? null,
+    section: data.section ?? undefined,
+    referrer: data.referrer ?? undefined,
+    device: data.device ?? undefined,
   });
 
   return new Response(JSON.stringify({ ok: true }), { status: 200 });

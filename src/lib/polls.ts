@@ -1,13 +1,8 @@
 import type { Poll, PollOption } from '../data/schema';
 import { SEED_POLL } from '../data/seed';
-import { Client, Databases } from 'node-appwrite';
-import { APPWRITE_API_KEY } from 'astro:env/server';
-import {
-  PUBLIC_APPWRITE_ENDPOINT,
-  PUBLIC_APPWRITE_PROJECT_ID,
-  PUBLIC_APPWRITE_DATABASE_ID,
-  PUBLIC_APPWRITE_COLLECTION_SETTINGS,
-} from 'astro:env/client';
+import { db } from '@db';
+import { polls } from '@db/schema';
+import { eq, desc } from 'drizzle-orm';
 
 /**
  * In-memory fallback poll storage initialized with seed data.
@@ -39,66 +34,48 @@ export function calculatePercentages(poll: Poll): Poll {
   };
 }
 
-/**
- * Optional Appwrite client helper.
- */
-function getAppwriteDb(): { client: Client; databases: Databases; databaseId: string } | null {
-  if (
-    !APPWRITE_API_KEY ||
-    !PUBLIC_APPWRITE_ENDPOINT ||
-    !PUBLIC_APPWRITE_PROJECT_ID ||
-    !PUBLIC_APPWRITE_DATABASE_ID
-  ) {
-    return null;
+function parseOptions(raw: unknown): PollOption[] {
+  if (Array.isArray(raw)) {
+    return raw.map((o: unknown, idx: number) => {
+      if (typeof o === 'string') {
+        try {
+          return JSON.parse(o);
+        } catch {
+          return { id: `opt-${idx + 1}`, text: o, votes: 0 };
+        }
+      }
+      return o as PollOption;
+    });
   }
-  try {
-    const client = new Client()
-      .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-      .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-      .setKey(APPWRITE_API_KEY);
-    const databases = new Databases(client);
-    return { client, databases, databaseId: PUBLIC_APPWRITE_DATABASE_ID };
-  } catch {
-    return null;
-  }
+  return [];
 }
 
 /**
  * Fetch the active reader poll with vote counts and calculated percentages.
  */
 export async function getActivePoll(): Promise<Poll> {
-  const dbConfig = getAppwriteDb();
-  if (dbConfig && PUBLIC_APPWRITE_COLLECTION_SETTINGS) {
+  if (db) {
     try {
-      const doc = await dbConfig.databases.getDocument(
-        dbConfig.databaseId,
-        PUBLIC_APPWRITE_COLLECTION_SETTINGS,
-        'active_poll',
-      );
-      if (doc && doc.question && Array.isArray(doc.options)) {
-        const parsedOptions: PollOption[] = (doc.options as unknown[]).map((o: unknown, idx: number) => {
-          if (typeof o === 'string') {
-            try {
-              return JSON.parse(o);
-            } catch {
-              return { id: `opt-${idx + 1}`, text: o, votes: 0 };
-            }
-          }
-          return o as PollOption;
-        });
+      const [row] = await db
+        .select()
+        .from(polls)
+        .where(eq(polls.active, true))
+        .orderBy(desc(polls.createdAt))
+        .limit(1);
 
+      if (row) {
         return calculatePercentages({
-          id: String(doc.$id || doc.id || _memoryPoll.id),
-          question: String(doc.question),
-          description: doc.description ? String(doc.description) : _memoryPoll.description,
-          category: doc.category ? String(doc.category) : _memoryPoll.category,
-          options: parsedOptions,
-          totalVotes: Number(doc.totalVotes || 0),
-          active: doc.active !== false,
+          id: row.id,
+          question: row.question,
+          description: row.description ?? _memoryPoll.description,
+          category: row.category ?? _memoryPoll.category,
+          options: parseOptions(row.options),
+          totalVotes: row.totalVotes ?? 0,
+          active: row.active !== false,
         });
       }
     } catch {
-      // Document may not exist in settings collection; fallback to memory
+      // Non-blocking fallback to memory
     }
   }
 
@@ -111,9 +88,46 @@ export async function getActivePoll(): Promise<Poll> {
 export async function recordVote(pollId: string, optionId: string): Promise<Poll | null> {
   if (!pollId || !optionId) return null;
 
-  // Verify poll matches current active poll
+  if (db) {
+    try {
+      const [row] = await db
+        .select()
+        .from(polls)
+        .where(eq(polls.id, pollId))
+        .limit(1);
+
+      if (row) {
+        const parsedOptions = parseOptions(row.options);
+        const optionIndex = parsedOptions.findIndex((opt) => opt.id === optionId);
+        if (optionIndex !== -1) {
+          parsedOptions[optionIndex].votes = (parsedOptions[optionIndex].votes || 0) + 1;
+          const newTotal = (row.totalVotes ?? 0) + 1;
+          await db
+            .update(polls)
+            .set({
+              options: parsedOptions,
+              totalVotes: newTotal,
+            })
+            .where(eq(polls.id, pollId));
+
+          return calculatePercentages({
+            id: row.id,
+            question: row.question,
+            description: row.description ?? '',
+            category: row.category ?? '',
+            options: parsedOptions,
+            totalVotes: newTotal,
+            active: row.active !== false,
+          });
+        }
+      }
+    } catch {
+      // fallback to memory
+    }
+  }
+
+  // Memory fallback
   if (_memoryPoll.id !== pollId && _memoryPoll.$id !== pollId) {
-    // If not matching by id, still allow if pollId matches
     _memoryPoll.id = pollId;
   }
 
@@ -122,31 +136,12 @@ export async function recordVote(pollId: string, optionId: string): Promise<Poll
     return null;
   }
 
-  // Increment in-memory option vote count
   _memoryPoll.options[optionIndex].votes = (_memoryPoll.options[optionIndex].votes || 0) + 1;
   const updated = calculatePercentages(_memoryPoll);
   _memoryPoll = {
     ...updated,
     options: updated.options.map((opt) => ({ ...opt })),
   };
-
-  // Attempt to persist to Appwrite if configured
-  const dbConfig = getAppwriteDb();
-  if (dbConfig && PUBLIC_APPWRITE_COLLECTION_SETTINGS) {
-    try {
-      await dbConfig.databases.updateDocument(
-        dbConfig.databaseId,
-        PUBLIC_APPWRITE_COLLECTION_SETTINGS,
-        'active_poll',
-        {
-          options: _memoryPoll.options.map((o) => JSON.stringify(o)),
-          totalVotes: _memoryPoll.totalVotes,
-        },
-      );
-    } catch {
-      // Non-blocking fallback to memory storage
-    }
-  }
 
   return updated;
 }

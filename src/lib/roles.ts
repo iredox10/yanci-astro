@@ -1,16 +1,13 @@
-import { Client, Databases, ID, Query } from 'node-appwrite';
-import { APPWRITE_API_KEY, APPWRITE_COLLECTION_ROLES } from 'astro:env/server';
-import {
-  PUBLIC_APPWRITE_ENDPOINT,
-  PUBLIC_APPWRITE_PROJECT_ID,
-  PUBLIC_APPWRITE_DATABASE_ID,
-} from 'astro:env/client';
+import { db } from '@db';
+import { roles, users } from '@db/schema';
+import { eq, sql } from 'drizzle-orm';
 import { hasRole, type SessionUser } from '@lib/auth';
+import { randomUUID } from 'node:crypto';
 
 /**
  * Typed permission catalog and CRUD for the `roles` collection. Permission
  * keys mirror the legacy admin app (`yanci/src/hooks/usePermissions.js`);
- * permissions are persisted as a legacy-compatible JSON map `{key: true}`.
+ * permissions are persisted in PostgreSQL.
  * The superadmin system role can never be edited or deleted from here.
  */
 
@@ -132,9 +129,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Readonly<Record<Permission
 };
 
 /**
- * Access guard for the roles API. The existing handlers check `hasRole(user,
- * 'admin')`; this keeps that floor and additionally honours explicit
- * `manage_roles` / `manage_users` grants should custom roles appear.
+ * Access guard for the roles API.
  */
 export function canManageRoles(user: SessionUser): boolean {
   if (hasRole(user, 'admin')) return true;
@@ -181,26 +176,6 @@ export type DeleteResult = { ok: true } | { ok: false; reason: MutationFailure }
 
 const SUPERADMIN_KEYS = new Set(['super_admin', 'superadmin', 'super admin']);
 
-function collectionId(): string {
-  return APPWRITE_COLLECTION_ROLES || 'roles';
-}
-
-function databases(): { db: Databases; databaseId: string } | null {
-  if (
-    !APPWRITE_API_KEY ||
-    !PUBLIC_APPWRITE_ENDPOINT ||
-    !PUBLIC_APPWRITE_PROJECT_ID ||
-    !PUBLIC_APPWRITE_DATABASE_ID
-  ) {
-    return null;
-  }
-  const client = new Client()
-    .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-    .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-    .setKey(APPWRITE_API_KEY);
-  return { db: new Databases(client), databaseId: PUBLIC_APPWRITE_DATABASE_ID };
-}
-
 export function slugify(input: string): string {
   return input
     .toLowerCase()
@@ -233,7 +208,6 @@ export function normalizePermissions(raw: unknown): PermissionKey[] {
   return ALL_PERMISSIONS.filter((p) => found.has(p));
 }
 
-/** Legacy storage format: a JSON object map of enabled keys. */
 export function permissionsToJson(perms: PermissionKey[]): string {
   return JSON.stringify(Object.fromEntries(perms.map((p) => [p, true])));
 }
@@ -242,51 +216,25 @@ export function isSuperadminRole(doc: Pick<RoleDoc, 'slug' | 'name' | 'isSystem'
   return SUPERADMIN_KEYS.has(doc.slug.toLowerCase()) || SUPERADMIN_KEYS.has(doc.name.trim().toLowerCase());
 }
 
-function toRoleDoc(doc: Record<string, unknown>): RoleDoc {
-  return {
-    $id: String(doc.$id),
-    name: String(doc.name ?? ''),
-    slug: String(doc.slug ?? '') || slugify(String(doc.name ?? '')),
-    description: String(doc.description ?? ''),
-    permissions: normalizePermissions(doc.permissions),
-    priority: Number.isFinite(Number(doc.priority)) ? Number(doc.priority) : 0,
-    isSystem: Boolean(doc.is_system),
-    $createdAt: String(doc.$createdAt ?? ''),
-  };
-}
-
-async function listRawDocs(db: Databases, databaseId: string): Promise<Record<string, unknown>[]> {
-  try {
-    const res = await db.listDocuments({
-      databaseId,
-      collectionId: collectionId(),
-      queries: [Query.limit(500)],
-    });
-    return res.documents as unknown as Record<string, unknown>[];
-  } catch (error) {
-    console.error('[roles] list failed', error);
-    return [];
-  }
-}
-
-/**
- * Member counts per role, derived from assignment documents in the same
- * collection (`userId`/`user_id` + `role`, the shape auth.ts reads). Keyed by
- * lower-cased role token.
- */
 export async function countRoleMembers(): Promise<Record<string, number>> {
-  const env = databases();
-  if (!env) return {};
-  const docs = await listRawDocs(env.db, env.databaseId);
-  const counts: Record<string, number> = {};
-  for (const doc of docs) {
-    const userId = doc.userId ?? doc.user_id;
-    if (!userId) continue;
-    const key = String(doc.role ?? '').trim().toLowerCase().replace(/\s+/g, '_');
-    if (!key) continue;
-    counts[key] = (counts[key] ?? 0) + 1;
+  if (!db) return {};
+  try {
+    const rows = await db
+      .select({
+        role: users.role,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(users)
+      .groupBy(users.role);
+    const counts: Record<string, number> = {};
+    for (const row of rows) {
+      if (row.role) counts[row.role.toLowerCase()] = row.count;
+    }
+    return counts;
+  } catch (error) {
+    console.error('[roles] count failed', error);
+    return {};
   }
-  return counts;
 }
 
 export function membersForRole(counts: Record<string, number>, doc: Pick<RoleDoc, 'slug' | 'name'>): number {
@@ -303,53 +251,74 @@ export function toRoleView(doc: RoleDoc, counts: Record<string, number>): RoleVi
 }
 
 export async function listRoles(): Promise<RoleDoc[]> {
-  const env = databases();
-  if (!env) return [];
-  return (await listRawDocs(env.db, env.databaseId)).map(toRoleDoc).sort((a, b) => b.priority - a.priority || a.name.localeCompare(b.name));
+  if (!db) return [];
+  try {
+    const rows = await db.select().from(roles);
+    return rows.map((r) => ({
+      $id: r.id,
+      name: r.name,
+      slug: slugify(r.id || r.name),
+      description: r.description ?? '',
+      permissions: normalizePermissions(r.permissions),
+      priority: 0,
+      isSystem: isSuperadminRole({ slug: r.id, name: r.name, isSystem: false }) || ['super_admin', 'editor', 'author', 'contributor', 'reader'].includes(r.id),
+      $createdAt: r.createdAt ? r.createdAt.toISOString() : new Date().toISOString(),
+    })).sort((a, b) => a.name.localeCompare(b.name));
+  } catch (error) {
+    console.error('[roles] list failed', error);
+    return [];
+  }
 }
 
 export async function getRole(id: string): Promise<RoleDoc | null> {
-  const env = databases();
-  if (!env) return null;
+  if (!db) return null;
   try {
-    const doc = await env.db.getDocument(env.databaseId, collectionId(), id);
-    return toRoleDoc(doc as unknown as Record<string, unknown>);
+    const [row] = await db.select().from(roles).where(eq(roles.id, id)).limit(1);
+    if (!row) return null;
+    return {
+      $id: row.id,
+      name: row.name,
+      slug: slugify(row.id || row.name),
+      description: row.description ?? '',
+      permissions: normalizePermissions(row.permissions),
+      priority: 0,
+      isSystem: isSuperadminRole({ slug: row.id, name: row.name, isSystem: false }) || ['super_admin', 'editor', 'author', 'contributor', 'reader'].includes(row.id),
+      $createdAt: row.createdAt ? row.createdAt.toISOString() : new Date().toISOString(),
+    };
   } catch {
     return null;
   }
 }
 
-function dataFrom(input: RoleInput, perms: PermissionKey[]): Record<string, unknown> {
-  const data: Record<string, unknown> = {
-    description: input.description ?? '',
-    permissions: permissionsToJson(perms),
-    priority: Number.isFinite(input.priority) ? input.priority : 0,
-  };
-  if (input.name !== undefined) data.name = input.name;
-  if (input.slug) data.slug = input.slug;
-  if (input.is_system !== undefined) data.is_system = input.is_system;
-  return data;
-}
-
 export async function createRole(input: RoleInput): Promise<CreateResult> {
-  const env = databases();
-  if (!env) return { ok: false, reason: 'unconfigured' };
-
+  if (!db) return { ok: false, reason: 'unconfigured' };
   const slug = input.slug ?? slugify(input.name ?? '');
-  const existing = await listRoles();
-  if (existing.some((r) => r.slug.toLowerCase() === slug.toLowerCase())) {
-    return { ok: false, reason: 'duplicate' };
-  }
+  const id = slug || randomUUID();
+  const existing = await getRole(id);
+  if (existing) return { ok: false, reason: 'duplicate' };
 
   try {
-    const doc = await env.db.createDocument({
-      databaseId: env.databaseId,
-      collectionId: collectionId(),
-      documentId: ID.unique(),
-      data: dataFrom({ ...input, slug }, input.permissions ?? []),
-      permissions: ['read("any")'],
-    });
-    return { ok: true, role: toRoleDoc(doc as unknown as Record<string, unknown>) };
+    const perms = input.permissions ?? [];
+    const [created] = await db.insert(roles).values({
+      id,
+      name: input.name ?? slug,
+      description: input.description ?? '',
+      permissions: perms,
+    }).returning();
+
+    return {
+      ok: true,
+      role: {
+        $id: created.id,
+        name: created.name,
+        slug: slugify(created.id),
+        description: created.description ?? '',
+        permissions: normalizePermissions(created.permissions),
+        priority: 0,
+        isSystem: false,
+        $createdAt: created.createdAt ? created.createdAt.toISOString() : new Date().toISOString(),
+      },
+    };
   } catch (error) {
     console.error('[roles] create failed', error);
     return { ok: false, reason: 'failed' };
@@ -357,20 +326,36 @@ export async function createRole(input: RoleInput): Promise<CreateResult> {
 }
 
 export async function updateRole(id: string, input: RoleInput): Promise<UpdateResult> {
-  const env = databases();
-  if (!env) return { ok: false, reason: 'unconfigured' };
+  if (!db) return { ok: false, reason: 'unconfigured' };
   const current = await getRole(id);
   if (!current) return { ok: false, reason: 'notfound' };
   if (isSuperadminRole(current)) return { ok: false, reason: 'superadmin' };
 
   try {
-    const doc = await env.db.updateDocument({
-      databaseId: env.databaseId,
-      collectionId: collectionId(),
-      documentId: id,
-      data: dataFrom(input, input.permissions ?? current.permissions),
-    });
-    return { ok: true, role: toRoleDoc(doc as unknown as Record<string, unknown>) };
+    const updateData: Partial<typeof roles.$inferInsert> = {};
+    if (input.name !== undefined) updateData.name = input.name;
+    if (input.description !== undefined) updateData.description = input.description;
+    if (input.permissions !== undefined) updateData.permissions = input.permissions;
+
+    const [updated] = await db
+      .update(roles)
+      .set(updateData)
+      .where(eq(roles.id, id))
+      .returning();
+
+    return {
+      ok: true,
+      role: {
+        $id: updated.id,
+        name: updated.name,
+        slug: slugify(updated.id),
+        description: updated.description ?? '',
+        permissions: normalizePermissions(updated.permissions),
+        priority: 0,
+        isSystem: current.isSystem,
+        $createdAt: updated.createdAt ? updated.createdAt.toISOString() : new Date().toISOString(),
+      },
+    };
   } catch (error) {
     console.error('[roles] update failed', error);
     return { ok: false, reason: 'failed' };
@@ -378,15 +363,14 @@ export async function updateRole(id: string, input: RoleInput): Promise<UpdateRe
 }
 
 export async function deleteRole(id: string): Promise<DeleteResult> {
-  const env = databases();
-  if (!env) return { ok: false, reason: 'unconfigured' };
+  if (!db) return { ok: false, reason: 'unconfigured' };
   const current = await getRole(id);
   if (!current) return { ok: false, reason: 'notfound' };
   if (isSuperadminRole(current)) return { ok: false, reason: 'superadmin' };
   if (current.isSystem) return { ok: false, reason: 'system' };
 
   try {
-    await env.db.deleteDocument(env.databaseId, collectionId(), id);
+    await db.delete(roles).where(eq(roles.id, id));
     return { ok: true };
   } catch (error) {
     console.error('[roles] delete failed', error);

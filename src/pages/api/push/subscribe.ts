@@ -1,11 +1,7 @@
 import type { APIRoute } from 'astro';
-import { AppwriteException, Client, Databases, ID, Query } from 'node-appwrite';
-import { APPWRITE_API_KEY } from 'astro:env/server';
-import {
-  PUBLIC_APPWRITE_ENDPOINT,
-  PUBLIC_APPWRITE_PROJECT_ID,
-  PUBLIC_APPWRITE_DATABASE_ID,
-} from 'astro:env/client';
+import crypto from 'node:crypto';
+import { eq } from 'drizzle-orm';
+import { db, pushSubscriptions } from '@/db';
 
 export const prerender = false;
 
@@ -53,19 +49,12 @@ function rateLimited(ip: string): boolean {
   const now = Date.now();
   const cutoff = now - 60_000;
   const hits = (_recent.get(ip) ?? []).filter((t) => t >= cutoff);
-  // Allow up to five subscribe attempts per minute per IP.
   if (hits.length >= 5) return true;
   hits.push(now);
   _recent.set(ip, hits);
   return false;
 }
 
-/**
- * POST /api/push/subscribe
- *
- * Stores a web push subscription for later fan-out by the send worker.
- * Deduplicates on the endpoint URL; re-subscribes refresh the stored keys.
- */
 export const POST: APIRoute = async ({ request }) => {
   let body: unknown;
   try {
@@ -83,57 +72,32 @@ export const POST: APIRoute = async ({ request }) => {
     return json({ ok: false, message: 'A hankali — a sake gwadawa nan gaba' }, 429);
   }
 
-  if (!PUBLIC_APPWRITE_ENDPOINT || !PUBLIC_APPWRITE_PROJECT_ID || !PUBLIC_APPWRITE_DATABASE_ID) {
-    return json({ ok: false, message: 'Push unavailable' }, 503);
-  }
-
-  const collectionId =
-    process.env.APPWRITE_COLLECTION_PUSH_SUBSCRIPTIONS || 'push_subscriptions';
-
-  const client = new Client()
-    .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-    .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-    .setKey(APPWRITE_API_KEY ?? '');
-  const databases = new Databases(client);
-
   try {
-    const existing = await databases.listDocuments({
-      databaseId: PUBLIC_APPWRITE_DATABASE_ID,
-      collectionId,
-      queries: [Query.equal('endpoint', body.endpoint), Query.limit(1)],
-    });
+    const [existing] = await db
+      .select({ id: pushSubscriptions.id })
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.endpoint, body.endpoint))
+      .limit(1);
 
-    const data = {
-      endpoint: body.endpoint,
-      p256dh: body.keys.p256dh,
-      auth: body.keys.auth,
-      subscribed_at: new Date().toISOString(),
-    };
-
-    if (existing.documents.length > 0) {
-      await databases.updateDocument({
-        databaseId: PUBLIC_APPWRITE_DATABASE_ID,
-        collectionId,
-        documentId: existing.documents[0].$id,
-        data,
-      });
+    if (existing) {
+      await db
+        .update(pushSubscriptions)
+        .set({
+          keys: body.keys,
+          subscribedAt: new Date(),
+        })
+        .where(eq(pushSubscriptions.id, existing.id));
     } else {
-      await databases.createDocument({
-        databaseId: PUBLIC_APPWRITE_DATABASE_ID,
-        collectionId,
-        documentId: ID.unique(),
-        data,
+      const id = `ps_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+      await db.insert(pushSubscriptions).values({
+        id,
+        endpoint: body.endpoint,
+        keys: body.keys,
       });
     }
+
     return new Response(null, { status: 204 });
   } catch (error) {
-    if (
-      error instanceof AppwriteException &&
-      (error.code === 404 || error.type === 'collection_not_found')
-    ) {
-      console.error('[push] subscriptions collection missing', collectionId);
-      return json({ ok: false, message: 'Push unavailable' }, 503);
-    }
     console.error('[push] subscribe failed', error);
     return json({ ok: false, message: 'An kasa aikawa' }, 503);
   }

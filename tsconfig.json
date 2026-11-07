@@ -10,7 +10,9 @@
       "@components/*": ["src/components/*"],
       "@layouts/*": ["src/layouts/*"],
       "@islands/*": ["src/components/islands/*"],
-      "@lib/*": ["src/lib/*"]
+      "@lib/*": ["src/lib/*"],
+      "@db": ["src/db/index.ts"],
+      "@db/*": ["src/db/*"]
     },
     "jsx": "react-jsx",
     "jsxImportSource": "react",

@@ -1,71 +1,24 @@
-import { Client, Databases, ID, Query } from 'node-appwrite';
+import { desc, eq, and, sql, inArray, or } from 'drizzle-orm';
 import {
-  APPWRITE_API_KEY,
-  APPWRITE_COLLECTION_NEWSLETTER,
-} from 'astro:env/server';
-import {
-  PUBLIC_APPWRITE_ENDPOINT,
-  PUBLIC_APPWRITE_PROJECT_ID,
-  PUBLIC_APPWRITE_DATABASE_ID,
-  PUBLIC_APPWRITE_COLLECTION_ARTICLES,
-  PUBLIC_APPWRITE_COLLECTION_VIEWS,
-  PUBLIC_APPWRITE_COLLECTION_HIGHLIGHTS,
-  PUBLIC_APPWRITE_COLLECTION_HOMEPAGE_STATS,
-  PUBLIC_APPWRITE_COLLECTION_SPORTS,
-  PUBLIC_APPWRITE_COLLECTION_HOMEPAGE_LAYOUT,
-  PUBLIC_APPWRITE_COLLECTION_SETTINGS,
-  PUBLIC_APPWRITE_COLLECTION_ELECTIONS,
-  PUBLIC_APPWRITE_COLLECTION_CANDIDATES,
-  PUBLIC_APPWRITE_COLLECTION_RESULTS,
-  PUBLIC_APPWRITE_COLLECTION_FACTCHECKS,
-  PUBLIC_APPWRITE_COLLECTION_STAFF,
-  PUBLIC_APPWRITE_COLLECTION_COMMENTS,
-} from 'astro:env/client';
+  db,
+  articles,
+  articleViews,
+  comments,
+  newsletterSubscribers,
+  highlights,
+  homepageStats,
+  sportsData,
+  settings,
+  elections,
+  candidates,
+  electionResults,
+  factChecks,
+  users,
+} from '../db';
 import type { Article, LiveUpdate, Comment } from '../data/schema';
 
-/**
- * Server-only Appwrite access. The secret `APPWRITE_API_KEY` stays on the
- * server and is never bundled to the browser.
- */
-
-let _databases: Databases | null = null;
-
 export function isAppwriteConfigured(): boolean {
-  return Boolean(
-    APPWRITE_API_KEY &&
-      PUBLIC_APPWRITE_PROJECT_ID &&
-      PUBLIC_APPWRITE_DATABASE_ID &&
-      PUBLIC_APPWRITE_COLLECTION_ARTICLES,
-  );
-}
-
-function databases(): Databases {
-  if (!_databases) {
-    void tuneFetch();
-    const client = new Client()
-      .setEndpoint(PUBLIC_APPWRITE_ENDPOINT)
-      .setProject(PUBLIC_APPWRITE_PROJECT_ID)
-      .setKey(APPWRITE_API_KEY ?? '');
-    _databases = new Databases(client);
-  }
-  return _databases;
-}
-
-let _fetchTuned = false;
-async function tuneFetch(): Promise<void> {
-  if (_fetchTuned) return;
-  _fetchTuned = true;
-  try {
-    const { Agent, setGlobalDispatcher } = await import('undici');
-    setGlobalDispatcher(
-      new Agent({
-        connect: { timeout: 4_000, family: 4 },
-        keepAliveTimeout: 60_000,
-      }),
-    );
-  } catch {
-    // undici unavailable — keep default fetch timeouts
-  }
+  return Boolean(process.env.DATABASE_URL);
 }
 
 interface CacheEntry<T> {
@@ -82,9 +35,14 @@ async function cachedRead<T>(
 ): Promise<T> {
   const hit = _readCache.get(key) as CacheEntry<T> | undefined;
   if (hit && hit.expires > Date.now()) return hit.value;
-  const value = await load();
-  _readCache.set(key, { value, expires: Date.now() + ttlMs });
-  return value;
+  try {
+    const value = await load();
+    _readCache.set(key, { value, expires: Date.now() + ttlMs });
+    return value;
+  } catch (err) {
+    if (hit) return hit.value;
+    throw err;
+  }
 }
 
 function staleOr<T>(key: string, fallback: T): T {
@@ -92,466 +50,387 @@ function staleOr<T>(key: string, fallback: T): T {
   return hit ? hit.value : fallback;
 }
 
-type Collections = {
-  databaseId: string;
-  articles: string;
-  views: string | null;
-  newsletter: string | null;
-  comments: string | null;
-};
-
-function collections(): Collections | null {
-  if (
-    !APPWRITE_API_KEY ||
-    !PUBLIC_APPWRITE_PROJECT_ID ||
-    !PUBLIC_APPWRITE_DATABASE_ID ||
-    !PUBLIC_APPWRITE_COLLECTION_ARTICLES
-  ) {
-    return null;
+function parseLiveUpdates(raw: unknown): LiveUpdate[] {
+  if (Array.isArray(raw)) {
+    return raw.map((u) => {
+      if (typeof u === 'string') {
+        try {
+          return JSON.parse(u);
+        } catch {
+          return null;
+        }
+      }
+      return u;
+    }).filter((u): u is LiveUpdate => u !== null && typeof u === 'object');
   }
+  return [];
+}
+
+/** Map a PostgreSQL articles record to the shared Article type. */
+export function toArticle(row: any): Article {
+  const isBreaking = Boolean(row.isBreaking ?? row.is_breaking);
+  const breakingUntil = row.breakingUntil ? new Date(row.breakingUntil).toISOString() : (row.breaking_until ?? undefined);
+
   return {
-    databaseId: PUBLIC_APPWRITE_DATABASE_ID,
-    articles: PUBLIC_APPWRITE_COLLECTION_ARTICLES,
-    views: PUBLIC_APPWRITE_COLLECTION_VIEWS ?? null,
-    newsletter: APPWRITE_COLLECTION_NEWSLETTER ?? null,
-    comments: PUBLIC_APPWRITE_COLLECTION_COMMENTS ?? null,
+    $id: String(row.id),
+    id: String(row.id),
+    headline: String(row.headline ?? ''),
+    kicker: row.kicker ? String(row.kicker) : undefined,
+    trail: row.trail ? String(row.trail) : undefined,
+    body: String(row.body ?? ''),
+    image: row.image ? String(row.image) : undefined,
+    videoUrl: row.videoUrl ?? row.video_url ?? undefined,
+    pillar: String(row.pillar ?? 'news'),
+    section: String(row.section ?? 'headlines'),
+    type: String(row.type ?? 'standard'),
+    author: String(row.author ?? 'Yanci'),
+    isLive: Boolean(row.isLive ?? row.is_live),
+    liveUpdates: parseLiveUpdates(row.liveUpdates ?? row.live_updates),
+    series: row.series ? String(row.series) : undefined,
+    status: (row.status as 'draft' | 'published' | 'scheduled') || 'published',
+    publishAt: row.publishAt ? new Date(row.publishAt).toISOString() : (row.publish_at ?? undefined),
+    slug: row.slug ? String(row.slug) : undefined,
+    metaTitle: row.metaTitle ?? row.meta_title ?? undefined,
+    metaDescription: row.metaDescription ?? row.meta_description ?? undefined,
+    isSensitive: Boolean(row.isSensitive ?? row.is_sensitive),
+    imageFocalX: Number(row.imageFocalX ?? row.image_focal_x ?? 50),
+    imageFocalY: Number(row.imageFocalY ?? row.image_focal_y ?? 50),
+    format: row.format ? String(row.format) : undefined,
+    is_breaking: isBreaking,
+    breaking_until: breakingUntil,
+    review_status: (row.reviewStatus ?? row.review_status ?? 'approved') as 'pending' | 'approved' | 'rejected',
+    focal_point: row.focalPoint ?? row.focal_point ?? undefined,
+    saved_count: Number(row.savedCount ?? row.saved_count ?? 0),
+    source_url: row.sourceUrl ?? row.source_url ?? undefined,
+    imageCaption: row.imageCaption ?? row.image_caption ?? undefined,
+    imageCredit: row.imageCredit ?? row.image_credit ?? undefined,
+    imageAlt: row.imageAlt ?? row.image_alt ?? undefined,
+    tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
+    coAuthor: row.coAuthor ?? row.co_author ?? undefined,
+    ogTitle: row.ogTitle ?? row.og_title ?? undefined,
+    ogDescription: row.ogDescription ?? row.og_description ?? undefined,
+    relatedArticles: Array.isArray(row.relatedArticles ?? row.related_articles)
+      ? (row.relatedArticles ?? row.related_articles).map(String)
+      : [],
+    views: Number(row.views ?? 0),
+    $createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : (row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString()),
+    $updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : (row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString()),
   };
 }
 
-function parseLiveUpdates(raw: unknown): LiveUpdate[] | undefined {
-  if (Array.isArray(raw)) {
-    // Collection stores each update as a JSON string (legacy format).
-    return raw
-      .map((u) => {
-        if (typeof u === 'string') {
-          try {
-            return JSON.parse(u);
-          } catch {
-            return null;
-          }
-        }
-        return u;
-      })
-      .filter((u): u is LiveUpdate => u !== null && typeof u === 'object');
-  }
-  if (typeof raw === 'string') {
-    try {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? (parsed as LiveUpdate[]) : undefined;
-    } catch {
-      return undefined;
-    }
-  }
-  return undefined;
-}
-
-function parseFocalPoint(raw: unknown): { x: number; y: number } | string | undefined {
-  if (!raw) return undefined;
-  if (typeof raw === 'object' && raw !== null && 'x' in raw && 'y' in raw) {
-    const obj = raw as { x: unknown; y: unknown };
-    const x = Number(obj.x);
-    const y = Number(obj.y);
-    if (!isNaN(x) && !isNaN(y)) {
-      return { x, y };
-    }
-  }
-  if (typeof raw === 'string') {
-    const trimmed = raw.trim();
-    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-      try {
-        const parsed = JSON.parse(trimmed);
-        if (parsed && typeof parsed === 'object' && 'x' in parsed && 'y' in parsed) {
-          const x = Number(parsed.x);
-          const y = Number(parsed.y);
-          if (!isNaN(x) && !isNaN(y)) {
-            return { x, y };
-          }
-        }
-      } catch {
-        // fallback to raw string
-      }
-    }
-    return raw;
-  }
-  return undefined;
-}
-
-/** Map an Appwrite document to the shared Article type. */
-export function toArticle(doc: Record<string, unknown>): Article {
-  const isBreaking =
-    typeof doc.is_breaking === 'boolean'
-      ? doc.is_breaking
-      : doc.is_breaking !== undefined && doc.is_breaking !== null
-        ? Boolean(doc.is_breaking)
-        : undefined;
-
-  const breakingUntil =
-    typeof doc.breaking_until === 'string'
-      ? doc.breaking_until
-      : undefined;
-
-  let reviewStatus =
-    typeof doc.review_status === 'string' &&
-    ['pending', 'approved', 'rejected'].includes(doc.review_status)
-      ? (doc.review_status as 'pending' | 'approved' | 'rejected')
-      : undefined;
-
-  const focalPoint = parseFocalPoint(doc.focal_point);
-
-  const savedCount =
-    typeof doc.saved_count === 'number'
-      ? doc.saved_count
-      : typeof doc.saved_count === 'string' && !isNaN(Number(doc.saved_count))
-        ? Number(doc.saved_count)
-        : undefined;
-
-  let sourceUrl = typeof doc.source_url === 'string' ? doc.source_url : undefined;
-  if (typeof doc.keyFigures === 'string' && doc.keyFigures) {
-    try {
-      const parsed = JSON.parse(doc.keyFigures);
-      if (parsed && typeof parsed === 'object') {
-        if (!sourceUrl && typeof parsed.source_url === 'string') {
-          sourceUrl = parsed.source_url;
-        }
-        if (
-          !reviewStatus &&
-          typeof parsed.review_status === 'string' &&
-          ['pending', 'approved', 'rejected'].includes(parsed.review_status)
-        ) {
-          reviewStatus = parsed.review_status as 'pending' | 'approved' | 'rejected';
-        }
-      }
-    } catch {}
-  }
-
-  return {
-    $id: doc.$id as string,
-    ...doc,
-    liveUpdates: parseLiveUpdates(doc.liveUpdates),
-    ...(isBreaking !== undefined ? { is_breaking: isBreaking } : {}),
-    ...(breakingUntil !== undefined ? { breaking_until: breakingUntil } : {}),
-    ...(reviewStatus !== undefined ? { review_status: reviewStatus } : {}),
-    ...(focalPoint !== undefined ? { focal_point: focalPoint } : {}),
-    ...(savedCount !== undefined ? { saved_count: savedCount } : {}),
-    ...(sourceUrl ? { source_url: sourceUrl } : {}),
-  } as unknown as Article;
-}
-
-/** Serialize article fields for storage in Appwrite. */
 export function serializeArticle(article: Partial<Article>): Record<string, unknown> {
-  const out: Record<string, unknown> = { ...article };
-
-  let keyFiguresObj: Record<string, unknown> = {};
-  if (typeof out.keyFigures === 'string' && out.keyFigures) {
-    try {
-      keyFiguresObj = JSON.parse(out.keyFigures);
-    } catch {}
-  }
-
-  if (article.review_status !== undefined) {
-    keyFiguresObj.review_status = article.review_status;
-    delete out.review_status;
-  }
-  if (article.focal_point !== undefined) {
-    keyFiguresObj.focal_point =
-      typeof article.focal_point === 'object' && article.focal_point !== null
-        ? JSON.stringify(article.focal_point)
-        : article.focal_point;
-    delete out.focal_point;
-  }
-  if (article.saved_count !== undefined) {
-    keyFiguresObj.saved_count = Number(article.saved_count);
-    delete out.saved_count;
-  }
-  if (article.source_url !== undefined) {
-    keyFiguresObj.source_url = article.source_url;
-    delete out.source_url;
-  }
-
-  if (Object.keys(keyFiguresObj).length > 0) {
-    out.keyFigures = JSON.stringify(keyFiguresObj);
-  }
-
-  if (article.liveUpdates !== undefined) {
-    out.liveUpdates = Array.isArray(article.liveUpdates)
-      ? article.liveUpdates.map((u) => (typeof u === 'string' ? u : JSON.stringify(u)))
-      : undefined;
-  }
-  if (article.is_breaking !== undefined) {
-    out.is_breaking = Boolean(article.is_breaking);
-  }
-  if (article.breaking_until !== undefined) {
-    out.breaking_until = article.breaking_until;
-  }
-  return out;
+  const row: Record<string, unknown> = {};
+  if (article.id !== undefined || article.$id !== undefined) row.id = String(article.id ?? article.$id);
+  if (article.headline !== undefined) row.headline = article.headline;
+  if (article.kicker !== undefined) row.kicker = article.kicker;
+  if (article.trail !== undefined) row.trail = article.trail;
+  if (article.body !== undefined) row.body = article.body;
+  if (article.image !== undefined) row.image = article.image;
+  if (article.videoUrl !== undefined) row.videoUrl = article.videoUrl;
+  if (article.pillar !== undefined) row.pillar = article.pillar;
+  if (article.section !== undefined) row.section = article.section;
+  if (article.type !== undefined) row.type = article.type;
+  if (article.author !== undefined) row.author = article.author;
+  if (article.isLive !== undefined) row.isLive = article.isLive;
+  if (article.liveUpdates !== undefined) row.liveUpdates = article.liveUpdates;
+  if (article.series !== undefined) row.series = article.series;
+  if (article.status !== undefined) row.status = article.status;
+  if (article.publishAt !== undefined) row.publishAt = article.publishAt ? new Date(article.publishAt) : null;
+  if (article.slug !== undefined) row.slug = article.slug;
+  if (article.metaTitle !== undefined) row.metaTitle = article.metaTitle;
+  if (article.metaDescription !== undefined) row.metaDescription = article.metaDescription;
+  if (article.isSensitive !== undefined) row.isSensitive = article.isSensitive;
+  if (article.imageFocalX !== undefined) row.imageFocalX = article.imageFocalX;
+  if (article.imageFocalY !== undefined) row.imageFocalY = article.imageFocalY;
+  if (article.format !== undefined) row.format = article.format;
+  if (article.is_breaking !== undefined) row.isBreaking = article.is_breaking;
+  if (article.breaking_until !== undefined) row.breakingUntil = article.breaking_until ? new Date(article.breaking_until) : null;
+  if (article.review_status !== undefined) row.reviewStatus = article.review_status;
+  if (article.focal_point !== undefined) row.focalPoint = article.focal_point;
+  if (article.source_url !== undefined) row.sourceUrl = article.source_url;
+  if (article.imageCaption !== undefined) row.imageCaption = article.imageCaption;
+  if (article.imageCredit !== undefined) row.imageCredit = article.imageCredit;
+  if (article.imageAlt !== undefined) row.imageAlt = article.imageAlt;
+  if (article.tags !== undefined) row.tags = article.tags;
+  if (article.coAuthor !== undefined) row.coAuthor = article.coAuthor;
+  if (article.ogTitle !== undefined) row.ogTitle = article.ogTitle;
+  if (article.ogDescription !== undefined) row.ogDescription = article.ogDescription;
+  if (article.relatedArticles !== undefined) row.relatedArticles = article.relatedArticles;
+  return row;
 }
 
-// ─── Read actions ────────────────────────────────────────────────────────────
 export async function getArticles(limit = 200): Promise<Article[]> {
-  const c = collections();
-  if (!c) return [];
   const key = `articles:${limit}`;
   try {
     return await cachedRead(key, 30_000, async () => {
-      const { documents } = await databases().listDocuments(c.databaseId, c.articles, [
-        Query.orderDesc('$createdAt'),
-        Query.limit(Math.min(limit, 100)),
-      ]);
-      if (!documents || documents.length === 0) throw new Error('no articles');
-      return (documents ?? []).map((doc) => toArticle(doc as unknown as Record<string, unknown>));
+      const rows = await db
+        .select()
+        .from(articles)
+        .where(eq(articles.status, 'published'))
+        .orderBy(desc(articles.createdAt))
+        .limit(limit);
+      return rows.map(toArticle);
     });
   } catch (error) {
-    console.error('[appwrite] getArticles failed', error);
+    console.error('[db] getArticles failed', error);
     return staleOr<Article[]>(key, []);
   }
 }
 
 export async function getArticleById(id: string): Promise<Article | null> {
-  const c = collections();
-  if (!c) return null;
+  const cleanId = String(id).trim();
+  if (!cleanId) return null;
+  const key = `article:${cleanId}`;
   try {
-    return await cachedRead(`article:id:${id}`, 30_000, async () => {
-      const doc = await databases().getDocument(c.databaseId, c.articles, id);
-      return toArticle(doc as unknown as Record<string, unknown>);
+    return await cachedRead(key, 60_000, async () => {
+      const rows = await db
+        .select()
+        .from(articles)
+        .where(eq(articles.id, cleanId))
+        .limit(1);
+      if (!rows.length) return null;
+      return toArticle(rows[0]);
     });
-  } catch {
-    return null;
+  } catch (error) {
+    console.error(`[db] getArticleById(${cleanId}) failed`, error);
+    return staleOr<Article | null>(key, null);
   }
 }
 
 export async function getArticleBySlug(slug: string): Promise<Article | null> {
-  const c = collections();
-  if (!c) return null;
+  const cleanSlug = String(slug).trim();
+  if (!cleanSlug) return null;
+  const key = `article:slug:${cleanSlug}`;
   try {
-    return await cachedRead(`article:slug:${slug}`, 30_000, async () => {
-      const { documents } = await databases().listDocuments(c.databaseId, c.articles, [
-        Query.equal('slug', slug),
-        Query.limit(1),
-      ]);
-      if (!documents?.[0]) throw new Error('not found');
-      return toArticle(documents[0] as unknown as Record<string, unknown>);
+    return await cachedRead(key, 60_000, async () => {
+      const rows = await db
+        .select()
+        .from(articles)
+        .where(eq(articles.slug, cleanSlug))
+        .limit(1);
+      if (!rows.length) return null;
+      return toArticle(rows[0]);
     });
-  } catch {
-    return null;
+  } catch (error) {
+    console.error(`[db] getArticleBySlug(${cleanSlug}) failed`, error);
+    return staleOr<Article | null>(key, null);
   }
 }
 
 export async function getBreakingArticles(limit = 10): Promise<Article[]> {
-  const articles = await getArticles(Math.max(limit, 100));
-  const now = new Date();
-  return articles
-    .filter((a) => {
-      if (a.is_breaking !== true) return false;
-      if (a.status && a.status !== 'published') return false;
-      if (!a.breaking_until) return true;
-      const until = new Date(a.breaking_until);
-      return !isNaN(until.getTime()) && until > now;
-    })
-    .slice(0, limit);
-}
-
-function extractTags(raw: unknown): string[] {
-  if (Array.isArray(raw)) {
-    return raw.map((t) => String(t).trim().toLowerCase().replace(/^#/, '')).filter(Boolean);
-  }
-  if (typeof raw === 'string') {
-    return raw.split(',').map((t) => t.trim().toLowerCase().replace(/^#/, '')).filter(Boolean);
-  }
-  return [];
-}
-
-// ─── Comments ────────────────────────────────────────────────────────────────
-/** Public visibility rule: comments without a status (legacy rows) count as approved. */
-export function isCommentVisible(c: { status?: string | null }): boolean {
-  return c.status === undefined || c.status === null || c.status === '' || c.status === 'approved';
-}
-
-export async function getComments(
-  articleId: string,
-  sort: 'latest' | 'top' = 'latest',
-  limit = 100,
-): Promise<Comment[]> {
-  const c = collections();
-  if (!c || !c.comments) return [];
+  const key = `breaking:${limit}`;
   try {
-    const { documents } = await databases().listDocuments(c.databaseId, c.comments, [
-      Query.equal('articleId', articleId),
-      sort === 'top' ? Query.orderDesc('likes') : Query.orderDesc('$createdAt'),
-      Query.limit(Math.min(limit, 200)),
-    ]);
-    return (documents ?? [])
-      .map((d) => d as unknown as Comment)
-      .filter((c) => isCommentVisible(c));
-  } catch (error) {
-    console.error('[appwrite] getComments failed', error);
-    return [];
-  }
-}
-
-/** Admin moderation list: all comments for a status, newest first. */
-export async function getAllComments(
-  status?: string,
-  limit = 200,
-): Promise<Comment[]> {
-  const c = collections();
-  if (!c || !c.comments) return [];
-  try {
-    const queries = [];
-    if (status === 'pending' || status === 'approved' || status === 'rejected') {
-      queries.push(Query.equal('status', status));
-    }
-    queries.push(Query.orderDesc('$createdAt'), Query.limit(Math.min(limit, 200)));
-    const { documents } = await databases().listDocuments(c.databaseId, c.comments, queries);
-    return (documents ?? []).map((d) => d as unknown as Comment);
-  } catch (error) {
-    console.error('[appwrite] getAllComments failed', error);
-    return [];
-  }
-}
-
-// ─── Views / analytics ───────────────────────────────────────────────────────
-export async function trackView(input: {
-  articleId: string;
-  section?: string | null;
-  referrer?: string | null;
-  device?: string | null;
-}): Promise<void> {
-  const c = collections();
-  if (!c || !c.views) return;
-  try {
-    await databases().createDocument(c.databaseId, c.views, ID.unique(), {
-      article_id: input.articleId,
-      section: input.section ?? null,
-      referrer: input.referrer ?? null,
-      device: input.device ?? null,
-      viewed_at: new Date().toISOString(),
+    return await cachedRead(key, 30_000, async () => {
+      const rows = await db
+        .select()
+        .from(articles)
+        .where(
+          and(
+            eq(articles.status, 'published'),
+            eq(articles.isBreaking, true),
+            sql`(${articles.breakingUntil} IS NULL OR ${articles.breakingUntil} > NOW())`
+          )
+        )
+        .orderBy(desc(articles.createdAt))
+        .limit(limit);
+      return rows.map(toArticle);
     });
   } catch (error) {
-    console.error('[appwrite] trackView failed', error);
+    console.error('[db] getBreakingArticles failed', error);
+    return staleOr<Article[]>(key, []);
+  }
+}
+
+export function isCommentVisible(c: { status?: string | null }): boolean {
+  return c.status === 'approved' || c.status === undefined || c.status === null;
+}
+
+export async function getComments(articleId: string, limit = 50): Promise<Comment[]> {
+  const cleanId = String(articleId).trim();
+  if (!cleanId) return [];
+  try {
+    const rows = await db
+      .select()
+      .from(comments)
+      .where(and(eq(comments.articleId, cleanId), eq(comments.status, 'approved')))
+      .orderBy(desc(comments.createdAt))
+      .limit(limit);
+
+    return rows.map((r) => ({
+      $id: r.id,
+      articleId: r.articleId,
+      name: r.name,
+      body: r.body,
+      likes: r.likes,
+      ownerToken: r.ownerToken ?? undefined,
+      status: r.status as 'pending' | 'approved' | 'rejected',
+      $createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
+    }));
+  } catch (error) {
+    console.error('[db] getComments failed', error);
+    return [];
+  }
+}
+
+export async function getAllComments(
+  statusOrLimit?: string | number,
+  limitNum = 100,
+): Promise<Comment[]> {
+  try {
+    let limit = limitNum;
+    let statusFilter: string | undefined;
+
+    if (typeof statusOrLimit === 'number') {
+      limit = statusOrLimit;
+    } else if (typeof statusOrLimit === 'string' && statusOrLimit.trim()) {
+      statusFilter = statusOrLimit.trim();
+    }
+
+    const query = statusFilter
+      ? db.select().from(comments).where(eq(comments.status, statusFilter)).orderBy(desc(comments.createdAt)).limit(limit)
+      : db.select().from(comments).orderBy(desc(comments.createdAt)).limit(limit);
+
+    const rows = await query;
+
+    return rows.map((r) => ({
+      $id: r.id,
+      articleId: r.articleId,
+      name: r.name,
+      body: r.body,
+      likes: r.likes,
+      ownerToken: r.ownerToken ?? undefined,
+      status: r.status as 'pending' | 'approved' | 'rejected',
+      $createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
+    }));
+  } catch (error) {
+    console.error('[db] getAllComments failed', error);
+    return [];
+  }
+}
+
+export async function trackView(input: {
+  articleId: string;
+  sessionId?: string;
+  ipHash?: string;
+  referrer?: string;
+  section?: string;
+  country?: string;
+  device?: string;
+}): Promise<boolean> {
+  const articleId = String(input.articleId ?? '').trim();
+  if (!articleId) return false;
+
+  try {
+    const viewId = `vw_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    await db.insert(articleViews).values({
+      id: viewId,
+      articleId,
+      sessionId: input.sessionId,
+      ipHash: input.ipHash,
+      referrer: input.referrer,
+      section: input.section,
+      country: input.country,
+      device: input.device,
+    });
+
+    await db
+      .update(articles)
+      .set({ views: sql`${articles.views} + 1` })
+      .where(eq(articles.id, articleId));
+
+    return true;
+  } catch (error) {
+    console.error('[db] trackView failed', error);
+    return false;
   }
 }
 
 export async function getMostRead(limit = 10): Promise<{ articleId: string; views: number }[]> {
-  const c = collections();
-  if (!c || !c.views) return [];
   const key = `mostread:${limit}`;
-  const viewsId = c.views;
   try {
     return await cachedRead(key, 60_000, async () => {
-      const { documents } = await databases().listDocuments(c.databaseId, viewsId, [
-        Query.limit(1000),
-      ]);
-      const counts = new Map<string, number>();
-      for (const doc of documents ?? []) {
-        const id = (doc as any).article_id;
-        if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
-      }
-      return [...counts.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, limit)
-        .map(([articleId, views]) => ({ articleId, views }));
+      const rows = await db
+        .select({ id: articles.id, views: articles.views })
+        .from(articles)
+        .where(eq(articles.status, 'published'))
+        .orderBy(desc(articles.views))
+        .limit(limit);
+
+      return rows.map((r) => ({ articleId: r.id, views: Number(r.views ?? 0) }));
     });
-  } catch {
-    return staleOr<{ articleId: string; views: number }[]>(key, []);
+  } catch (error) {
+    console.error('[db] getMostRead failed', error);
+    return staleOr(key, []);
   }
 }
 
-export function viewCountFor(articleId: string, most: Awaited<ReturnType<typeof getMostRead>>): number {
+export function viewCountFor(
+  articleId: string,
+  most: Awaited<ReturnType<typeof getMostRead>>,
+): number {
   return most.find((m) => m.articleId === articleId)?.views ?? 0;
 }
 
-/**
- * Trending tags derived from the most-read articles' tags (by view count),
- * padded with the top sections. Returns [] when there is no DB data so the
- * caller can fall back to seed content.
- */
 export async function getTrending(limit = 6): Promise<string[]> {
-  const c = collections();
-  if (!c) return [];
   try {
-    const most = await getMostRead(20);
-    if (most.length === 0) return [];
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const { articleId } of most) {
-      const article = await getArticleById(articleId);
-      for (const tag of article?.tags ?? []) {
-        const clean = tag.trim();
-        if (clean && !seen.has(clean)) {
-          seen.add(clean);
-          out.push(clean.startsWith('#') ? clean : `#${clean}`);
+    const rows = await db
+      .select({ tags: articles.tags })
+      .from(articles)
+      .where(eq(articles.status, 'published'))
+      .orderBy(desc(articles.views))
+      .limit(30);
+
+    const tagCounts = new Map<string, number>();
+    for (const r of rows) {
+      if (Array.isArray(r.tags)) {
+        for (const t of r.tags) {
+          const tag = String(t).trim();
+          if (tag) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
         }
-        if (out.length >= limit) return out;
       }
     }
-    if (out.length === 0) {
-      for (const a of await getArticles(20)) {
-        const section = a.section?.trim();
-        if (section && !seen.has(section)) {
-          seen.add(section);
-          out.push(`#${section}`);
-        }
-        if (out.length >= limit) break;
-      }
-    }
-    return out;
-  } catch (error) {
-    console.error('[appwrite] getTrending failed', error);
+    return Array.from(tagCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([t]) => t);
+  } catch {
     return [];
   }
 }
 
-// ─── Newsletter subscriptions ────────────────────────────────────────────────
 export async function subscribeNewsletter(email: string): Promise<boolean> {
-  const c = collections();
-  if (!c || !c.newsletter) return false;
-  const normalized = email.trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) return false;
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail) return false;
   try {
-    await databases().createDocument(c.databaseId, c.newsletter, ID.unique(), {
-      email: normalized,
-      subscribed_at: new Date().toISOString(),
-      status: 'subscribed',
-    });
+    const subId = `sub_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    await db
+      .insert(newsletterSubscribers)
+      .values({
+        id: subId,
+        email: cleanEmail,
+        active: true,
+      })
+      .onConflictDoNothing();
     return true;
   } catch (error) {
-    console.error('[appwrite] subscribeNewsletter failed', error);
+    console.error('[db] subscribeNewsletter failed', error);
     return false;
   }
 }
 
 export async function unsubscribeNewsletter(email: string): Promise<boolean> {
-  const c = collections();
-  if (!c || !c.newsletter) return false;
-  const normalized = email.trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) return false;
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail) return false;
   try {
-    const found = await databases().listDocuments(c.databaseId, c.newsletter, [
-      Query.equal('email', normalized),
-      Query.limit(1),
-    ]);
-    if (found.documents.length === 0) return false;
-    await databases().updateDocument(
-      c.databaseId,
-      c.newsletter,
-      found.documents[0].$id,
-      { status: 'unsubscribed' },
-    );
+    await db
+      .update(newsletterSubscribers)
+      .set({ active: false })
+      .where(eq(newsletterSubscribers.email, cleanEmail));
     return true;
   } catch (error) {
-    console.error('[appwrite] unsubscribeNewsletter failed', error);
+    console.error('[db] unsubscribeNewsletter failed', error);
     return false;
   }
-}
-
-// ─── Homepage content collections ────────────────────────────────────────────
-
-function docCollection(collectionId: string | null | undefined): string | null {
-  return collectionId || null;
-}
-
-function databaseId(): string | null {
-  return PUBLIC_APPWRITE_DATABASE_ID || null;
 }
 
 export interface HomepageHighlight {
@@ -568,33 +447,31 @@ export interface HomepageHighlight {
 }
 
 export async function getHighlights(limit = 20): Promise<HomepageHighlight[]> {
-  const id = docCollection(PUBLIC_APPWRITE_COLLECTION_HIGHLIGHTS);
-  const dbId = databaseId();
-  if (!dbId || !id) return [];
   const key = `highlights:${limit}`;
   try {
     return await cachedRead(key, 60_000, async () => {
-      const { documents } = await databases().listDocuments(dbId, id, [
-        Query.limit(limit),
-      ]);
-      return (documents ?? [])
-        .filter((d) => d.active !== false)
-        .sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0))
-        .map((d) => ({
-          $id: d.$id,
-          tag: String(d.tag ?? ''),
-          title: String(d.title ?? ''),
-          copy: String(d.copy ?? ''),
-          icon: String(d.icon ?? 'trend'),
-          accent: String(d.accent ?? '#10b981'),
-          gradient: String(d.gradient ?? ''),
-          link: d.link ? String(d.link) : undefined,
-          order: Number(d.order ?? 0),
-          active: d.active !== false,
-        }));
+      const rows = await db
+        .select()
+        .from(highlights)
+        .where(eq(highlights.active, true))
+        .orderBy(highlights.sortOrder)
+        .limit(limit);
+
+      return rows.map((h) => ({
+        $id: h.id,
+        tag: h.category ?? 'labarai',
+        title: h.title,
+        copy: h.subtitle ?? '',
+        icon: 'trend',
+        accent: '#10b981',
+        gradient: '',
+        link: h.link ?? undefined,
+        order: h.sortOrder,
+        active: h.active,
+      }));
     });
   } catch (error) {
-    console.error('[appwrite] getHighlights failed', error);
+    console.error('[db] getHighlights failed', error);
     return staleOr<HomepageHighlight[]>(key, []);
   }
 }
@@ -610,45 +487,30 @@ export interface HomepageStat {
 }
 
 export async function getHomepageStats(limit = 20): Promise<HomepageStat[]> {
-  const id = docCollection(PUBLIC_APPWRITE_COLLECTION_HOMEPAGE_STATS);
-  const dbId = databaseId();
-  if (!dbId || !id) return [];
   const key = `hpstats:${limit}`;
   try {
     return await cachedRead(key, 60_000, async () => {
-      const { documents } = await databases().listDocuments(dbId, id, [
-        Query.limit(limit),
-      ]);
-      return (documents ?? [])
-        .filter((d) => d.active !== false)
-        .sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0))
-        .map((d) => ({
-          $id: d.$id,
-          label: String(d.label ?? ''),
-          value: Number(d.value ?? 0),
-          suffix: String(d.suffix ?? ''),
-          icon: String(d.icon ?? 'article'),
-          order: Number(d.order ?? 0),
-          active: d.active !== false,
-        }));
+      const rows = await db
+        .select()
+        .from(homepageStats)
+        .where(eq(homepageStats.active, true))
+        .orderBy(homepageStats.sortOrder)
+        .limit(limit);
+
+      return rows.map((s) => ({
+        $id: s.id,
+        label: s.label,
+        value: Number(s.value) || 0,
+        suffix: s.suffix ?? '',
+        icon: 'article',
+        order: s.sortOrder,
+        active: s.active,
+      }));
     });
   } catch (error) {
-    console.error('[appwrite] getHomepageStats failed', error);
+    console.error('[db] getHomepageStats failed', error);
     return staleOr<HomepageStat[]>(key, []);
   }
-}
-
-function parseJsonArray(raw: unknown): unknown[] | null {
-  if (Array.isArray(raw)) return raw as unknown[];
-  if (typeof raw === 'string') {
-    try {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? (parsed as unknown[]) : null;
-    } catch {
-      return null;
-    }
-  }
-  return null;
 }
 
 export interface SportsData {
@@ -659,52 +521,38 @@ export interface SportsData {
 }
 
 export async function getSportsData(): Promise<SportsData | null> {
-  const id = docCollection(PUBLIC_APPWRITE_COLLECTION_SPORTS);
-  const dbId = databaseId();
-  if (!dbId || !id) return null;
   const key = 'sports';
   try {
     return await cachedRead(key, 60_000, async () => {
-      const { documents } = await databases().listDocuments(dbId, id, [
-        Query.limit(1),
-      ]);
-      const doc = documents?.[0];
-      if (!doc) throw new Error('no sports doc');
+      const rows = await db.select().from(sportsData).limit(1);
+      if (!rows.length) return null;
+      const doc = rows[0];
       return {
-        $id: doc.$id,
-        liveMatches: parseJsonArray(doc.liveMatches) ?? [],
-        standings: parseJsonArray(doc.standings) ?? [],
-        fixtures: parseJsonArray(doc.fixtures) ?? [],
+        $id: doc.id,
+        liveMatches: Array.isArray(doc.liveMatches) ? doc.liveMatches : [],
+        standings: Array.isArray(doc.standings) ? doc.standings : [],
+        fixtures: Array.isArray(doc.upcomingFixtures) ? doc.upcomingFixtures : [],
       };
     });
   } catch (error) {
-    console.error('[appwrite] getSportsData failed', error);
+    console.error('[db] getSportsData failed', error);
     return staleOr<SportsData | null>(key, null);
   }
 }
 
 export async function getSettings(limit = 100): Promise<Record<string, string>> {
-  const id = docCollection(PUBLIC_APPWRITE_COLLECTION_SETTINGS);
-  const dbId = databaseId();
-  if (!dbId || !id) return {};
   const key = 'settings';
   try {
     return await cachedRead(key, 60_000, async () => {
-      const { documents } = await databases().listDocuments(dbId, id, [
-        Query.limit(1),
-      ]);
-      const doc = documents?.[0];
-      if (!doc) return {};
+      const rows = await db.select().from(settings).limit(limit);
       const out: Record<string, string> = {};
-      for (const [k, value] of Object.entries(doc)) {
-        if (k.startsWith('$')) continue;
-        if (value === null || value === undefined) continue;
-        out[k] = String(value);
+      for (const r of rows) {
+        out[r.key] = r.value;
       }
       return out;
     });
   } catch (error) {
-    console.error('[appwrite] getSettings failed', error);
+    console.error('[db] getSettings failed', error);
     return staleOr<Record<string, string>>(key, {});
   }
 }
@@ -723,27 +571,27 @@ export interface ElectionDoc {
 }
 
 export async function getElections(limit = 20): Promise<ElectionDoc[]> {
-  const id = docCollection(PUBLIC_APPWRITE_COLLECTION_ELECTIONS);
-  const dbId = databaseId();
-  if (!dbId || !id) return [];
   try {
-    const { documents } = await databases().listDocuments(dbId, id, [
-      Query.limit(limit),
-    ]);
-    return (documents ?? []).map((d) => ({
-      $id: d.$id,
-      name: String(d.name ?? ''),
-      fullName: String(d.fullName ?? ''),
-      date: String(d.date ?? ''),
-      type: String(d.type ?? ''),
-      status: String(d.status ?? ''),
-      electoralBody: String(d.electoralBody ?? ''),
-      description: String(d.description ?? ''),
-      image: String(d.image ?? ''),
-      published: d.published !== false,
+    const rows = await db
+      .select()
+      .from(elections)
+      .where(eq(elections.published, true))
+      .limit(limit);
+
+    return rows.map((e) => ({
+      $id: e.id,
+      name: e.name,
+      fullName: e.fullName ?? '',
+      date: e.date ?? '',
+      type: e.type,
+      status: e.status,
+      electoralBody: e.electoralBody ?? 'INEC',
+      description: e.description ?? '',
+      image: '',
+      published: e.published,
     }));
   } catch (error) {
-    console.error('[appwrite] getElections failed', error);
+    console.error('[db] getElections failed', error);
     return [];
   }
 }
@@ -764,30 +612,28 @@ export interface CandidateDoc {
 }
 
 export async function getCandidates(electionId?: string, limit = 100): Promise<CandidateDoc[]> {
-  const id = docCollection(PUBLIC_APPWRITE_COLLECTION_CANDIDATES);
-  const dbId = databaseId();
-  if (!dbId || !id) return [];
   try {
-    const queries = electionId
-      ? [Query.equal('electionId', electionId), Query.limit(limit)]
-      : [Query.limit(limit)];
-    const { documents } = await databases().listDocuments(dbId, id, queries);
-    return (documents ?? []).map((d) => ({
-      $id: d.$id,
-      electionId: String(d.electionId ?? ''),
-      name: String(d.name ?? ''),
-      party: String(d.party ?? ''),
-      position: String(d.position ?? ''),
-      state: String(d.state ?? ''),
-      education: String(d.education ?? ''),
-      platform: String(d.platform ?? ''),
-      runningMate: String(d.runningMate ?? ''),
-      previousOffice: String(d.previousOffice ?? ''),
-      image: String(d.image ?? ''),
-      order: Number(d.order ?? 0),
+    const query = electionId
+      ? db.select().from(candidates).where(eq(candidates.electionId, electionId)).limit(limit)
+      : db.select().from(candidates).limit(limit);
+
+    const rows = await query;
+    return rows.map((c) => ({
+      $id: c.id,
+      electionId: c.electionId,
+      name: c.name,
+      party: c.party ?? '',
+      position: 'Dan Takara',
+      state: 'Najeriya',
+      education: '',
+      platform: c.manifesto ?? '',
+      runningMate: c.runningMate ?? '',
+      previousOffice: '',
+      image: c.avatar ?? '',
+      order: 0,
     }));
   } catch (error) {
-    console.error('[appwrite] getCandidates failed', error);
+    console.error('[db] getCandidates failed', error);
     return [];
   }
 }
@@ -809,43 +655,29 @@ export interface ResultDoc {
 }
 
 export async function getResults(electionId?: string, limit = 200): Promise<ResultDoc[]> {
-  const id = docCollection(PUBLIC_APPWRITE_COLLECTION_RESULTS);
-  const dbId = databaseId();
-  if (!dbId || !id) return [];
   try {
-    const queries = electionId
-      ? [Query.equal('electionId', electionId), Query.limit(limit)]
-      : [Query.limit(limit)];
-    const { documents } = await databases().listDocuments(dbId, id, queries);
-    const parseObj = (raw: unknown): Record<string, number> => {
-      if (raw && typeof raw === 'object') return raw as Record<string, number>;
-      if (typeof raw === 'string') {
-        try {
-          const parsed = JSON.parse(raw);
-          return parsed && typeof parsed === 'object' ? (parsed as Record<string, number>) : {};
-        } catch {
-          return {};
-        }
-      }
-      return {};
-    };
-    return (documents ?? []).map((d) => ({
-      $id: d.$id,
-      electionId: String(d.electionId ?? ''),
-      state: String(d.state ?? ''),
-      region: String(d.region ?? ''),
-      candidateVotes: parseObj(d.candidateVotes),
-      met25Threshold: (parseJsonArray(d.met25Threshold) ?? []).map(String),
-      winner: String(d.winner ?? ''),
-      governor: String(d.governor ?? ''),
-      senate: parseObj(d.senate),
-      registeredVoters: Number(d.registeredVoters ?? 0),
-      accreditedVoters: Number(d.accreditedVoters ?? 0),
-      validVotes: Number(d.validVotes ?? 0),
-      rejectedVotes: Number(d.rejectedVotes ?? 0),
+    const query = electionId
+      ? db.select().from(electionResults).where(eq(electionResults.electionId, electionId)).limit(limit)
+      : db.select().from(electionResults).limit(limit);
+
+    const rows = await query;
+    return rows.map((r) => ({
+      $id: r.id,
+      electionId: r.electionId,
+      state: r.state,
+      region: 'Arewa',
+      candidateVotes: { [r.candidateId]: Number(r.votes ?? 0) },
+      met25Threshold: [],
+      winner: '',
+      governor: '',
+      senate: {},
+      registeredVoters: 0,
+      accreditedVoters: 0,
+      validVotes: Number(r.votes ?? 0),
+      rejectedVotes: 0,
     }));
   } catch (error) {
-    console.error('[appwrite] getResults failed', error);
+    console.error('[db] getResults failed', error);
     return [];
   }
 }
@@ -864,28 +696,26 @@ export interface FactCheckDoc {
 }
 
 export async function getFactChecks(electionId?: string, limit = 100): Promise<FactCheckDoc[]> {
-  const id = docCollection(PUBLIC_APPWRITE_COLLECTION_FACTCHECKS);
-  const dbId = databaseId();
-  if (!dbId || !id) return [];
   try {
-    const queries = electionId
-      ? [Query.equal('electionId', electionId), Query.limit(limit)]
-      : [Query.limit(limit)];
-    const { documents } = await databases().listDocuments(dbId, id, queries);
-    return (documents ?? []).map((d) => ({
-      $id: d.$id,
-      electionId: String(d.electionId ?? ''),
-      claim: String(d.claim ?? ''),
-      claimant: String(d.claimant ?? ''),
-      claimantParty: String(d.claimantParty ?? ''),
-      verdict: String(d.verdict ?? 'unverified'),
-      analysis: String(d.analysis ?? ''),
-      source: String(d.source ?? ''),
-      date: String(d.date ?? ''),
-      relatedArticleId: d.relatedArticleId ? String(d.relatedArticleId) : undefined,
+    const query = electionId
+      ? db.select().from(factChecks).where(eq(factChecks.electionId, electionId)).limit(limit)
+      : db.select().from(factChecks).limit(limit);
+
+    const rows = await query;
+    return rows.map((f) => ({
+      $id: f.id,
+      electionId: f.electionId ?? '',
+      claim: f.claim,
+      claimant: f.claimant ?? '',
+      claimantParty: '',
+      verdict: f.verdict,
+      analysis: f.explanation ?? '',
+      source: f.sources ?? '',
+      date: f.date ?? '',
+      relatedArticleId: f.articleId ?? undefined,
     }));
   } catch (error) {
-    console.error('[appwrite] getFactChecks failed', error);
+    console.error('[db] getFactChecks failed', error);
     return [];
   }
 }
@@ -903,42 +733,30 @@ export interface StaffDoc {
 }
 
 export async function getStaff(limit = 100): Promise<StaffDoc[]> {
-  const id = docCollection(PUBLIC_APPWRITE_COLLECTION_STAFF);
-  const dbId = databaseId();
-  if (!dbId || !id) return [];
   try {
-    const { documents } = await databases().listDocuments(dbId, id, [
-      Query.limit(limit),
-    ]);
-    return (documents ?? []).map((d) => ({
-      $id: d.$id,
-      name: String(d.name ?? ''),
-      email: String(d.email ?? ''),
-      role: String(d.role ?? ''),
-      category: String(d.category ?? ''),
-      status: String(d.status ?? ''),
-      bio: String(d.bio ?? ''),
-      image: String(d.image ?? ''),
-      order: Number(d.order ?? 0),
+    const rows = await db
+      .select()
+      .from(users)
+      .where(eq(users.active, true))
+      .limit(limit);
+
+    return rows.map((u, i) => ({
+      $id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      category: 'Edita',
+      status: u.active ? 'active' : 'inactive',
+      bio: u.bio ?? '',
+      image: u.avatar ?? '',
+      order: i,
     }));
   } catch (error) {
-    console.error('[appwrite] getStaff failed', error);
+    console.error('[db] getStaff failed', error);
     return [];
   }
 }
 
-// ─── Recommended articles ───────────────────────────────────────────────────
-/**
- * Recommendation engine for articles.
- * Algorithm:
- * - Fetch recent published articles (excluding the current one).
- * - Calculate relevance score:
- *   * Same tags: 3 points per matching tag
- *   * Same section/category: 2 points
- *   * Same pillar: 1 point
- *   * Recency bonus (published within last 7 days): +1 point
- * - Sort by score descending and return top `limit` articles.
- */
 export async function getRecommendedArticles(
   currentArticle: Article | Record<string, unknown>,
   limit = 4,
@@ -950,110 +768,29 @@ export async function getRecommendedArticles(
       (currentArticle as Record<string, unknown>).id ??
       '',
   );
-  const currentSlug = String(
-    (currentArticle as Article).slug ??
-      (currentArticle as Record<string, unknown>).slug ??
-      '',
-  ).trim().toLowerCase();
-
   const currentTags = new Set(
-    extractTags(
-      (currentArticle as Article).tags ??
-        (currentArticle as Record<string, unknown>).tags,
-    ),
+    ((currentArticle as Article).tags ?? []).map((t) => String(t).trim().toLowerCase()),
   );
-  const currentSection = String(
-    (currentArticle as Article).section ??
-      (currentArticle as Record<string, unknown>).category ??
-      (currentArticle as Record<string, unknown>).section ??
-      '',
-  ).trim().toLowerCase();
-  const currentPillar = String(
-    (currentArticle as Article).pillar ??
-      (currentArticle as Record<string, unknown>).pillar ??
-      '',
-  ).trim().toLowerCase();
+  const currentSection = (currentArticle as Article).section;
+  const currentPillar = (currentArticle as Article).pillar;
 
-  let pool: Article[] = [];
-  try {
-    pool = await getArticles(Math.max(50, limit * 10, 200));
-  } catch {
-    pool = [];
-  }
+  const all = await getArticles(30);
+  const candidatesList = all.filter((a) => String(a.$id ?? a.id) !== currentId);
 
-  if (pool.length === 0) {
-    const { SEED_ARTICLES } = await import('../data/seed');
-    pool = (SEED_ARTICLES as unknown as Article[]).map((doc) =>
-      toArticle(doc as unknown as Record<string, unknown>),
-    );
-  }
-
-  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-  const nowTime = Date.now();
-
-  const isPublished = (a: Article) => (a.status ?? 'published') === 'published';
-
-  const candidates = pool.filter((a) => {
-    const candidateId = String(a.$id ?? a.id ?? '');
-    const candidateSlug = String(a.slug ?? '').trim().toLowerCase();
-    const isSame =
-      (currentId && candidateId === currentId) ||
-      (currentSlug && candidateSlug === currentSlug);
-    return !isSame && isPublished(a);
-  });
-
-  const scored = candidates.map((article) => {
+  const scored = candidatesList.map((a) => {
     let score = 0;
-
-    // 1. Same tags: 3 points per matching tag
-    const candidateTags = new Set(extractTags(article.tags));
-    let matchingTagHits = 0;
-    for (const tag of candidateTags) {
-      if (currentTags.has(tag)) {
-        matchingTagHits++;
-      }
+    for (const t of a.tags ?? []) {
+      if (currentTags.has(String(t).trim().toLowerCase())) score += 3;
     }
-    score += matchingTagHits * 3;
-
-    // 2. Same section/category: 2 points
-    const candidateSection = String(
-      article.section ?? (article as unknown as Record<string, unknown>).category ?? '',
-    ).trim().toLowerCase();
-    if (currentSection && candidateSection && currentSection === candidateSection) {
-      score += 2;
+    if (a.section && a.section === currentSection) score += 2;
+    if (a.pillar && a.pillar === currentPillar) score += 1;
+    if (a.$createdAt) {
+      const ageDays = (Date.now() - new Date(a.$createdAt).getTime()) / (1000 * 60 * 60 * 24);
+      if (ageDays <= 7) score += 1;
     }
-
-    // 3. Same pillar: 1 point
-    const candidatePillar = String(article.pillar ?? '').trim().toLowerCase();
-    if (currentPillar && candidatePillar && currentPillar === candidatePillar) {
-      score += 1;
-    }
-
-    // 4. Recency bonus (published within last 7 days): +1 point
-    const dateVal =
-      article.publishAt ||
-      article.$createdAt ||
-      (article as unknown as Record<string, unknown>).published_at ||
-      (article as unknown as Record<string, unknown>).created_at;
-    if (dateVal) {
-      const pubTime = new Date(String(dateVal)).getTime();
-      const diff = nowTime - pubTime;
-      if (!isNaN(pubTime) && diff <= SEVEN_DAYS_MS && diff >= -60_000) {
-        score += 1;
-      }
-    }
-
-    return { article, score };
+    return { article: a, score };
   });
 
-  scored.sort((a, b) => {
-    if (b.score !== a.score) {
-      return b.score - a.score;
-    }
-    const timeB = new Date(b.article.publishAt ?? b.article.$createdAt ?? 0).getTime() || 0;
-    const timeA = new Date(a.article.publishAt ?? a.article.$createdAt ?? 0).getTime() || 0;
-    return timeB - timeA;
-  });
-
+  scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, limit).map((s) => s.article);
 }
