@@ -73,8 +73,8 @@ export async function seedDatabase(pool) {
   const adminId = 'usr_admin_initial';
 
   await pool.query(
-    `INSERT INTO users (id, email, password_hash, name, role, status)
-     VALUES ($1, $2, $3, $4, 'super_admin', 'active')
+    `INSERT INTO users (id, email, password_hash, name, role, active)
+     VALUES ($1, $2, $3, $4, 'super_admin', true)
      ON CONFLICT (email) DO NOTHING`,
     [adminId, adminEmail, passwordHash, 'Babban Edita (Admin)']
   );
@@ -133,10 +133,10 @@ export async function seedDatabase(pool) {
 
   for (const s of stats) {
     await pool.query(
-      `INSERT INTO homepage_stats (id, label, value, suffix, "order")
+      `INSERT INTO homepage_stats (id, label, value, suffix, sort_order)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (id) DO NOTHING`,
-      [s.id, s.label, s.value, s.suffix, s.order]
+      [s.id, s.label, String(s.value), s.suffix, s.order]
     );
   }
 
@@ -175,10 +175,10 @@ export async function seedDatabase(pool) {
 
   for (const h of highlights) {
     await pool.query(
-      `INSERT INTO highlights (id, tag, title, copy, icon, accent, gradient, "order")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO highlights (id, title, subtitle, category, sort_order)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (id) DO NOTHING`,
-      [h.id, h.tag, h.title, h.copy, h.icon, h.accent, h.gradient, h.order]
+      [h.id, h.title, h.copy, h.tag, h.order]
     );
   }
 
@@ -479,7 +479,7 @@ Wajibi ne hukumomi, 'yan jarida da kuma masu amfani da kafafen sada zumunta su h
   for (const a of articles) {
     await pool.query(
       `INSERT INTO articles (
-        id, slug, headline, kicker, trail, body, image, pillar, section, type, author, is_live, views, status, published_at, created_at, updated_at
+        id, slug, headline, kicker, trail, body, image, pillar, section, type, author, is_live, views, status, publish_at, created_at, updated_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'published', NOW(), NOW(), NOW())
       ON CONFLICT (id) DO NOTHING`,
       [
